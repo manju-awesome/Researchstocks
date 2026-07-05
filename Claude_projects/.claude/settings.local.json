@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PYTHONPATH=src python3 -m stockanalysis.scanners.market_movers --tickers NVDA AMD --top 2)"
+    ]
+  }
+}

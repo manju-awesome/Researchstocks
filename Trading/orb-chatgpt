@@ -1,0 +1,67 @@
+//@version=5
+strategy("Pro ORB Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10)
+
+// === INPUTS ===
+orbMinutes = input.int(15, "Opening Range Minutes", minval=1)
+sessionInput = input.session("0930-1600", "Trading Session")
+useVolumeFilter = input.bool(true, "Use Volume Filter")
+volMultiplier = input.float(1.5, "Volume Multiplier")
+
+riskReward = input.float(2.0, "Risk Reward Ratio")
+
+// === SESSION FILTER ===
+inSession = not na(time(timeframe.period, sessionInput))
+
+// === VARIABLES ===
+var float orbHigh = na
+var float orbLow = na
+var bool orbComplete = false
+
+// === TIME CALCULATION ===
+startTime = timestamp(year, month, dayofmonth, 9, 30)
+endTime = startTime + orbMinutes * 60 * 1000
+
+// Reset daily
+if (ta.change(time("D")))
+    orbHigh := na
+    orbLow := na
+    orbComplete := false
+
+// Build Opening Range
+if (time >= startTime and time <= endTime)
+    orbHigh := na(orbHigh) ? high : math.max(orbHigh, high)
+    orbLow := na(orbLow) ? low : math.min(orbLow, low)
+
+// Mark completion
+if (time > endTime)
+    orbComplete := true
+
+// === VOLUME FILTER ===
+avgVol = ta.sma(volume, 20)
+volCondition = not useVolumeFilter or (volume > avgVol * volMultiplier)
+
+// === ENTRY CONDITIONS ===
+longCondition = orbComplete and close > orbHigh and volCondition and inSession
+shortCondition = orbComplete and close < orbLow and volCondition and inSession
+
+// === STOP LOSS & TAKE PROFIT ===
+range = orbHigh - orbLow
+
+longSL = orbLow
+longTP = close + (range * riskReward)
+
+shortSL = orbHigh
+shortTP = close - (range * riskReward)
+
+// === EXECUTION ===
+if (longCondition)
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Long Exit", from_entry="Long", stop=longSL, limit=longTP)
+
+if (shortCondition)
+    strategy.entry("Short", strategy.short)
+    strategy.exit("Short Exit", from_entry="Short", stop=shortSL, limit=shortTP)
+
+// === PLOTTING ===
+plot(orbHigh, "ORB High", color=color.green, linewidth=2)
+plot(orbLow, "ORB Low", color=color.red, linewidth=2)

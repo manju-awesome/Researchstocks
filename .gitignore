@@ -1,0 +1,5 @@
+# macOS junk
+.DS_Store
+
+# Separate git repo — has its own history, don't embed it here
+Trading_with_claude/

@@ -1,0 +1,327 @@
+//@version=5
+// ═══════════════════════════════════════════════════════
+// IBX Pro Breakout Strategy — FIXED
+// FIX 1 : trail_price / trail_offset → trail_points
+// FIX 2 : trades_today += 1 → trades_today := trades_today + 1
+// FIX 3 : All 6 alertcondition() w/ dynamic strings → alert()
+// FIX 4 : Inline ternary in alert message pre-computed to _dir variable
+// FIX 5 : Invalid linestyle= parameter removed from plot()
+// ═══════════════════════════════════════════════════════
+strategy(
+     title        = "Intraday Breakout Strategy [Professional]",
+     shorttitle   = "IBX Pro",
+     overlay      = true,
+     margin_long  = 100,
+     margin_short = 100,
+     commission_type  = strategy.commission.percent,
+     commission_value = 0.05,
+     slippage         = 2
+ )
+
+// ═══════════════════════════════════════════════════════
+// ░░  INPUTS
+// ═══════════════════════════════════════════════════════
+
+grp_session    = "⏰ Session Filter"
+session_start  = input.session("0930-1600", "Market Session (ET)", group=grp_session)
+trade_window   = input.session("1030-1200", "Trade Entry Window",  group=grp_session,
+                     tooltip="Only take entries in this window (avoid lunch chop)")
+
+grp_orb        = "📦 Opening Range Breakout"
+orb_minutes    = input.int(15, "ORB Period (minutes)", minval=5, maxval=60, group=grp_orb,
+                     tooltip="Opening range built from first N minutes of session")
+orb_buffer_pct = input.float(0.05, "Breakout Buffer %", minval=0.01, maxval=0.5, step=0.01,
+                     group=grp_orb, tooltip="Extra % above/below ORB to confirm breakout")
+
+grp_filter     = "🔍 Confluence Filters"
+use_vwap       = input.bool(true,  "Require Price Above/Below VWAP", group=grp_filter)
+use_volume     = input.bool(true,  "Require Volume Spike",           group=grp_filter)
+vol_multiplier = input.float(1.5,  "Volume Spike Multiplier",        group=grp_filter,
+                     minval=1.0, maxval=5.0, step=0.1,
+                     tooltip="Current volume must be X times the average")
+vol_avg_len    = input.int(20, "Volume Average Length", group=grp_filter)
+use_rsi_filter = input.bool(true,  "RSI Momentum Filter", group=grp_filter)
+rsi_len        = input.int(14,     "RSI Length",          group=grp_filter)
+
+grp_risk       = "🛡️ Risk Management"
+risk_pct       = input.float(1.0, "Risk Per Trade (%)", minval=0.1, maxval=5.0, step=0.1,
+                     group=grp_risk, tooltip="% of equity risked per trade")
+rr_ratio       = input.float(2.0, "Reward:Risk Ratio",  minval=1.0, maxval=10.0, step=0.5,
+                     group=grp_risk)
+use_trailing   = input.bool(true,  "Use Trailing Stop",  group=grp_risk)
+trail_pct      = input.float(0.5,  "Trailing Stop %",    group=grp_risk, minval=0.1)
+max_trades_day = input.int(2,      "Max Trades Per Day", group=grp_risk, minval=1, maxval=10)
+eod_exit_time  = input.session("1545-1600", "End-of-Day Exit Window", group=grp_risk,
+                     tooltip="Force-close all positions before market close")
+
+// ═══════════════════════════════════════════════════════
+// ░░  SESSION & TIME LOGIC
+// ═══════════════════════════════════════════════════════
+
+in_session      = not na(time("1", session_start))
+in_trade_window = not na(time("1", trade_window))
+in_eod_window   = not na(time("1", eod_exit_time))
+
+is_new_day = dayofmonth != dayofmonth[1]
+
+var int trades_today = 0
+if is_new_day
+    trades_today := 0
+
+can_trade = trades_today < max_trades_day and in_trade_window
+
+// ═══════════════════════════════════════════════════════
+// ░░  OPENING RANGE (ORB) CALCULATION
+// ═══════════════════════════════════════════════════════
+
+var float orb_high = na
+var float orb_low  = na
+var bool  orb_set  = false
+
+if is_new_day
+    orb_high := na
+    orb_low  := na
+    orb_set  := false
+
+session_open_hour   = 9
+session_open_minute = 30
+minutes_since_open  = (hour - session_open_hour) * 60 + (minute - session_open_minute)
+
+if in_session and minutes_since_open >= 0 and minutes_since_open < orb_minutes
+    orb_high := na(orb_high) ? high : math.max(orb_high, high)
+    orb_low  := na(orb_low)  ? low  : math.min(orb_low,  low)
+
+if in_session and minutes_since_open >= orb_minutes and not orb_set
+    orb_set := true
+
+orb_long_trigger  = orb_high * (1 + orb_buffer_pct / 100)
+orb_short_trigger = orb_low  * (1 - orb_buffer_pct / 100)
+
+// ═══════════════════════════════════════════════════════
+// ░░  INDICATORS
+// ═══════════════════════════════════════════════════════
+
+vwap_val    = ta.vwap(hlc3)
+vol_avg     = ta.sma(volume, vol_avg_len)
+vol_spike   = volume > vol_avg * vol_multiplier
+rsi         = ta.rsi(close, rsi_len)
+rsi_bullish = rsi > 50
+rsi_bearish = rsi < 50
+atr         = ta.atr(14)
+
+// ═══════════════════════════════════════════════════════
+// ░░  ENTRY CONDITIONS
+// ═══════════════════════════════════════════════════════
+
+long_breakout  = orb_set and ta.crossover(close,  orb_long_trigger)
+short_breakout = orb_set and ta.crossunder(close, orb_short_trigger)
+
+vwap_long_ok  = use_vwap       ? close > vwap_val : true
+vwap_short_ok = use_vwap       ? close < vwap_val : true
+vol_ok        = use_volume     ? vol_spike         : true
+rsi_long_ok   = use_rsi_filter ? rsi_bullish       : true
+rsi_short_ok  = use_rsi_filter ? rsi_bearish       : true
+
+long_signal  = long_breakout  and vwap_long_ok  and vol_ok and rsi_long_ok  and can_trade
+short_signal = short_breakout and vwap_short_ok and vol_ok and rsi_short_ok and can_trade
+
+// ═══════════════════════════════════════════════════════
+// ░░  RISK MANAGEMENT — POSITION SIZING
+// ═══════════════════════════════════════════════════════
+
+long_stop_price  = orb_low  - atr * 0.5
+short_stop_price = orb_high + atr * 0.5
+
+long_stop_dist  = close - long_stop_price
+short_stop_dist = short_stop_price - close
+
+long_target  = close + long_stop_dist  * rr_ratio
+short_target = close - short_stop_dist * rr_ratio
+
+equity    = strategy.equity
+long_qty  = math.floor((equity * risk_pct / 100) / long_stop_dist)
+short_qty = math.floor((equity * risk_pct / 100) / short_stop_dist)
+
+// ═══════════════════════════════════════════════════════
+// ░░  STRATEGY EXECUTION
+// ═══════════════════════════════════════════════════════
+
+// FIX 1 — trail_price and trail_offset are not valid strategy.exit() params.
+//          trail_points takes a distance in ticks (price units / mintick).
+trail_points_val = trail_pct / 100 * close / syminfo.mintick
+
+// Long entry
+if long_signal and strategy.position_size == 0
+    strategy.entry("Long", strategy.long, qty=long_qty)
+    strategy.exit("Long Exit", "Long",
+         stop         = long_stop_price,
+         limit        = long_target,
+         trail_points = use_trailing ? trail_points_val : na)
+    // FIX 2 — += is not supported on var int; use := with explicit addition
+    trades_today := trades_today + 1
+
+// Short entry
+if short_signal and strategy.position_size == 0
+    strategy.entry("Short", strategy.short, qty=short_qty)
+    strategy.exit("Short Exit", "Short",
+         stop         = short_stop_price,
+         limit        = short_target,
+         trail_points = use_trailing ? trail_points_val : na)
+    // FIX 2
+    trades_today := trades_today + 1
+
+// End-of-day force close
+if in_eod_window and strategy.position_size != 0
+    strategy.close_all(comment="EOD Close")
+
+// ═══════════════════════════════════════════════════════
+// ░░  ALERT SYSTEM
+// FIX 3 — alertcondition() rejects dynamic strings entirely.
+//          All 6 alerts rewritten as alert() calls inside if-blocks.
+//          alert() supports full runtime string concatenation.
+// ═══════════════════════════════════════════════════════
+
+orb_just_set   = orb_set and not orb_set[1]
+max_trades_hit = trades_today >= max_trades_day and (long_breakout or short_breakout)
+eod_alert      = in_eod_window and not in_eod_window[1] and strategy.position_size != 0
+
+// Pre-compute all display strings (valid here — used in alert(), not alertcondition())
+_ticker  = syminfo.ticker
+_tf      = timeframe.period
+_price   = str.tostring(math.round(close,               2))
+_orb_h   = str.tostring(math.round(orb_high,            2))
+_orb_l   = str.tostring(math.round(orb_low,             2))
+_rsi_val = str.tostring(math.round(rsi,                  1))
+_vol_x   = str.tostring(math.round(volume / vol_avg,     1))
+_stop_l  = str.tostring(math.round(long_stop_price,      2))
+_stop_s  = str.tostring(math.round(short_stop_price,     2))
+_tgt_l   = str.tostring(math.round(long_target,          2))
+_tgt_s   = str.tostring(math.round(short_target,         2))
+_orb_lt  = str.tostring(math.round(orb_long_trigger,     2))
+_orb_st  = str.tostring(math.round(orb_short_trigger,    2))
+
+// ── 1. LONG ENTRY ────────────────────────────────────────────
+if long_signal
+    alert(
+         "🟢 LONG BREAKOUT — " + _ticker + " (" + _tf + "m)\n"  +
+         "━━━━━━━━━━━━━━━━━━━━\n"                                 +
+         "📈 Entry Price : $" + _price   + "\n"                   +
+         "🎯 Target      : $" + _tgt_l   + "\n"                   +
+         "🛑 Stop Loss   : $" + _stop_l  + "\n"                   +
+         "━━━━━━━━━━━━━━━━━━━━\n"                                 +
+         "📦 ORB High    : $" + _orb_h   + "\n"                   +
+         "📊 RSI         : "  + _rsi_val + "\n"                   +
+         "🔊 Vol Spike   : "  + _vol_x   + "x avg\n"              +
+         "━━━━━━━━━━━━━━━━━━━━\n"                                 +
+         "⚠️  Confirm on chart before executing!",
+         alert.freq_once_per_bar)
+
+// ── 2. SHORT ENTRY ───────────────────────────────────────────
+if short_signal
+    alert(
+         "🔴 SHORT BREAKOUT — " + _ticker + " (" + _tf + "m)\n"  +
+         "━━━━━━━━━━━━━━━━━━━━\n"                                  +
+         "📉 Entry Price : $" + _price   + "\n"                    +
+         "🎯 Target      : $" + _tgt_s   + "\n"                    +
+         "🛑 Stop Loss   : $" + _stop_s  + "\n"                    +
+         "━━━━━━━━━━━━━━━━━━━━\n"                                  +
+         "📦 ORB Low     : $" + _orb_l   + "\n"                    +
+         "📊 RSI         : "  + _rsi_val + "\n"                    +
+         "🔊 Vol Spike   : "  + _vol_x   + "x avg\n"               +
+         "━━━━━━━━━━━━━━━━━━━━\n"                                  +
+         "⚠️  Confirm on chart before executing!",
+         alert.freq_once_per_bar)
+
+// ── 3. ANY ENTRY (combined) ──────────────────────────────────
+// FIX 4 — ternary inside alertcondition() message is illegal.
+//          Pre-compute _dir before building the string.
+if long_signal or short_signal
+    _dir = long_signal ? "LONG 🟢" : "SHORT 🔴"
+    alert(
+         "⚡ BREAKOUT SIGNAL — " + _ticker    + "\n"  +
+         "Direction : "  + _dir               + "\n"  +
+         "Price     : $" + _price             + "\n"  +
+         "RSI       : "  + _rsi_val + " | Vol: " + _vol_x + "x",
+         alert.freq_once_per_bar)
+
+// ── 4. ORB LOCKED ────────────────────────────────────────────
+if orb_just_set
+    alert(
+         "📦 ORB LOCKED — " + _ticker + "\n"  +
+         "━━━━━━━━━━━━━━━━━━━━\n"             +
+         "ORB High   : $" + _orb_h  + "\n"    +
+         "ORB Low    : $" + _orb_l  + "\n"    +
+         "Long above : $" + _orb_lt + "\n"    +
+         "Short below: $" + _orb_st + "\n"    +
+         "━━━━━━━━━━━━━━━━━━━━\n"             +
+         "👀 Watching for breakout...",
+         alert.freq_once_per_bar)
+
+// ── 5. END OF DAY WARNING ────────────────────────────────────
+if eod_alert
+    alert(
+         "⏰ EOD CLOSE — " + _ticker + "\n"                +
+         "Market closing soon — all positions being closed.\n" +
+         "Current Price : $" + _price,
+         alert.freq_once_per_bar)
+
+// ── 6. MAX DAILY TRADES REACHED ─────────────────────────────
+if max_trades_hit
+    alert(
+         "🚫 MAX TRADES HIT — " + _ticker + "\n"                           +
+         "Daily limit of " + str.tostring(max_trades_day) + " trades reached.\n" +
+         "No new entries until tomorrow.",
+         alert.freq_once_per_bar)
+
+// ═══════════════════════════════════════════════════════
+// ░░  VISUALS
+// ═══════════════════════════════════════════════════════
+
+orb_high_line = plot(orb_set ? orb_high : na, "ORB High",
+     color=color.new(color.green, 20), linewidth=2, style=plot.style_linebr)
+orb_low_line  = plot(orb_set ? orb_low  : na, "ORB Low",
+     color=color.new(color.red,   20), linewidth=2, style=plot.style_linebr)
+fill(orb_high_line, orb_low_line, color=color.new(color.gray, 90), title="ORB Zone")
+
+// FIX 5 — `linestyle=` is not a valid plot() parameter and causes a compile error.
+//          Removed from both trigger-level plot() calls below.
+plot(orb_set ? orb_long_trigger  : na, "Long Trigger",
+     color=color.lime,   linewidth=1, style=plot.style_linebr)
+plot(orb_set ? orb_short_trigger : na, "Short Trigger",
+     color=color.orange, linewidth=1, style=plot.style_linebr)
+
+plot(vwap_val, "VWAP", color=color.blue, linewidth=1)
+
+plotshape(long_signal,  title="Long Entry",  location=location.belowbar,
+     style=shape.triangleup,   color=color.lime, size=size.normal)
+plotshape(short_signal, title="Short Entry", location=location.abovebar,
+     style=shape.triangledown, color=color.red,  size=size.normal)
+
+bgcolor(in_trade_window ? color.new(color.green, 97) : na, title="Trade Window")
+bgcolor(in_eod_window   ? color.new(color.red,   93) : na, title="EOD Window")
+
+// ═══════════════════════════════════════════════════════
+// ░░  INFO TABLE
+// ═══════════════════════════════════════════════════════
+
+var table info = table.new(position.top_right, 2, 7,
+     bgcolor=color.new(color.black, 80), border_color=color.gray, border_width=1)
+
+if barstate.islast
+    table.cell(info, 0, 0, "IBX Pro",      text_color=color.white,  text_size=size.small)
+    table.cell(info, 1, 0, syminfo.ticker,  text_color=color.yellow, text_size=size.small)
+    table.cell(info, 0, 1, "ORB Period",   text_color=color.gray,   text_size=size.tiny)
+    table.cell(info, 1, 1, str.tostring(orb_minutes) + " min",text_color=color.white,  text_size=size.tiny)
+    table.cell(info, 0, 2, "Risk/Trade",   text_color=color.gray,   text_size=size.tiny)
+    table.cell(info, 1, 2, str.tostring(risk_pct) + "%",text_color=color.white,  text_size=size.tiny)
+    table.cell(info, 0, 3, "R:R",          text_color=color.gray,   text_size=size.tiny)
+    table.cell(info, 1, 3, "1:" + str.tostring(rr_ratio),text_color=color.white,  text_size=size.tiny)
+    table.cell(info, 0, 4, "Trades Today", text_color=color.gray,   text_size=size.tiny)
+    table.cell(info, 1, 4, str.tostring(trades_today) + "/" + str.tostring(max_trades_day),text_color=color.white,  text_size=size.tiny)
+    table.cell(info, 0, 5, "Position",     text_color=color.gray,   text_size=size.tiny)
+    pos_txt   = strategy.position_size > 0 ? "LONG"  :strategy.position_size < 0 ? "SHORT" : "FLAT"
+    pos_color = strategy.position_size > 0 ? color.lime :strategy.position_size < 0 ? color.red  : color.gray
+    table.cell(info, 1, 5, pos_txt,         text_color=pos_color,   text_size=size.tiny)
+    table.cell(info, 0, 6, "Net P&L",      text_color=color.gray,   text_size=size.tiny)
+    pnl_color = strategy.netprofit >= 0 ? color.lime : color.red
+    table.cell(info, 1, 6, str.tostring(math.round(strategy.netprofit, 2)),text_color=pnl_color,    text_size=size.tiny)

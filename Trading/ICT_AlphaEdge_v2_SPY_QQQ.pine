@@ -1,0 +1,465 @@
+// ============================================================
+//  ICT AlphaEdge Strategy v2 — SPY & QQQ Intraday (15m–1H)
+//  Concepts : FVG · Order Blocks · Liquidity Sweeps/MSS
+//             Kill Zones · Breaker Blocks/Mitigation
+//  NEW v2   : SPY/QQQ ticker guard · NY-timezone alerts
+//             ▲ Long entry · ▼ Short entry · Exit arrows
+//  Author   : Generated for Alpha Platform
+//  Version  : 2.0
+// ============================================================
+//@version=5
+indicator("ICT AlphaEdge v2 | SPY & QQQ",
+     shorttitle="ICT AlphaEdge v2", overlay=true,
+     max_boxes_count=300, max_lines_count=300, max_labels_count=300)
+
+// ══════════════════════════════════════════════════════════════
+//  TICKER GUARD — SPY & QQQ only
+// ══════════════════════════════════════════════════════════════
+ticker_ok = syminfo.ticker == "SPY" or syminfo.ticker == "QQQ"
+if not ticker_ok
+    runtime.error("ICT AlphaEdge v2 is configured for SPY and QQQ only. " +
+                  "Please apply this indicator to an SPY or QQQ chart.")
+
+// ══════════════════════════════════════════════════════════════
+//  INPUTS
+// ══════════════════════════════════════════════════════════════
+
+// ── Ticker Display ───────────────────────────────────────────
+grp_gen = "⚙️ General"
+show_ticker_label = input.bool(true, "Show Ticker Badge", group=grp_gen)
+
+// ── Fair Value Gaps ──────────────────────────────────────────
+grp_fvg           = "⚡ Fair Value Gaps (FVG)"
+show_fvg          = input.bool(true,  "Show FVGs",           group=grp_fvg)
+fvg_bull_col      = input.color(color.new(#00e676, 80), "Bullish FVG",   group=grp_fvg)
+fvg_bear_col      = input.color(color.new(#ff1744, 80), "Bearish FVG",   group=grp_fvg)
+fvg_mitigated_col = input.color(color.new(#888888, 90), "Mitigated FVG", group=grp_fvg)
+fvg_extend        = input.int(20, "Extend Boxes (bars)", minval=1,        group=grp_fvg)
+
+// ── Order Blocks ─────────────────────────────────────────────
+grp_ob       = "📦 Order Blocks (OB)"
+show_ob      = input.bool(true,  "Show Order Blocks",         group=grp_ob)
+ob_bull_col  = input.color(color.new(#1de9b6, 75), "Bullish OB", group=grp_ob)
+ob_bear_col  = input.color(color.new(#ff6d00, 75), "Bearish OB", group=grp_ob)
+ob_lookback  = input.int(5, "OB Lookback (bars)", minval=2, maxval=20, group=grp_ob)
+
+// ── Liquidity Sweeps & MSS ───────────────────────────────────
+grp_liq      = "💧 Liquidity Sweeps & MSS"
+show_sweep   = input.bool(true, "Show Liquidity Sweeps",      group=grp_liq)
+show_mss     = input.bool(true, "Show MSS Labels",            group=grp_liq)
+sweep_len    = input.int(20, "Swing Lookback", minval=5, maxval=50, group=grp_liq)
+sweep_col    = input.color(color.new(#e040fb, 0), "Sweep Color",   group=grp_liq)
+mss_bull_col = input.color(#00bcd4, "MSS Bullish",            group=grp_liq)
+mss_bear_col = input.color(#ff5252, "MSS Bearish",            group=grp_liq)
+
+// ── Kill Zones (New York Time) ───────────────────────────────
+grp_kz        = "🕐 Kill Zones (New York Time)"
+show_kz       = input.bool(true,  "Show Kill Zones",          group=grp_kz)
+show_london   = input.bool(true,  "London Open 3–5 AM ET",    group=grp_kz)
+show_ny_open  = input.bool(true,  "NY Open 9:30–11 AM ET",    group=grp_kz)
+show_ny_lunch = input.bool(false, "NY Lunch 11 AM–1 PM ET",   group=grp_kz)
+show_ny_close = input.bool(true,  "NY Close 3–4 PM ET",       group=grp_kz)
+kz_london_col = input.color(color.new(#ffd600, 88), "London Color",   group=grp_kz)
+kz_nyopen_col = input.color(color.new(#00e676, 88), "NY Open Color",  group=grp_kz)
+kz_lunch_col  = input.color(color.new(#888888, 92), "Lunch Color",    group=grp_kz)
+kz_close_col  = input.color(color.new(#ff6d00, 88), "Close Color",    group=grp_kz)
+
+// ── Breaker Blocks ───────────────────────────────────────────
+grp_bb      = "🔥 Breaker Blocks"
+show_bb     = input.bool(true, "Show Breaker Blocks",         group=grp_bb)
+bb_bull_col = input.color(color.new(#76ff03, 78), "Bullish Breaker", group=grp_bb)
+bb_bear_col = input.color(color.new(#ff4081, 78), "Bearish Breaker", group=grp_bb)
+
+// ── Entry / Exit Signals ─────────────────────────────────────
+grp_sig         = "🎯 Entry & Exit Signals"
+show_signals    = input.bool(true, "Show Entry/Exit Markers",  group=grp_sig)
+require_kz      = input.bool(true, "Entries Only in Kill Zone",group=grp_sig)
+long_entry_col  = input.color(#00e676, "Long Entry Color",     group=grp_sig)
+short_entry_col = input.color(#ff1744, "Short Entry Color",    group=grp_sig)
+exit_col        = input.color(#ffeb3b, "Exit Arrow Color",     group=grp_sig)
+
+// ══════════════════════════════════════════════════════════════
+//  NEW YORK TIME HELPERS
+//  TradingView's `hour` / `minute` on NYSE-listed symbols
+//  (SPY, QQQ) already reflects America/New_York exchange time.
+// ══════════════════════════════════════════════════════════════
+// Current bar hour & minute in NY exchange time
+ny_hour   = hour(time, "America/New_York")
+ny_minute = minute(time, "America/New_York")
+ny_hm     = ny_hour * 100 + ny_minute        // e.g. 9:30 → 930
+
+// Kill zone membership using clean NY hhmm comparison
+in_london   = show_london   and (ny_hm >= 300  and ny_hm < 500)
+in_nyopen   = show_ny_open  and (ny_hm >= 930  and ny_hm < 1100)
+in_nylunch  = show_ny_lunch and (ny_hm >= 1100 and ny_hm < 1300)
+in_nyclose  = show_ny_close and (ny_hm >= 1500 and ny_hm < 1600)
+in_any_kz   = in_london or in_nyopen or in_nylunch or in_nyclose
+
+// Regular trading hours gate (9:30–16:00 ET) — no signals outside RTH
+in_rth = ny_hm >= 930 and ny_hm < 1600
+
+// ══════════════════════════════════════════════════════════════
+//  KILL ZONE BACKGROUNDS
+// ══════════════════════════════════════════════════════════════
+bgcolor(show_kz and in_london  ? kz_london_col : na, title="London Kill Zone")
+bgcolor(show_kz and in_nyopen  ? kz_nyopen_col : na, title="NY Open Kill Zone")
+bgcolor(show_kz and in_nylunch ? kz_lunch_col  : na, title="NY Lunch")
+bgcolor(show_kz and in_nyclose ? kz_close_col  : na, title="NY Close Kill Zone")
+
+// Zone-start labels (first bar of each zone)
+kz_london_start = show_kz and show_london   and in_london  and not in_london[1]
+kz_nyopen_start = show_kz and show_ny_open  and in_nyopen  and not in_nyopen[1]
+kz_lunch_start  = show_kz and show_ny_lunch and in_nylunch and not in_nylunch[1]
+kz_close_start  = show_kz and show_ny_close and in_nyclose and not in_nyclose[1]
+
+if kz_london_start
+    label.new(bar_index, high, "🇬🇧 London KZ  3:00 AM ET",
+         color=kz_london_col, textcolor=#222222,
+         style=label.style_label_down, size=size.small)
+if kz_nyopen_start
+    label.new(bar_index, high, "🗽 NY Open  9:30 AM ET",
+         color=kz_nyopen_col, textcolor=#222222,
+         style=label.style_label_down, size=size.small)
+if kz_lunch_start
+    label.new(bar_index, high, "🍽 NY Lunch  11:00 AM ET",
+         color=kz_lunch_col,  textcolor=#222222,
+         style=label.style_label_down, size=size.small)
+if kz_close_start
+    label.new(bar_index, high, "🔔 NY Close  3:00 PM ET",
+         color=kz_close_col,  textcolor=#222222,
+         style=label.style_label_down, size=size.small)
+
+// ══════════════════════════════════════════════════════════════
+//  TICKER BADGE (top-right corner label)
+// ══════════════════════════════════════════════════════════════
+var label ticker_lbl = na
+if show_ticker_label and barstate.islast
+    label.delete(ticker_lbl)
+    badge_col = syminfo.ticker == "SPY" ? color.new(#1565c0, 10) : color.new(#6a1b9a, 10)
+    ticker_lbl := label.new(bar_index, high,
+         "● " + syminfo.ticker + " | ICT AlphaEdge v2 | NY Time",
+         color=badge_col, textcolor=color.white,
+         style=label.style_label_left, size=size.normal)
+
+// ══════════════════════════════════════════════════════════════
+//  CANDLE HELPERS
+// ══════════════════════════════════════════════════════════════
+is_bearish_candle = close < open
+is_bullish_candle = close > open
+avg_body   = ta.sma(math.abs(close - open), 14)
+strong_bull = (close - open) > 1.5 * avg_body and is_bullish_candle
+strong_bear = (open - close) > 1.5 * avg_body and is_bearish_candle
+
+// ══════════════════════════════════════════════════════════════
+//  1. FAIR VALUE GAPS (FVG)
+// ══════════════════════════════════════════════════════════════
+var box[]  fvg_boxes  = array.new_box()
+var bool[] fvg_is_bull = array.new_bool()
+
+bull_fvg = low > high[2]
+bear_fvg = high < low[2]
+
+if show_fvg
+    if bull_fvg
+        b = box.new(bar_index - 2, low, bar_index + fvg_extend, high[2],
+             border_color=fvg_bull_col, bgcolor=fvg_bull_col, border_width=1)
+        array.push(fvg_boxes,   b)
+        array.push(fvg_is_bull, true)
+    if bear_fvg
+        b = box.new(bar_index - 2, low[2], bar_index + fvg_extend, high,
+             border_color=fvg_bear_col, bgcolor=fvg_bear_col, border_width=1)
+        array.push(fvg_boxes,   b)
+        array.push(fvg_is_bull, false)
+
+if show_fvg and array.size(fvg_boxes) > 0
+    for i = array.size(fvg_boxes) - 1 to 0
+        b       = array.get(fvg_boxes,   i)
+        is_bull = array.get(fvg_is_bull, i)
+        btop    = box.get_top(b)
+        bbot    = box.get_bottom(b)
+        mitigated = is_bull ? close < btop : close > bbot
+        if mitigated
+            box.set_bgcolor(b,       fvg_mitigated_col)
+            box.set_border_color(b,  fvg_mitigated_col)
+        else
+            box.set_right(b, bar_index + fvg_extend)
+
+// ══════════════════════════════════════════════════════════════
+//  2. ORDER BLOCKS (OB)
+// ══════════════════════════════════════════════════════════════
+var box[]  ob_boxes  = array.new_box()
+var bool[] ob_is_bull = array.new_bool()
+
+if show_ob
+    if strong_bull
+        for i = 1 to ob_lookback
+            if is_bearish_candle[i]
+                b = box.new(bar_index - i, low[i], bar_index + fvg_extend, high[i],
+                     border_color=ob_bull_col, bgcolor=ob_bull_col,
+                     border_width=1, border_style=line.style_solid)
+                array.push(ob_boxes,   b)
+                array.push(ob_is_bull, true)
+                break
+    if strong_bear
+        for i = 1 to ob_lookback
+            if is_bullish_candle[i]
+                b = box.new(bar_index - i, low[i], bar_index + fvg_extend, high[i],
+                     border_color=ob_bear_col, bgcolor=ob_bear_col,
+                     border_width=1, border_style=line.style_solid)
+                array.push(ob_boxes,   b)
+                array.push(ob_is_bull, false)
+                break
+
+if show_ob and array.size(ob_boxes) > 0
+    for i = array.size(ob_boxes) - 1 to 0
+        b       = array.get(ob_boxes,   i)
+        is_bull = array.get(ob_is_bull, i)
+        btop    = box.get_top(b)
+        bbot    = box.get_bottom(b)
+        if not (is_bull ? close < bbot : close > btop)
+            box.set_right(b, bar_index + fvg_extend)
+
+// ══════════════════════════════════════════════════════════════
+//  3. LIQUIDITY SWEEPS & MSS
+// ══════════════════════════════════════════════════════════════
+swing_high = ta.pivothigh(high, sweep_len, sweep_len)
+swing_low  = ta.pivotlow(low,  sweep_len, sweep_len)
+
+prev_swing_high = ta.valuewhen(not na(swing_high), swing_high, 0)
+prev_swing_low  = ta.valuewhen(not na(swing_low),  swing_low,  0)
+
+bull_sweep = high > prev_swing_high and close < prev_swing_high
+bear_sweep = low  < prev_swing_low  and close > prev_swing_low
+
+if show_sweep
+    if bull_sweep
+        line.new(bar_index, prev_swing_high, bar_index, high,
+             color=sweep_col, width=2, style=line.style_dashed)
+        label.new(bar_index, high, "SWEEP H",
+             color=sweep_col, textcolor=color.white,
+             style=label.style_label_down, size=size.small)
+    if bear_sweep
+        line.new(bar_index, prev_swing_low, bar_index, low,
+             color=sweep_col, width=2, style=line.style_dashed)
+        label.new(bar_index, low, "SWEEP L",
+             color=sweep_col, textcolor=color.white,
+             style=label.style_label_up, size=size.small)
+
+var bool swept_high = false
+var bool swept_low  = false
+
+if bear_sweep
+    swept_low  := true
+    swept_high := false
+if bull_sweep
+    swept_high := true
+    swept_low  := false
+
+mss_bull = swept_low  and close > prev_swing_high
+mss_bear = swept_high and close < prev_swing_low
+
+if mss_bull
+    swept_low  := false
+if mss_bear
+    swept_high := false
+
+if show_mss
+    if mss_bull
+        label.new(bar_index, low, "MSS ▲",
+             color=mss_bull_col, textcolor=color.white,
+             style=label.style_label_up, size=size.normal)
+    if mss_bear
+        label.new(bar_index, high, "MSS ▼",
+             color=mss_bear_col, textcolor=color.white,
+             style=label.style_label_down, size=size.normal)
+
+// ══════════════════════════════════════════════════════════════
+//  4. BREAKER BLOCKS
+// ══════════════════════════════════════════════════════════════
+var box[]  bb_boxes  = array.new_box()
+var bool[] bb_is_bull = array.new_bool()
+
+if show_bb and array.size(ob_boxes) > 0
+    for i = array.size(ob_boxes) - 1 to 0
+        b_ob       = array.get(ob_boxes,   i)
+        is_bull_ob = array.get(ob_is_bull, i)
+        ob_top     = box.get_top(b_ob)
+        ob_bot     = box.get_bottom(b_ob)
+
+        if not is_bull_ob and close > ob_top
+            bb = box.new(box.get_left(b_ob), ob_bot, bar_index + fvg_extend, ob_top,
+                 border_color=bb_bull_col, bgcolor=bb_bull_col,
+                 border_width=1, border_style=line.style_dotted)
+            array.push(bb_boxes,   bb)
+            array.push(bb_is_bull, true)
+            box.set_bgcolor(b_ob,      color.new(color.gray, 95))
+            box.set_border_color(b_ob, color.new(color.gray, 95))
+            array.remove(ob_boxes,   i)
+            array.remove(ob_is_bull, i)
+
+        else if is_bull_ob and close < ob_bot
+            bb = box.new(box.get_left(b_ob), ob_bot, bar_index + fvg_extend, ob_top,
+                 border_color=bb_bear_col, bgcolor=bb_bear_col,
+                 border_width=1, border_style=line.style_dotted)
+            array.push(bb_boxes,   bb)
+            array.push(bb_is_bull, false)
+            box.set_bgcolor(b_ob,      color.new(color.gray, 95))
+            box.set_border_color(b_ob, color.new(color.gray, 95))
+            array.remove(ob_boxes,   i)
+            array.remove(ob_is_bull, i)
+
+if show_bb and array.size(bb_boxes) > 0
+    for i = array.size(bb_boxes) - 1 to 0
+        b = array.get(bb_boxes, i)
+        box.set_right(b, bar_index + fvg_extend)
+
+// ══════════════════════════════════════════════════════════════
+//  5. ENTRY & EXIT SIGNAL ENGINE
+// ══════════════════════════════════════════════════════════════
+//
+//  LONG ENTRY  — confluence of:
+//    • Bearish liquidity sweep   (stop-hunt below swing low)
+//    • Bullish MSS               (structure flips up)
+//    • Bullish FVG present       (imbalance to fill)
+//    • Inside RTH, optionally inside a Kill Zone
+//
+//  SHORT ENTRY — confluence of:
+//    • Bullish liquidity sweep   (stop-hunt above swing high)
+//    • Bearish MSS               (structure flips down)
+//    • Bearish FVG present       (imbalance to fill)
+//    • Inside RTH, optionally inside a Kill Zone
+//
+//  EXIT LONG   — price reaches into a Bearish OB / Breaker above
+//                OR a bearish FVG overhead gets entered
+//  EXIT SHORT  — price reaches into a Bullish OB / Breaker below
+//                OR a bullish FVG below gets entered
+// ──────────────────────────────────────────────────────────────
+
+// Track open trade direction  (0 = flat, 1 = long, -1 = short)
+var int trade_dir = 0
+
+// Kill zone gate
+kz_gate = require_kz ? in_any_kz : true
+
+// ── Raw signal conditions ─────────────────────────────────────
+raw_long  = bear_sweep[1] and mss_bull and bull_fvg and in_rth and kz_gate
+raw_short = bull_sweep[1] and mss_bear and bear_fvg and in_rth and kz_gate
+
+// Prevent duplicate signals in same direction
+long_entry  = show_signals and raw_long  and trade_dir != 1
+short_entry = show_signals and raw_short and trade_dir != -1
+
+// Exit long: bearish FVG appears overhead  OR  bearish MSS after entry
+exit_long  = show_signals and trade_dir == 1  and (bear_fvg or mss_bear)
+// Exit short: bullish FVG appears below  OR  bullish MSS after entry
+exit_short = show_signals and trade_dir == -1 and (bull_fvg or mss_bull)
+
+// Update trade state
+if long_entry
+    trade_dir := 1
+if short_entry
+    trade_dir := -1
+if exit_long or exit_short
+    trade_dir := 0
+
+// ── LONG ENTRY: solid green triangle below bar ────────────────
+plotshape(long_entry,
+     title="Long Entry ▲",
+     location=location.belowbar,
+     style=shape.triangleup,
+     size=size.normal,
+     color=long_entry_col,
+     text="LONG",
+     textcolor=color.white)
+
+// ── SHORT ENTRY: solid red triangle above bar ─────────────────
+plotshape(short_entry,
+     title="Short Entry ▼",
+     location=location.abovebar,
+     style=shape.triangledown,
+     size=size.normal,
+     color=short_entry_col,
+     text="SHORT",
+     textcolor=color.white)
+
+// ── EXIT LONG: yellow arrow-down above bar ────────────────────
+plotshape(exit_long,
+     title="Exit Long ↓",
+     location=location.abovebar,
+     style=shape.arrowdown,
+     size=size.small,
+     color=exit_col,
+     text="EXIT",
+     textcolor=#222222)
+
+// ── EXIT SHORT: yellow arrow-up below bar ────────────────────
+plotshape(exit_short,
+     title="Exit Short ↑",
+     location=location.belowbar,
+     style=shape.arrowup,
+     size=size.small,
+     color=exit_col,
+     text="EXIT",
+     textcolor=#222222)
+
+// ══════════════════════════════════════════════════════════════
+//  6. ALERT CONDITIONS  (all times expressed in New York / ET)
+// ══════════════════════════════════════════════════════════════
+// ── Structure alerts ─────────────────────────────────────────
+alertcondition(bull_fvg,
+     title="[SPY/QQQ] Bullish FVG",
+     message="ICT AlphaEdge | {{ticker}} | Bullish FVG formed | NY Time: {{time}} | Price: {{close}}")
+
+alertcondition(bear_fvg,
+     title="[SPY/QQQ] Bearish FVG",
+     message="ICT AlphaEdge | {{ticker}} | Bearish FVG formed | NY Time: {{time}} | Price: {{close}}")
+
+alertcondition(bull_sweep,
+     title="[SPY/QQQ] Liquidity Sweep – High",
+     message="ICT AlphaEdge | {{ticker}} | HIGH swept (stop hunt) | NY Time: {{time}} | Price: {{close}}")
+
+alertcondition(bear_sweep,
+     title="[SPY/QQQ] Liquidity Sweep – Low",
+     message="ICT AlphaEdge | {{ticker}} | LOW swept (stop hunt) | NY Time: {{time}} | Price: {{close}}")
+
+alertcondition(mss_bull,
+     title="[SPY/QQQ] Bullish MSS",
+     message="ICT AlphaEdge | {{ticker}} | ▲ Bullish Market Structure Shift | NY Time: {{time}} | Price: {{close}}")
+
+alertcondition(mss_bear,
+     title="[SPY/QQQ] Bearish MSS",
+     message="ICT AlphaEdge | {{ticker}} | ▼ Bearish Market Structure Shift | NY Time: {{time}} | Price: {{close}}")
+
+// ── Kill Zone OB alerts ───────────────────────────────────────
+alertcondition(strong_bull and in_nyopen,
+     title="[SPY/QQQ] Bullish OB – NY Open KZ",
+     message="ICT AlphaEdge | {{ticker}} | Bullish OB in NY OPEN Kill Zone | NY Time: 9:30–11:00 AM | Price: {{close}}")
+
+alertcondition(strong_bear and in_nyopen,
+     title="[SPY/QQQ] Bearish OB – NY Open KZ",
+     message="ICT AlphaEdge | {{ticker}} | Bearish OB in NY OPEN Kill Zone | NY Time: 9:30–11:00 AM | Price: {{close}}")
+
+alertcondition(strong_bull and in_nyclose,
+     title="[SPY/QQQ] Bullish OB – NY Close KZ",
+     message="ICT AlphaEdge | {{ticker}} | Bullish OB in NY CLOSE Kill Zone | NY Time: 3:00–4:00 PM | Price: {{close}}")
+
+alertcondition(strong_bear and in_nyclose,
+     title="[SPY/QQQ] Bearish OB – NY Close KZ",
+     message="ICT AlphaEdge | {{ticker}} | Bearish OB in NY CLOSE Kill Zone | NY Time: 3:00–4:00 PM | Price: {{close}}")
+
+// ── Entry / Exit alerts ───────────────────────────────────────
+alertcondition(long_entry,
+     title="[SPY/QQQ] ▲ LONG ENTRY",
+     message="🟢 ICT AlphaEdge | {{ticker}} | ▲ LONG ENTRY SIGNAL | Kill Zone active | NY Time: {{time}} | Price: {{close}}")
+
+alertcondition(short_entry,
+     title="[SPY/QQQ] ▼ SHORT ENTRY",
+     message="🔴 ICT AlphaEdge | {{ticker}} | ▼ SHORT ENTRY SIGNAL | Kill Zone active | NY Time: {{time}} | Price: {{close}}")
+
+alertcondition(exit_long,
+     title="[SPY/QQQ] EXIT Long",
+     message="⚠️ ICT AlphaEdge | {{ticker}} | EXIT LONG – target/reversal zone reached | NY Time: {{time}} | Price: {{close}}")
+
+alertcondition(exit_short,
+     title="[SPY/QQQ] EXIT Short",
+     message="⚠️ ICT AlphaEdge | {{ticker}} | EXIT SHORT – target/reversal zone reached | NY Time: {{time}} | Price: {{close}}")

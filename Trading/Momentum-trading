@@ -1,0 +1,76 @@
+//@version=5
+strategy("Minervini VCP Pro Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10)
+
+// === INPUTS ===
+indexSymbol = input.symbol("SPX", "Benchmark Index")
+volMultiplier = input.float(1.5, "Volume Spike Multiplier")
+baseLength = input.int(30, "Base Length")
+pivotLookback = input.int(10, "Pivot Lookback")
+tightRangePercent = input.float(0.08, "Tight Range %")
+trailStopPercent = input.float(0.08, "Trailing Stop %")
+
+// === MOVING AVERAGES ===
+sma50 = ta.sma(close, 50)
+sma150 = ta.sma(close, 150)
+sma200 = ta.sma(close, 200)
+
+// === TREND TEMPLATE (STRICT) ===
+trendTemplate =
+     close > sma150 and
+     close > sma200 and
+     sma150 > sma200 and
+     sma50 > sma150 and
+     close > sma50
+
+// === RELATIVE STRENGTH vs INDEX ===
+indexClose = request.security(indexSymbol, timeframe.period, close)
+rsLine = close / indexClose
+rsMA = ta.sma(rsLine, 50)
+rsStrong = rsLine > rsMA
+
+// === VCP DETECTION (MULTI-CONTRACTION APPROXIMATION) ===
+range1 = ta.highest(high, baseLength) - ta.lowest(low, baseLength)
+range2 = ta.highest(high, baseLength * 2) - ta.lowest(low, baseLength * 2)
+range3 = ta.highest(high, baseLength * 3) - ta.lowest(low, baseLength * 3)
+
+// shrinking volatility
+vcp = range1 < range2 and range2 < range3
+
+// === TIGHT PRICE STRUCTURE ===
+recentHigh = ta.highest(high, pivotLookback)
+recentLow = ta.lowest(low, pivotLookback)
+tightRange = (recentHigh - recentLow) / recentLow < tightRangePercent
+
+// === PIVOT POINT ===
+pivot = ta.highest(high, pivotLookback)
+
+// === VOLUME ===
+avgVol = ta.sma(volume, 20)
+volumeSpike = volume > avgVol * volMultiplier
+
+// === ENTRY ===
+breakout = close > pivot
+
+longCondition =
+     trendTemplate and
+     rsStrong and
+     vcp and
+     tightRange and
+     breakout and
+     volumeSpike
+
+// === TRAILING STOP (Minervini style) ===
+trailStop = close * (1 - trailStopPercent)
+
+// === EXECUTION ===
+if (longCondition)
+    strategy.entry("Long", strategy.long)
+
+strategy.exit("Exit", "Long", trail_price=close, trail_offset=close * trailStopPercent)
+
+// === PLOTS ===
+plot(sma50, color=color.blue, title="SMA 50")
+plot(sma150, color=color.orange, title="SMA 150")
+plot(sma200, color=color.red, title="SMA 200")
+
+plot(pivot, "Pivot", color=color.green)
