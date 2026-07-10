@@ -6,7 +6,8 @@ metrics via yfinance, categorises every ticker using a structured decision
 tree, grades entries (enrich_rows), and produces:
 
   data/output/stock_scan_YYYYMMDD_HHMM.csv  – full metrics + category + levels
-  data/output/metrics_YYYYMMDD_HHMMSS.csv   – csv_writer output
+                                              (Scan_Time column = when the scan
+                                              finished; single CSV per run)
   HTML dashboard (reporting.dashboard)      – top-5 cards + market pulse
   Console tables per category, put/call reports, and a Day Trade Candidates
   section with paste-ready lines for docs/day_trading_prompts.md
@@ -72,7 +73,6 @@ from pathlib import Path
 if __package__ in (None, ""):   # direct run: make `stockanalysis.*` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from stockanalysis.reporting.csv_writer import save_metrics_to_csv
 from stockanalysis.core.metrics import get_metrics
 from stockanalysis.core.grade_signals import classify_grade_and_signals, enrich_rows
 from stockanalysis.reporting.signal_tracker import log_signals_from_rows, log_day_trades_from_rows
@@ -680,13 +680,14 @@ def main(tickers: list) -> list:
     if n_day:
         log.info("Day-trade tracker: %d candidate(s) logged", n_day)
 
-    save_metrics_to_csv(rows, output_dir=out_dir)
-
     # ── DataFrame + column ordering ──────────────────────────────────────────
+    # (was also mirrored to metrics_*.csv via csv_writer — same rows, so one
+    # file per scan is enough; stock_scan_*.csv is the sorted/curated one)
     df = pd.DataFrame(rows)
+    df.insert(0, "Scan_Time", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     priority = [
-        "Ticker", "LongName", "Sector",
+        "Scan_Time", "Ticker", "LongName", "Sector",
         "Category", "Cat_Reason", "Rank_Score",
         "Grade", "RR_T2", "Days_To_Earnings", "SizeFlag",
         "Entry", "Stop", "Target", "Notes",

@@ -33,13 +33,15 @@ rejected and why.
 ## 2. Entry evaluation (the "should I take this trade" prompt)
 
 ```
-I'm considering a [LONG/SHORT] day trade on [TICKER]. Current data:
+INTC: price 120.35, gap ?% (now 0.00%), VWAP 122.55 (below), RVOL 0.88, ADX 23.2, ATR(daily) 11.14, prev-day H/L 130.74/117.63, pre-mkt H/L 131.00/121.52 | plan: entry ? stop ? target ? [C, score 47]
+I'm considering a [LONG/SHORT] day trade on [INTC]. Current data:
 - Price: [X], VWAP: [X], 9EMA: [X], 20EMA: [X] (on the [1/5]-min chart)
 - Opening range (9:30–9:45): high [X], low [X]
 - Prev-day high [X], prev-day low [X], today's gap: [X]%
 - RVOL: [X], ATR (daily): [X]
 - Market context: SPY is [above/below] VWAP and [trending up/down/chopping], VIX [X]
 - Setup I see: [ORB breakout / VWAP reclaim / gap-and-go / pullback to 9EMA / other]
+INTC: price 120.35, gap ?% (now 0.00%), VWAP 122.55 (below), RVOL 0.88, ADX 23.2, ATR(daily) 11.14, prev-day H/L 130.74/117.63, pre-mkt H/L 131.00/121.52 | plan: entry ? stop ? target ? [C, score 47]
 
 Answer in this exact format:
 1. VERDICT: Take it / Skip it / Wait for [specific condition]
