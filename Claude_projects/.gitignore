@@ -1,0 +1,6 @@
+# Generated scanner artifacts — reproducible from the pipeline
+July01-2027/StockAnalysis_Version1/data/cache/
+July01-2027/StockAnalysis_Version1/data/output/
+
+__pycache__/
+*.pyc

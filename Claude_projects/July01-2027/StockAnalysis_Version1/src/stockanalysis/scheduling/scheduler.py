@@ -12,7 +12,7 @@ Orchestrates all stock scan runs with:
 Setup
 -----
 1. Install dependencies:
-       pip install schedule yfinance resend pyotp
+       pip install schedule yfinance resend python-dotenv
 
 2. Set environment variables (or create a .env file):
        RESEND_API_KEY=re_xxxxxxxxxxxx
@@ -73,12 +73,12 @@ from stockanalysis.scanners.scan_universe import main as run_scan, SP500_TICKERS
 from stockanalysis.reporting.dashboard import generate_dashboard, _score_to_grade  # dashboard + grading
 
 # ── Config ────────────────────────────────────────────────────────────────────
-#DAY_TRADE_TICKERS=['NBIS', 'CRWV', 'GLW', 'COIN', 'AMAT', 'META', 'MU', 'HIMS', 'PLTR', 'MRVL', 'MSFT', 'NVDA', 'TSLA', 'AMD', 'AVGO', 'HOOD']
-DAY_TRADE_TICKERS=['HOOD','NBIS','ARM','SPY','QQQ','PLTR', 'HIMS', 'INTC', 'AMAT', 'CRDO', 'ANET', 'NVDA', 'TSLA', 'AMD', 'AVGO', 'META']
-# Watchlist subsets — keeps intraday yfinance calls manageable
+#DAY_TRADE_TICKERS=[ 'META', 'MU', 'PLTR', 'MRVL', 'MSFT', 'NVDA', 'TSLA', 'AMD', 'AVGO', 'ARM']
+DAY_TRADE_TICKERS=['AMAT', 'WDC', 'GLW', 'MU', 'STX', 'COHR', 'NBIS', 'ARM', 'LITE', 'MRVL', 'PLTR', 'AVGO', 'HOOD', 'META', 'MSFT', 'NVDA', 'TSLA', 'AMD', 'CRWD']
+
 INTRADAY_TICKERS  = DAY_TRADE_TICKERS  #Daytrade only
 #WATCHLIST_TICKERS = WATCHLIST_TICKERS 
-WATCHLIST_TICKERS = DAY_TRADE_TICKERS
+WATCHLIST_TICKERS = WATCHLIST_TICKERS
 # #used for both swing and Longterm positions
 FULL_TICKERS      = SP500_TICKERS 
 #To find the next trending stocks
@@ -408,7 +408,8 @@ def _alert_conditions(mode: str) -> callable:
     """Return a filter function for rows that deserve an email alert."""
     conditions = {
         "daytrade": lambda r: (
-            _num(r, "RVOL", 0) >= 1.5
+            # time-adjusted RVOL when available; daily RVOL underreads all morning
+            (_num(r, "RVOL_Intraday", 0) or _num(r, "RVOL", 0)) >= 1.5
             and r.get("Above_VWAP")
             and r.get("Category") in ("Momentum", "Momentum-Pullback")
             and _num(r, "ADX_14", 0) >= 25
@@ -572,7 +573,6 @@ def run(mode: str, tickers: list[str] | None = None, force: bool = False) -> Non
     # ── Ticker universe ─────────────────────────────────────────
     if tickers is None:
         if mode == "daytrade":
-
             #_initialize_day_session()
             tickers = _dynamic_day_trade if _dynamic_day_trade else DAY_TRADE_TICKERS
         elif mode in ("swing", "puts", "calls"):
@@ -784,7 +784,8 @@ def _start_scheduler_test() -> None:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def main() -> None:
+    """Standalone entry point — run this module directly."""
     parser = argparse.ArgumentParser(description="Stock scan scheduler")
 
     parser.add_argument(
@@ -811,3 +812,7 @@ if __name__ == "__main__":
         _start_scheduler_test()
     else:
         _start_scheduler()
+
+
+if __name__ == "__main__":
+    main()

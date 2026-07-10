@@ -300,39 +300,51 @@ def _signals_mp(row: dict) -> dict:
     pct_ema8  = _v(row, "Pct_vs_8EMA", 0)
     atr_shrink = _v(row, "ATR Shrinking", False)
 
-    # Entry — tiered by how close to 8EMA
+    # Entry — tiered by how close to 8EMA. `trigger` is the buy level backing
+    # the text; stop/target/R:R math anchors to it, not to current price — a
+    # "reclaim" plan fills at the reclaim level, not wherever price sits now.
     if pct_ema8 is not None and abs(pct_ema8) <= 3:
         entry = (f"Near 8EMA — buy hold above {_fmt(ema8)} (8EMA) "
                  f"with RVOL expansion >1.2. Confirm VWAP hold.")
+        trigger = max(price, ema8 or price)
     elif ma50 and price < ma50:
         entry = (f"Primary: 50MA reclaim above {_fmt(ma50)} with volume surge (RVOL >1.5). "
                  f"Secondary: 8EMA reclaim {_fmt(ema8)}. "
                  f"Do NOT buy before 50MA reclaim.")
+        trigger = ma50
     else:
         entry = (f"8EMA reclaim above {_fmt(ema8)} on volume (RVOL >1.3). "
                  f"Scale add on pullback to 21EMA {_fmt(ema21)}.")
+        trigger = max(price, ema8 or price)
 
-    # Stop
-    atr_s   = _atr_stop(price, atr, 1.5)
-    pd_s    = pd_low if pd_low else _pct_stop(price, 7)
-    stop_px = min(atr_s, pd_s)  # use the lower (further) of the two for MP
-    stop    = (f"{_fmt(stop_px)} — "
+    # Stop — from the trigger, floored at the -7% hard stop so a high-ATR name
+    # can't print a structural stop the hard-stop rule would never let run
+    atr_s   = _atr_stop(trigger, atr, 1.5)
+    pd_s    = pd_low if pd_low else _pct_stop(trigger, 7)
+    hard_s  = _pct_stop(trigger, 7)
+    stop_px = max(min(atr_s, pd_s), hard_s)
+    if stop_px >= trigger:   # degenerate levels (zero ATR / PDL above trigger)
+        stop_px = hard_s
+    stop    = (f"{_fmt(stop_px)} from entry fill — "
                f"Prev-Day Low {_fmt(pd_low)} / ATR×1.5 {_fmt(atr_s)}. "
-               f"Hard stop -7% = {_fmt(_pct_stop(price, 7))}.")
+               f"Hard stop -7% = {_fmt(hard_s)}.")
 
-    # Targets — step through MAs toward 52W high
+    # Targets — step through MAs toward 52W high, measured from the trigger.
+    # Each step needs headroom above it, else a "reclaim 8EMA" entry gets the
+    # same 8EMA as its own T1 (reward zero, R:R meaningless)
     t_steps = []
-    if ema8   and ema8   > price: t_steps.append((ema8,  "8EMA"))
-    if ma50   and ma50   > price: t_steps.append((ma50,  "50MA"))
-    if ma200  and ma200  > price: t_steps.append((ma200, "200MA"))
-    if high52 and high52 > price: t_steps.append((high52, "52W high"))
+    for px, label in ((ema8, "8EMA"), (ma50, "50MA"),
+                      (ma200, "200MA"), (high52, "52W high")):
+        if px and px > trigger * 1.03:
+            t_steps.append((px, label))
     if not t_steps:
-        t_steps = [(_target(price, 10), "+10%"), (_target(price, 20), "+20%")]
+        t_steps = [(_target(trigger, 10), "+10%"), (_target(trigger, 20), "+20%")]
 
     t_parts = []
     for i, (px, label) in enumerate(t_steps[:3], 1):
-        t_parts.append(f"T{i} {_fmt(px)} ({label} / {_pct((px/price-1)*100)})")
-    target = " → ".join(t_parts) + f". Trail 21EMA {_fmt(ema21)} once in profit."
+        t_parts.append(f"T{i} {_fmt(px)} ({label} / {_pct((px/trigger-1)*100)})")
+    target = (" → ".join(t_parts) + f" — % from entry {_fmt(trigger)}. "
+              f"Trail 21EMA {_fmt(ema21)} once in profit.")
 
     notes = _risk_notes(row)
     if atr_shrink:
@@ -342,11 +354,12 @@ def _signals_mp(row: dict) -> dict:
 
     grade = _grade_mp(row)
     t1_px = t_steps[0][0] if t_steps else None
-    # T2 must be beyond T1 — with a single overhead MA, fall back to +15%
-    t2_px = t_steps[1][0] if len(t_steps) > 1 else _target(price, 15)
+    # T2 must be beyond T1 — with a single overhead MA, fall back to +15%,
+    # but never below T1 itself (a far 52W-high T1 would invert the ladder)
+    t2_px = t_steps[1][0] if len(t_steps) > 1 else max(t1_px, _target(trigger, 15))
     return dict(entry=entry, stop=stop, target=target,
                 notes=notes, size_flag=_size_flag(atr_pct, grade),
-                levels=dict(entry=price, stop=stop_px, t1=t1_px, t2=t2_px))
+                levels=dict(entry=trigger, stop=stop_px, t1=t1_px, t2=t2_px))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -724,7 +737,8 @@ def enrich_rows(rows: list[dict]) -> list[dict]:
 # STANDALONE TEST
 # ─────────────────────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def main() -> None:
+    """Run the grading engine against built-in sample rows (one per category)."""
     test_rows = [
         dict(
             Ticker="PANW", Category="Momentum",
@@ -819,3 +833,7 @@ if __name__ == "__main__":
         if sig["notes"]:
             for n in sig["notes"]:
                 print(f"  NOTE   : {n}")
+
+
+if __name__ == "__main__":
+    main()

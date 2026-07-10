@@ -1,28 +1,39 @@
 """
-top5_dashboard.py
-=================
-Generates a self-contained HTML dashboard showing Top 5 stocks
-for Calls, Puts, Swing Trade, and Day Trade after the scan runs.
+dashboard.py
+============
+Generates a self-contained HTML dashboard from enriched scan rows:
+
+  - Market-pulse header: VIX, SPY/QQQ strength (own trend + allocation-weighted
+    mega-cap breadth), top-10 S&P mega caps with weights, news catalysts, and
+    upcoming high-impact economic events
+  - Top 5 cards per section (Day Trade, Swing Trade, Calls, Puts) with the
+    R:R-gated entry/stop/target plan from grade_signals, gate warnings (⛔/⚠),
+    and a fixed-risk R:R + position-size line
+    (ACCOUNT_SIZE / RISK_PER_TRADE_PCT / MAX_POSITION_PCT env vars)
 
 Usage
 -----
     from stockanalysis.reporting.dashboard import generate_dashboard
 
-    # After your main scan loop:
-    rows = [...]   # list of enriched dicts from get_metrics + categorize + enrich_row
+    rows = [...]   # dicts from get_metrics + categorize + enrich_row
     generate_dashboard(rows, output_dir=out_dir)
-    # → opens Reports/dashboard_YYYYMMDD_HHMM.html in your browser automatically
+    # → writes dashboard_YYYYMMDD_HHMM.html and opens it in your browser
 
-Or call standalone:
-    python top5_dashboard.py  (uses built-in sample data)
+Run standalone (built-in sample data):
+    python dashboard.py
+    python -m stockanalysis.reporting.dashboard
 """
 
 from __future__ import annotations
 import html as _html
 import os
+import sys
 import webbrowser
 from datetime import datetime
 from pathlib import Path
+
+if __package__ in (None, ""):   # direct run: make `stockanalysis.*` importable
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 # ── Scoring functions ─────────────────────────────────────────────────────────
@@ -93,6 +104,34 @@ def _risk_size_html(entry_px, stop_px, t1_px, t2_px, size_flag) -> str:
     )
 
 
+def day_trade_levels(row: dict) -> dict | None:
+    """
+    Numeric day-trade breakout plan for a scan row. Single source of truth —
+    used by the Day Trade cards AND the outcome tracker so the plan that gets
+    graded is exactly the plan that was displayed.
+
+    entry = ORB high (primary) or prev-day high; stop = nearest structure low
+    below entry (ORB low / prev-day low) else -5%; t1 = +3%; t2 = 8EMA if it
+    has ≥3% headroom, else +5%. setup labels which trigger was used.
+    """
+    orb_h, orb_l = _v(row, "ORB_High"), _v(row, "ORB_Low")
+    pd_high, pd_low = _v(row, "Prev-Day High"), _v(row, "Prev-Day Low")
+    price, ema8 = _v(row, "Current Price"), _v(row, "8EMA")
+    entry = orb_h or pd_high or price
+    if not entry:
+        return None
+    struct_lows = [x for x in (orb_l, pd_low) if x and x < entry]
+    stop = max(struct_lows) if struct_lows else entry * 0.95
+    t2 = ema8 if (ema8 and ema8 > entry * 1.03) else entry * 1.05
+    return {
+        "entry": round(float(entry), 2),
+        "stop":  round(float(stop), 2),
+        "t1":    round(float(entry) * 1.03, 2),
+        "t2":    round(float(t2), 2),
+        "setup": "ORB breakout" if orb_h else "PDH breakout",
+    }
+
+
 def _score_to_grade(score: float, section: str) -> str:
     thresholds = _GRADE_THRESHOLDS.get(
         section, [(80, "A+"), (60, "A"), (40, "B+"), (20, "B"), (1, "C")]
@@ -120,7 +159,8 @@ def _day_trade_score(row: dict) -> float:
     """
     score = 0.0
     cat        = _v(row, "Category", "")
-    rvol       = _v(row, "RVOL", 0) or 0
+    # Prefer time-adjusted intraday RVOL — daily RVOL reads ~0.3 all morning
+    rvol       = _v(row, "RVOL_Intraday") or _v(row, "RVOL", 0) or 0
     vol20      = _v(row, "Vol_vs_20D", 0) or 0
     above_vwap = _v(row, "Above_VWAP", False)
     rs         = _v(row, "RS", 0) or 0
@@ -333,7 +373,7 @@ def _stock_card(row: dict, section: str) -> str:
     rsi     = _v(row, "RSI_14")
     adx     = _v(row, "ADX_14")
     bb      = _v(row, "BB_PctB")
-    rvol    = _v(row, "RVOL")
+    rvol    = _v(row, "RVOL_Intraday") or _v(row, "RVOL")   # prefer time-adjusted
     atr_pct = _v(row, "ATR_Pct")
     dist    = _v(row, "Dist_52W_High%")
     above_vwap = _v(row, "Above_VWAP", False)
@@ -364,15 +404,22 @@ def _stock_card(row: dict, section: str) -> str:
     # used below for the R:R / position-size line.
     lv_e = lv_s = lv_t1 = lv_t2 = None
     if section == "Day Trade":
-        lv_e  = pd_high or price or None
-        lv_s  = pd_low if (pd_low and lv_e and pd_low < lv_e) else (lv_e * 0.95 if lv_e else None)
-        lv_t1 = lv_e * 1.03 if lv_e else None
-        # 8EMA is only a valid T2 when it sits above the breakout entry
-        lv_t2 = ema8 if (ema8 and lv_e and ema8 > lv_e * 1.03) else (lv_e * 1.05 if lv_e else None)
-        entry   = (f"Above VWAP {_fmt(vwap)} — buy Prev-Day High {_fmt(pd_high)} breakout with RVOL>1.5"
+        orb_h, orb_l = _v(row, "ORB_High"), _v(row, "ORB_Low")
+        orb_status   = _v(row, "ORB_Status")
+        dl = day_trade_levels(row) or {}
+        lv_e, lv_s  = dl.get("entry"), dl.get("stop")
+        lv_t1, lv_t2 = dl.get("t1"), dl.get("t2")
+        trigger = (f"buy ORB high {_fmt(orb_h)} breakout (range {_fmt(orb_l)}–{_fmt(orb_h)}, "
+                   f"now {orb_status}), confirm over Prev-Day High {_fmt(pd_high)}"
+                   if orb_h else
+                   f"buy Prev-Day High {_fmt(pd_high)} breakout")
+        entry   = (f"Above VWAP {_fmt(vwap)} — {trigger} with RVOL>1.5"
                    if above_vwap else
-                   f"Wait for VWAP reclaim {_fmt(vwap)}, then Prev-Day High {_fmt(pd_high)} breakout")
-        stop    = f"Below Prev-Day Low {_fmt(pd_low)} — hard stop: {_fmt(price * 0.95 if price else None)} (-5%)"
+                   f"Wait for VWAP reclaim {_fmt(vwap)}, then {trigger}")
+        stop    = (f"Below ORB low {_fmt(orb_l)} / Prev-Day Low {_fmt(pd_low)} — "
+                   f"hard stop: {_fmt(price * 0.95 if price else None)} (-5%)"
+                   if orb_l else
+                   f"Below Prev-Day Low {_fmt(pd_low)} — hard stop: {_fmt(price * 0.95 if price else None)} (-5%)")
         t2_lab  = "8EMA " if (lv_t2 is not None and lv_t2 == ema8) else ""
         t2_pct  = _pct((lv_t2 / lv_e - 1) * 100) if (lv_t2 and lv_e) else "—"
         target  = f"T1 {_fmt(lv_t1)} (+3%), T2 {t2_lab}{_fmt(lv_t2)} ({t2_pct}). Trail VWAP."
@@ -459,7 +506,12 @@ def _stock_card(row: dict, section: str) -> str:
     if section in ("Day Trade", "Swing Trade"):
         rr_size_html = _risk_size_html(lv_e, lv_s, lv_t1, lv_t2, size_flag)
     else:  # options — max loss is the premium, so size = the risk budget itself
-        flag   = (size_flag or "HALF").upper()
+        # The swing SizeFlag reflects the LONG-side verdict; an "Avoid" stock is
+        # a perfectly valid put candidate, so NONE must not zero the budget.
+        # Derive from volatility instead: quarter budget on high-ATR names.
+        flag = (size_flag or "").upper()
+        if flag not in ("FULL", "HALF", "QUARTER"):
+            flag = "QUARTER" if (atr_pct or 0) > 10 else "HALF"
         budget = ACCOUNT_SIZE * RISK_PER_TRADE_PCT / 100 * _SIZE_MULT.get(flag, 0.5)
         rr_size_html = (
             f'<div style="display:flex;gap:6px;align-items:flex-start;margin-top:4px;font-size:11px">'
@@ -607,6 +659,24 @@ def _market_pulse_html(pulse: dict) -> str:
         f'<div style="font-size:10px;color:#898781">{_html.escape(str(vix.get("label") or ""))}</div></div>'
     )
 
+    # Futures tile — live direction pre-market / overnight when SPY is stale
+    futures = pulse.get("futures") or []
+    if futures:
+        fut_bits = []
+        for f in futures:
+            c = "#0F6E56" if f["chg_pct"] >= 0 else "#A32D2D"
+            fut_bits.append(f'<b>{_html.escape(f["label"])}</b> '
+                            f'<span style="color:{c}">{_pct(f["chg_pct"])}</span>')
+        futures_tile = (
+            f'<div style="flex:1;min-width:150px">'
+            f'<div style="font-size:11px;color:#898781">Futures (24h)</div>'
+            f'<div style="font-size:13px;font-weight:500;line-height:1.6">'
+            f'{" · ".join(fut_bits)}</div>'
+            f'<div style="font-size:10px;color:#898781">use pre-market — SPY/QQQ quotes lag</div></div>'
+        )
+    else:
+        futures_tile = ""
+
     chips = []
     for s in top10:
         chg = s.get("day_chg_pct")
@@ -616,6 +686,16 @@ def _market_pulse_html(pulse: dict) -> str:
             f'padding:3px 8px;font-size:11px;white-space:nowrap">'
             f'<b>{s["ticker"]}</b> <span style="color:#898781">{s.get("weight_pct")}%</span> '
             f'<span style="color:{c}">{_pct(chg)}</span></span>')
+
+    # Sector rotation chips, strongest → weakest
+    sector_chips = []
+    for s in pulse.get("sectors") or []:
+        c = "#0F6E56" if s["chg_pct"] >= 0 else "#A32D2D"
+        sector_chips.append(
+            f'<span style="background:#f9f9f7;border:0.5px solid #e1e0d9;border-radius:6px;'
+            f'padding:3px 8px;font-size:11px;white-space:nowrap">'
+            f'{_html.escape(s["label"])} <b>{s["ticker"]}</b> '
+            f'<span style="color:{c}">{_pct(s["chg_pct"])}</span></span>')
 
     news_lines = []
     for s in top10:
@@ -634,6 +714,21 @@ def _market_pulse_html(pulse: dict) -> str:
             f'<div style="font-size:11px;color:#52514e;margin-top:3px">'
             f'📅 {e["when"].strftime("%a %m/%d %H:%M ET")} — <b>{_html.escape(e["title"])}</b>{fc}</div>')
 
+    # Fed rate outlook (FedWatch-style, from fed funds futures)
+    fed = pulse.get("fed") or {}
+    if fed.get("current_implied") is not None:
+        try:
+            from stockanalysis.scanners.market_movers import summarize_fed_outlook
+            summary = summarize_fed_outlook(fed)
+        except Exception:
+            summary = f"now ~{fed['current_implied']:.2f}%"
+        # color by the furthest-month direction: hikes red, cuts green
+        last_chg = (fed.get("months") or [{}])[-1].get("change_bps", 0)
+        f_color = "#A32D2D" if last_chg >= 13 else "#0F6E56" if last_chg <= -13 else "#52514e"
+        econ_lines.append(
+            f'<div style="font-size:11px;color:{f_color};margin-top:3px">'
+            f'🏦 <b>Fed outlook</b> (fed funds futures): {_html.escape(summary)}</div>')
+
     return f"""
 <div style="background:white;border:0.5px solid #e1e0d9;border-radius:12px;
             padding:14px 16px;margin-bottom:16px">
@@ -641,13 +736,162 @@ def _market_pulse_html(pulse: dict) -> str:
     {vix_tile}
     {_idx_tile("SPY", spy)}
     {_idx_tile("QQQ", qqq)}
+    {futures_tile}
   </div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:{'8px' if (news_lines or econ_lines) else '0'}">
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
     {''.join(chips)}
   </div>
+  {(f'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
+    f'<span style="font-size:10px;color:#898781;margin-right:2px">SECTORS</span>'
+    + ''.join(sector_chips) + '</div>') if sector_chips else ''}
   {''.join(news_lines)}
   {''.join(econ_lines)}
 </div>"""
+
+
+GAPPER_MIN_PCT = float(os.environ.get("GAPPER_MIN_PCT", "2.0"))
+
+
+def _gappers_html(rows: list[dict], fetch_catalysts: bool = True) -> str:
+    """
+    Full-width "Gappers" table: scanned tickers gapping ≥ GAPPER_MIN_PCT
+    (true open gap when today's bar exists, else the pre-market implied gap),
+    ranked by |gap| × RVOL, with the news catalyst attached.
+    Returns '' when nothing qualifies.
+    """
+    gappers = []
+    for r in rows:
+        gap = r.get("Gap%") if r.get("Gap%") is not None else r.get("Gap_Now%")
+        if gap is None or abs(gap) < GAPPER_MIN_PCT:
+            continue
+        rvol = _v(r, "RVOL_Intraday") or _v(r, "RVOL") or 0
+        gappers.append((abs(gap) * max(rvol, 0.5), gap, rvol, r))
+    if not gappers:
+        return ""
+    gappers.sort(key=lambda g: g[0], reverse=True)
+    gappers = gappers[:10]
+
+    catalysts = {}
+    if fetch_catalysts:
+        try:
+            from stockanalysis.scanners.market_movers import _fetch_catalyst
+            for _, _, _, r in gappers[:8]:          # cap the news calls
+                try:
+                    catalysts[r["Ticker"]] = _fetch_catalyst(r["Ticker"])
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    trs = []
+    for _, gap, rvol, r in gappers:
+        tk    = _v(r, "Ticker", "?")
+        price = _v(r, "Current Price")
+        vwap_ok = _v(r, "Above_VWAP")
+        atrp  = _v(r, "ATR_Pct")
+        cat, headline = catalysts.get(tk, ("", ""))
+        if cat in ("General News", "No News Found"):
+            cat = ""
+        g_c = "#0F6E56" if gap >= 0 else "#A32D2D"
+        news = (f'<span style="color:#185FA5">{_html.escape(cat)}</span> — '
+                f'{_html.escape((headline or "")[:110])}' if cat else
+                _html.escape((headline or "—")[:110]))
+        trs.append(
+            f'<tr style="border-top:0.5px solid #e1e0d9">'
+            f'<td style="padding:6px 10px;font-weight:600">{tk}</td>'
+            f'<td style="padding:6px 10px">{_fmt(price)}</td>'
+            f'<td style="padding:6px 10px;color:{g_c};font-weight:600">{_pct(gap)}</td>'
+            f'<td style="padding:6px 10px">{rvol:.2f}</td>'
+            f'<td style="padding:6px 10px">{"▲" if vwap_ok else "▼" if vwap_ok is False else "—"} VWAP</td>'
+            f'<td style="padding:6px 10px">{f"{atrp:.1f}%" if atrp is not None else "—"}</td>'
+            f'<td style="padding:6px 10px;font-size:11px;color:#52514e">{news}</td></tr>')
+
+    return f"""
+<div style="background:white;border:0.5px solid #e1e0d9;border-radius:12px;
+            padding:14px 16px;margin-bottom:16px">
+  <div style="font-size:14px;font-weight:600;margin-bottom:8px">
+    ⚡ Gappers (≥{GAPPER_MIN_PCT:g}%, ranked by gap × RVOL)</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="color:#898781;font-size:10px;text-align:left">
+      <th style="padding:4px 10px">TICKER</th><th style="padding:4px 10px">PRICE</th>
+      <th style="padding:4px 10px">GAP</th><th style="padding:4px 10px">RVOL</th>
+      <th style="padding:4px 10px">VWAP</th><th style="padding:4px 10px">ATR%</th>
+      <th style="padding:4px 10px">CATALYST</th></tr>
+    {''.join(trs)}
+  </table>
+</div>"""
+
+
+CATEGORY_ORDER = ["Momentum", "Momentum-Pullback", "VCP Setup",
+                  "Turnaround", "Longterm Hold", "Avoid", "Error"]
+
+_CATEGORY_COLORS = {
+    "Momentum":          "#185FA5", "Momentum-Pullback": "#0F6E56",
+    "VCP Setup":         "#26215C", "Turnaround":        "#633806",
+    "Longterm Hold":     "#3B6D11", "Avoid":             "#898781",
+    "Error":             "#A32D2D",
+}
+
+
+def _categories_html(rows: list[dict]) -> str:
+    """Full category breakdown — every scanned ticker, grouped by category,
+    as collapsible tables below the Top-5 grid. Avoid/Error start collapsed."""
+    sections = []
+    for cat in CATEGORY_ORDER:
+        sub = [r for r in rows if _v(r, "Category") == cat]
+        if not sub:
+            continue
+        sub.sort(key=lambda r: _v(r, "Rank_Score", 0) or 0, reverse=True)
+        color = _CATEGORY_COLORS.get(cat, "#444441")
+        is_open = "" if cat in ("Avoid", "Error") else " open"
+
+        trs = []
+        for r in sub:
+            rvol   = _v(r, "RVOL_Intraday") or _v(r, "RVOL")
+            reason = _html.escape(str(_v(r, "Cat_Reason", ""))[:110])
+            grade  = _v(r, "Grade", "—") or "—"
+            g_txt, g_bg = _GRADE_COLORS.get(grade, ("#444441", "#F1EFE8"))
+            def n(key, fmt="{:.1f}"):
+                val = _v(r, key)
+                return fmt.format(val) if isinstance(val, (int, float)) else "—"
+            trs.append(
+                f'<tr style="border-top:0.5px solid #e1e0d9">'
+                f'<td style="padding:5px 10px;font-weight:600">{_v(r, "Ticker", "?")}</td>'
+                f'<td style="padding:5px 10px">{_fmt(_v(r, "Current Price"))}</td>'
+                f'<td style="padding:5px 10px"><span style="background:{g_bg};color:{g_txt};'
+                f'font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px">{grade}</span></td>'
+                f'<td style="padding:5px 10px">{_v(r, "Rank_Score", "—")}</td>'
+                f'<td style="padding:5px 10px">{n("Dist_52W_High%")}%</td>'
+                f'<td style="padding:5px 10px">{f"{rvol:.2f}" if isinstance(rvol, (int, float)) else "—"}</td>'
+                f'<td style="padding:5px 10px">{n("RSI_14", "{:.0f}")}</td>'
+                f'<td style="padding:5px 10px">{n("ADX_14", "{:.0f}")}</td>'
+                f'<td style="padding:5px 10px">{n("RS")}</td>'
+                f'<td style="padding:5px 10px">{n("ATR_Pct")}%</td>'
+                f'<td style="padding:5px 10px;font-size:11px;color:#52514e">{reason}</td></tr>')
+
+        sections.append(f"""
+<details{is_open} style="background:white;border:0.5px solid #e1e0d9;border-radius:12px;
+                 padding:10px 16px;margin-bottom:12px">
+  <summary style="cursor:pointer;font-size:14px;font-weight:600;color:{color}">
+    {cat} ({len(sub)})</summary>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+    <tr style="color:#898781;font-size:10px;text-align:left">
+      <th style="padding:4px 10px">TICKER</th><th style="padding:4px 10px">PRICE</th>
+      <th style="padding:4px 10px">GRADE</th><th style="padding:4px 10px">SCORE</th>
+      <th style="padding:4px 10px">52W HIGH</th><th style="padding:4px 10px">RVOL</th>
+      <th style="padding:4px 10px">RSI</th><th style="padding:4px 10px">ADX</th>
+      <th style="padding:4px 10px">RS</th><th style="padding:4px 10px">ATR%</th>
+      <th style="padding:4px 10px">REASON</th></tr>
+    {''.join(trs)}
+  </table>
+  </div>
+</details>""")
+
+    if not sections:
+        return ""
+    return ('<h2 style="font-size:16px;font-weight:600;margin:24px 0 12px">'
+            'All Categories</h2>' + "".join(sections))
 
 
 def generate_dashboard(
@@ -707,6 +951,20 @@ def generate_dashboard(
         except Exception as e:
             print(f"[Dashboard] market pulse unavailable ({e}) — header skipped")
 
+    # Gappers table — catalysts need the network, so reuse the pulse flag
+    try:
+        gappers_html = _gappers_html(rows, fetch_catalysts=include_market_pulse)
+    except Exception as e:
+        print(f"[Dashboard] gappers section failed ({e}) — skipped")
+        gappers_html = ""
+
+    # Full category breakdown (every scanned ticker)
+    try:
+        categories_html = _categories_html(rows)
+    except Exception as e:
+        print(f"[Dashboard] categories section failed ({e}) — skipped")
+        categories_html = ""
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -750,12 +1008,16 @@ def generate_dashboard(
   <div class="kpi"><div class="kpi-n" style="color:#898781">{avoid_count}</div><div class="kpi-l">Avoided</div></div>
 </div>
 
+{gappers_html}
+
 <div class="grid">
   {day_html}
   {swing_html}
   {calls_html}
   {puts_html}
 </div>
+
+{categories_html}
 
 <p style="margin-top:20px;font-size:11px;color:#898781;text-align:center">
   Not financial advice. All signals are algorithmic — verify before trading.
@@ -785,7 +1047,8 @@ generate_dashboard(rows, output_dir=out_dir, open_browser=True)
 
 
 # ── Standalone test ───────────────────────────────────────────────────────────
-if __name__ == "__main__":
+def main() -> None:
+    """Standalone entry point — run this module directly."""
     sample = [
         {"Ticker":"NVDA","Category":"Momentum-Pullback","Current Price":192.53,
          "RS":-10.66,"ADX_14":16.1,"RSI_14":37.5,"BB_PctB":0.042,"ATR_Pct":4.13,"ATR20":7.94,
@@ -867,3 +1130,7 @@ if __name__ == "__main__":
     print(f"Test dashboard: {out}")
     print("\nIntegration snippet for stock_categorizer.py:")
     print(INTEGRATION_SNIPPET)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,9 +1,17 @@
 """
 market_movers.py
 ================
-Scans pre-market and live market for top 10 movers across the S&P 500 +
-extended watchlist, then enriches each with a catalyst (earnings beat/miss,
-analyst upgrade/downgrade, M&A, product launch, macro event, or general news).
+Market-wide context scans:
+
+  - Top-10 pre-market / live / after-hours movers across the S&P 500 +
+    extended watchlist, each enriched with a news catalyst (earnings
+    beat/miss, upgrade/downgrade, M&A, product launch, macro, general)
+  - VIX level/change with interpretation bands (fetch_vix)
+  - This week's high/medium-impact US economic calendar (fetch_economic_events)
+  - market_pulse(): dashboard-header snapshot — top-10 S&P mega caps by live
+    market cap with basket allocation %, SPY/QQQ strength from their own trend
+    + allocation-weighted mega-cap breadth + VIX penalty, plus per-ticker
+    catalysts and upcoming econ events
 
 Usage
 -----
@@ -15,12 +23,12 @@ Standalone:
     python market_movers.py --top 20          # show top 20 instead of 10
     python market_movers.py --email           # send results via Resend
     python market_movers.py --tickers NVDA AMD MU --top 5
+    python -m stockanalysis.scanners.market_movers
 
 Scheduler integration:
-    from market_movers import run_movers_job
+    from stockanalysis.scanners.market_movers import run_movers_job
     schedule.every().day.at("08:00").do(run_movers_job, mode="premarket")
     schedule.every().day.at("09:35").do(run_movers_job, mode="live")
-    schedule.every().day.at("10:30").do(run_movers_job, mode="live")
 """
 
 from __future__ import annotations
@@ -307,9 +315,75 @@ def fetch_economic_events() -> dict:
         return {"events": [], "error": str(e)}
 
 
+# ── Fed rate outlook (CME FedWatch-style) ─────────────────────────────────────
+# The FedWatch tool itself sits behind Akamai (HTTP 403 for scripts), so we
+# compute the same signal from its underlying market: 30-Day Fed Funds futures
+# (ZQ, CBOT). Implied rate = 100 − price; the spread of each month vs the
+# front month is the cumulative rate change the market prices by that month
+# (±25 bp ≈ one Fed move).
+_ZQ_MONTH_CODES = "FGHJKMNQUVXZ"          # futures month codes Jan..Dec
+
+
+def fetch_fed_rate_outlook(months_ahead: int = 6) -> dict:
+    """
+    Rate-change outlook for upcoming months from fed funds futures.
+    Returns {"current_implied", "months": [{label, symbol, implied_rate,
+    change_bps, moves}], "asof", "error"} — never raises.
+    """
+    try:
+        now, months, anchor = _now_et(), [], None
+        for i in range(months_ahead + 1):
+            yr_off, m0 = divmod(now.month - 1 + i, 12)
+            year, month = now.year + yr_off, m0 + 1
+            sym = f"ZQ{_ZQ_MONTH_CODES[month - 1]}{str(year)[-2:]}.CBT"
+            try:
+                h = yf.Ticker(sym).history(period="5d")
+                closes = h["Close"].dropna() if h is not None and not h.empty else None
+                if closes is None or closes.empty:
+                    continue
+                implied = round(100 - float(closes.iloc[-1]), 3)
+            except Exception as e:
+                log.debug("fed funds contract %s failed: %s", sym, e)
+                continue
+            if anchor is None:                 # front month = "current" anchor
+                anchor = implied
+                continue
+            chg_bps = round((implied - anchor) * 100)
+            months.append({
+                "label":        datetime(year, month, 1).strftime("%b %Y"),
+                "symbol":       sym,
+                "implied_rate": implied,
+                "change_bps":   chg_bps,
+                "moves":        round(chg_bps / 25, 1),   # +1 ≈ one 25bp hike
+            })
+        return {"current_implied": anchor, "months": months,
+                "asof": now.strftime("%Y-%m-%d"),
+                "error": None if anchor is not None else "no fed funds data"}
+    except Exception as e:
+        log.warning("Fed rate outlook failed: %s", e)
+        return {"current_implied": None, "months": [], "asof": None, "error": str(e)}
+
+
+def summarize_fed_outlook(fed: dict) -> str:
+    """One-line human summary, e.g. 'now ~3.63% · Sep +10bp · Dec +28bp (~1 hike priced)'."""
+    cur = fed.get("current_implied")
+    if cur is None:
+        return "Fed outlook unavailable"
+    parts = [f"now ~{cur:.2f}%"]
+    for m in fed.get("months") or []:
+        note = ""
+        if abs(m["moves"]) >= 0.9:
+            n = abs(m["moves"])
+            kind = "hike" if m["change_bps"] > 0 else "cut"
+            note = f" (~{n:g} {kind}{'s' if n >= 1.5 else ''} priced)"
+        parts.append(f"{m['label'][:3]} {m['change_bps']:+d}bp{note}")
+    return " · ".join(parts)
+
+
 def fetch_market_context() -> dict:
-    """VIX + economic events; each section fails independently."""
-    return {"vix": fetch_vix(), "econ": fetch_economic_events()}
+    """VIX + economic events + Fed rate outlook; each section fails independently."""
+    return {"vix": fetch_vix(), "econ": fetch_economic_events(),
+            "fed": fetch_fed_rate_outlook()}
 
 
 # ── Market pulse (dashboard header) ───────────────────────────────────────────
@@ -322,6 +396,40 @@ SP500_MEGACAP_CANDIDATES = [
 ]
 # Subset that also dominates QQQ — drives the QQQ breadth reading
 QQQ_MEGACAPS = {"NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "META", "AVGO", "TSLA"}
+
+# Index futures — trade nearly 24h, so they give live direction pre-market
+# and overnight when SPY/QQQ quotes are stale
+FUTURES = [("ES=F", "S&P fut"), ("NQ=F", "Nasdaq fut")]
+
+# Sector ETFs for the rotation chips row
+SECTOR_ETFS = [
+    ("SMH", "Semis"),   ("XLK", "Tech"),      ("XLC", "Comms"),
+    ("XLY", "Discret"), ("XLF", "Financials"), ("XLV", "Health"),
+    ("XLI", "Industr"), ("XLE", "Energy"),     ("XLP", "Staples"),
+    ("XLU", "Utilities"), ("IWM", "Small caps"),("IGV", "Software"),
+    ("DRAM", "Memory")
+]
+
+
+def _quote_chg(ticker: str) -> dict | None:
+    """Last price + % change vs prior close. fast_info first, history fallback."""
+    try:
+        t = yf.Ticker(ticker)
+        try:
+            last = float(t.fast_info["last_price"])
+            prev = float(t.fast_info["regular_market_previous_close"])
+        except Exception:
+            closes = t.history(period="5d")["Close"].dropna()
+            if len(closes) < 2:
+                return None
+            last, prev = float(closes.iloc[-1]), float(closes.iloc[-2])
+        if not prev:
+            return None
+        return {"ticker": ticker, "price": round(last, 2),
+                "chg_pct": round((last / prev - 1) * 100, 2)}
+    except Exception as e:
+        log.debug("quote failed for %s: %s", ticker, e)
+        return None
 
 
 def _trend_snapshot(ticker: str) -> dict | None:
@@ -432,7 +540,24 @@ def market_pulse(top_n: int = 10, with_catalysts: bool = True) -> dict:
     econ = fetch_economic_events()
     upcoming = [e for e in econ.get("events", []) if e["when"] >= _now_et()][:3]
 
-    return {"vix": vix, "spy": spy, "qqq": qqq, "top10": top, "econ_events": upcoming}
+    futures = []
+    for sym, label in FUTURES:
+        q = _quote_chg(sym)
+        if q:
+            q["label"] = label
+            futures.append(q)
+
+    sectors = []
+    for sym, label in SECTOR_ETFS:
+        q = _quote_chg(sym)
+        if q:
+            q["label"] = label
+            sectors.append(q)
+    sectors.sort(key=lambda s: s["chg_pct"], reverse=True)
+
+    return {"vix": vix, "spy": spy, "qqq": qqq, "top10": top,
+            "econ_events": upcoming, "fed": fetch_fed_rate_outlook(),
+            "futures": futures, "sectors": sectors}
 
 
 # ── Price fetch ───────────────────────────────────────────────────────────────
@@ -691,6 +816,18 @@ def _print_context_block(context: dict) -> None:
         print(f"  VIX {vix['level']:.2f}{chg_str}  — {vix['label']}")
     else:
         print(f"  VIX unavailable: {vix.get('error', 'unknown error')}")
+
+    fed = context.get("fed") or {}
+    if fed.get("current_implied") is not None:
+        print(f"\n  FED RATE OUTLOOK (fed funds futures, FedWatch-style)")
+        print(f"  {summarize_fed_outlook(fed)}")
+        for m in fed.get("months") or []:
+            direction = ("HIKE" if m["change_bps"] >= 13 else
+                         "CUT" if m["change_bps"] <= -13 else "hold")
+            print(f"    {m['label']:<9} implied {m['implied_rate']:.2f}%  "
+                  f"{m['change_bps']:+4d}bp vs front  [{direction}]")
+    elif fed.get("error"):
+        print(f"\n  Fed outlook unavailable: {fed['error']}")
 
     impacts = "/".join(sorted(ECON_IMPACTS))
     countries = "/".join(sorted(ECON_COUNTRIES))
@@ -1059,7 +1196,8 @@ def run_movers_job(mode: str = "auto", top_n: int = 10, send_email: bool = True)
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def main() -> None:
+    """Standalone entry point — run this module directly."""
     parser = argparse.ArgumentParser(
         description="Market mover scanner with catalyst detection",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1107,3 +1245,7 @@ Examples:
 
     if args.email:
         email_movers(rows, context)
+
+
+if __name__ == "__main__":
+    main()
