@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "workstation-webapp",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "TZ=America/New_York",
+        "python3",
+        "July01-2027/StockAnalysis_Version1/src/stockanalysis/webapp/app.py"
+      ],
+      "port": 8899
+    },
+    {
+      "name": "workstation-dashboard",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m", "http.server", "8788",
+        "--directory", "July01-2027/StockAnalysis_Version1/data/output"
+      ],
+      "port": 8788
+    }
+  ]
+}

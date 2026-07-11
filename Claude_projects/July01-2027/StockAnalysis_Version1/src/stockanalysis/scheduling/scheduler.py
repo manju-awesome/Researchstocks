@@ -73,8 +73,10 @@ from stockanalysis.scanners.scan_universe import main as run_scan, SP500_TICKERS
 from stockanalysis.reporting.dashboard import generate_dashboard, _score_to_grade  # dashboard + grading
 
 # ── Config ────────────────────────────────────────────────────────────────────
-#DAY_TRADE_TICKERS=[ 'META', 'MU', 'PLTR', 'MRVL', 'MSFT', 'NVDA', 'TSLA', 'AMD', 'AVGO', 'ARM']
-DAY_TRADE_TICKERS=['AMAT', 'WDC', 'GLW', 'MU', 'STX', 'COHR', 'NBIS', 'ARM', 'LITE', 'MRVL', 'PLTR', 'AVGO', 'HOOD', 'META', 'MSFT', 'NVDA', 'TSLA', 'AMD', 'CRWD']
+#
+DAY_TRADE_TICKERS=[ 'META','MSFT', 'NVDA', 'TSLA', 'AMD', 'AVGO']
+#DAY_TRADE_TICKERS=['COIN','AMAT', 'WDC', 'ARM', 'LITE', 'INTC', 'GLW', 'MU', 'HOOD', 'AAOI', 'STX', 'COHR', 'NBIS', 'MRVL', 'PLTR', 'AVGO', 'META', 'MSFT', 'NVDA', 'TSLA', 'AMD', 'CRWD']
+
 
 INTRADAY_TICKERS  = DAY_TRADE_TICKERS  #Daytrade only
 #WATCHLIST_TICKERS = WATCHLIST_TICKERS 
@@ -102,6 +104,10 @@ HISTORY_CSV     = REPORTS_DIR / "scan_history.csv"
 
 # VIX threshold above which put scans run every 30 min instead of once at noon
 VIX_ELEVATED_THRESHOLD = 25.0
+
+# Nightly output cleanup (scheduler loop, 23:30 ET Mon–Fri): delete generated
+# files older than this many days. 0 or negative disables the nightly job.
+CLEANUP_DAYS = int(os.environ.get("CLEANUP_DAYS", "7"))
 
 # Minimum grade to send an email alert
 EMAIL_GRADE_THRESHOLD = {"A+", "A"}
@@ -149,6 +155,19 @@ def _initialize_day_session() -> None:
     _dynamic_day_trade = merged
     DAY_TRADE_TICKERS = merged
 
+    # Persist for the dashboard's Day Session Universe panel — dashboards are
+    # often generated in another process (webapp/CLI), so module state alone
+    # would be invisible to them
+    try:
+        import json
+        base = [t for t in merged if t not in hot]
+        (REPORTS_DIR / "day_session.json").write_text(json.dumps({
+            "date": str(_now_et().date()),
+            "updated_at": _now_et().strftime("%Y-%m-%d %H:%M:%S ET"),
+            "hot": hot, "base": base, "merged": merged,
+        }, indent=1))
+    except Exception as e:
+        _log(f"⚠  day_session.json write failed ({e})")
 
     print("Dynamic Day trade stocks",_dynamic_day_trade)
 
@@ -275,7 +294,8 @@ def _start_scheduler() -> None:
             try:
                 rows = run_scan(FULL_TICKERS)
                 if rows:
-                    generate_dashboard(rows, output_dir=REPORTS_DIR, open_browser=True)
+                    generate_dashboard(rows, output_dir=REPORTS_DIR, open_browser=True,
+                                       report_name="fullReport")
                     _append_history(rows, "full", str(REPORTS_DIR))
             except Exception as e:
                 _log(f"Friday scan failed: {e}")
@@ -603,7 +623,8 @@ def run(mode: str, tickers: list[str] | None = None, force: bool = False) -> Non
 
     # ── Dashboard ─────────────────────────────────────────────────
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    dashboard_path = generate_dashboard(rows, output_dir=REPORTS_DIR, open_browser=True)
+    dashboard_path = generate_dashboard(rows, output_dir=REPORTS_DIR, open_browser=True,
+                                        report_name=f"{mode}Report")
 
     # ── Grade + filter for alerts ─────────────────────────────────
     condition = _alert_conditions(mode)
@@ -692,9 +713,11 @@ def _start_scheduler() -> None:
         run("daytrade")
 
     def job_daytrade_1000():
+        print("inside job")
         run("daytrade")
 
     def job_daytrade_1030():
+        print("inside job")
         run("daytrade")
 
     def job_puts_midday():
@@ -707,8 +730,8 @@ def _start_scheduler() -> None:
     schedule.every().day.at("08:05").do(job_calls_premarket)
     schedule.every().day.at("09:30").do(job_daytrade_open)
     schedule.every().day.at("10:00").do(job_daytrade_1000)
-    schedule.every().day.at("10:30").do(job_daytrade_1030)
-    schedule.every().day.at("12:00").do(job_puts_midday)
+    schedule.every().day.at("11:35").do(job_daytrade_1030)
+    schedule.every().day.at("11:40").do(job_puts_midday)
     schedule.every().day.at("16:30").do(job_full_close)
 
 
@@ -727,7 +750,8 @@ def _start_scheduler() -> None:
                 _log(f"Friday scan failed: {e}")
                 return
             if rows:
-                generate_dashboard(rows, output_dir=REPORTS_DIR, open_browser=True)
+                generate_dashboard(rows, output_dir=REPORTS_DIR, open_browser=True,
+                                   report_name="fullReport")
                 _append_history(rows, "full", str(REPORTS_DIR))
 
     schedule.every().day.at("16:45").do(_friday_scan)
@@ -739,7 +763,18 @@ def _start_scheduler() -> None:
             for hhmm in ["11:00", "11:30", "12:30", "13:00", "13:30", "14:00"]:
                 schedule.every().day.at(hhmm).do(_put_scan_job)
 
-    schedule.every().day.at("10:00").do(_maybe_add_vix_scans)
+    schedule.every().day.at("11:30").do(_maybe_add_vix_scans)
+
+    # ── Nightly output cleanup (23:30 ET) ────────────────────────
+    # Same pruning as `--cleanup N`, run automatically after the day's
+    # scans; CLEANUP_DAYS=0 in the environment disables it
+    if CLEANUP_DAYS > 0:
+        def job_nightly_cleanup():
+            cleanup_outputs(CLEANUP_DAYS)
+
+        schedule.every().day.at("23:30").do(job_nightly_cleanup)
+        _log(f"🧹 Nightly cleanup registered (23:30 ET, keep {CLEANUP_DAYS}d "
+             f"of outputs; set CLEANUP_DAYS=0 to disable)")
 
     _log("✅ Scheduler started. Jobs registered:")
     for job in schedule.jobs:
@@ -748,10 +783,6 @@ def _start_scheduler() -> None:
     _log("⏳ Waiting for next scheduled job... (Ctrl+C to quit)\n")
 
     while True:
-        # Skip weekends
-        if datetime.now(ET).weekday() >= 5:   # 5=Sat, 6=Sun
-            time.sleep(60)
-            continue
         schedule.run_pending()
         time.sleep(30)   # check every 30 seconds
 
@@ -776,10 +807,41 @@ def _start_scheduler_test() -> None:
 
     _log("✅ Test complete — check:")
     _log(f"   Email inbox  → {EMAIL_TO}")
-    _log(f"   Dashboard    → {REPORTS_DIR / 'dashboard_*.html'}")
+    _log(f"   Dashboard    → {REPORTS_DIR / '<universe>Report_*.html'}")
     _log(f"   History CSV  → {HISTORY_CSV}")
 
 
+
+
+# ── Output cleanup ────────────────────────────────────────────────────────────
+
+# Only generated artifacts are eligible for cleanup — never user state
+# (portfolio.csv), never the rolling history/tracker CSVs.
+# Dashboards are named "<universe>Report_<ts>.html" (e.g. sp500Report_...);
+# "dashboard_*.html" is still matched for files written before that rename.
+CLEANUP_PATTERNS = ("stock_scan_*.csv", "*Report_*.html", "dashboard_*.html",
+                    "metrics_*.csv", "research/*.html")
+
+
+def cleanup_outputs(days: int = 7, reports_dir: Path | None = None) -> int:
+    """
+    Delete generated output files whose modification time is older than
+    `days` days. Returns the number of files removed.
+    """
+    base = Path(reports_dir) if reports_dir else REPORTS_DIR
+    cutoff = time.time() - days * 86400
+    removed = 0
+    for pattern in CLEANUP_PATTERNS:
+        for f in base.glob(pattern):
+            try:
+                if f.is_file() and f.stat().st_mtime < cutoff:
+                    f.unlink()
+                    removed += 1
+            except OSError as e:
+                _log(f"⚠  cleanup: could not remove {f.name} ({e})")
+    _log(f"🧹 Cleanup: removed {removed} file(s) older than {days}d "
+         f"from {base}")
+    return removed
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -798,11 +860,36 @@ def main() -> None:
         action="store_true",
         help="Bypass market health gate and run scan regardless of SPY/QQQ trend",
     )
-    args = parser.parse_args()
-
+    parser.add_argument(
+        "--cleanup",
+        nargs="?", const=7, type=int, metavar="DAYS",
+        help="Delete generated output files (scan CSVs, dashboards, research "
+             "pages) modified more than DAYS days ago, then exit. "
+             "Default 7 when the flag is given without a value.",
+    )
+    parser.add_argument(
+        "--research",
+        nargs="*", metavar="TICKER",
+        help="Refresh research pages for ONLY these tickers (fresh data "
+             "fetched just for them), then exit. With no tickers listed, "
+             "refreshes the DAY_TRADE_TICKERS list.",
+    )
     parser.add_argument("--test-scheduler", action="store_true",
                         help="Fire all jobs within 4 min and exit")
     args = parser.parse_args()
+
+    # One-shot maintenance/refresh actions — run whichever were asked, exit
+    if args.cleanup is not None or args.research is not None:
+        if args.cleanup is not None:
+            cleanup_outputs(args.cleanup)
+        if args.research is not None:
+            from stockanalysis.reporting.research import refresh_research
+            tickers = args.research or DAY_TRADE_TICKERS
+            _log(f"📄 Refreshing research pages for: {', '.join(tickers)}")
+            written = refresh_research(tickers)
+            _log(f"📄 Research refresh done — {len(written)} page(s) → "
+                 f"{REPORTS_DIR / 'research'}")
+        return
 
     if args.run_now:
         _log(f"One-shot mode: running {args.run_now.upper()} scan now")
