@@ -136,6 +136,14 @@ def scheduler_alive() -> bool:
                for t in threading.enumerate())
 
 
+def job_name(job) -> str:
+    """The registered function's name for a `schedule` Job — shared by the
+    status table and the manual "run now" trigger so both identify jobs the
+    same way."""
+    fn = job.job_func
+    return getattr(fn, "func", fn).__name__ if hasattr(fn, "func") else getattr(fn, "__name__", str(fn))
+
+
 def scheduler_jobs() -> list[dict]:
     """Next-run time for every job registered with the `schedule` library.
     Reads the package's shared default scheduler, so this works regardless
@@ -145,11 +153,7 @@ def scheduler_jobs() -> list[dict]:
     except ImportError:
         return []
 
-    def _name(job) -> str:
-        fn = job.job_func
-        return getattr(fn, "func", fn).__name__ if hasattr(fn, "func") else getattr(fn, "__name__", str(fn))
-
     jobs = sorted(schedule.jobs, key=lambda j: j.next_run or datetime.max)
-    return [{"job": _name(j),
+    return [{"job": job_name(j),
              "next_run": j.next_run.strftime("%a %H:%M") if j.next_run else None}
             for j in jobs]

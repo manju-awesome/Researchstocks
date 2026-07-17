@@ -47,6 +47,7 @@ DEFAULT_PORT = 8899
 # path -> page-body function returning (html_body, extra_js)
 ROUTES = {
     "/":            ("dashboard", "Dashboard", pages.dashboard_page),
+    "/ai-sentiment":("ai-sentiment", "AI Sentiment", pages.ai_sentiment_page),
     "/scanner":     ("scanner",   "Scanner",   pages.scanner_page),
     "/research":    ("research",  "Research",  pages.research_page),
     "/portfolio":   ("portfolio", "Portfolio", pages.portfolio_page),
@@ -111,6 +112,15 @@ class WorkstationHandler(SimpleHTTPRequestHandler):
                 return
             watchlists = api.watchlist_toggle(name, ticker)
             self._send_json({"ok": True, "watchlists": watchlists})
+            return
+
+        if self.path == "/api/portfolio/save":
+            self._send_json(api.portfolio_save(form))
+            return
+
+        if self.path == "/api/portfolio/delete":
+            ticker = (form.get("ticker") or [""])[0]
+            self._send_json(api.portfolio_delete(ticker))
             return
 
         self.send_error(404)

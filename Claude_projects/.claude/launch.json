@@ -6,6 +6,7 @@
       "runtimeExecutable": "env",
       "runtimeArgs": [
         "TZ=America/New_York",
+        "PYTHONUNBUFFERED=1",
         "python3",
         "July01-2027/StockAnalysis_Version1/src/stockanalysis/webapp/app.py"
       ],

@@ -113,6 +113,12 @@ def _chart_svg(bars, row: dict, width: int = 880, height: int = 380) -> str:
             if lv.get(key):
                 levels.append((float(lv[key]), label, color))
 
+    # Key-level S1/R1 (only when they cleared the score threshold)
+    if row.get("S1") is not None:
+        levels.append((float(row["S1"]), "S1", "#0F6E56"))
+    if row.get("R1") is not None:
+        levels.append((float(row["R1"]), "R1", "#A32D2D"))
+
     pad_l, pad_r, pad_t = 52, 8, 8
     price_h, vol_h, pad_b = height - 110, 70, 24
     ys = [float(v) for v in close]
@@ -210,6 +216,44 @@ def _section(title: str, body: str) -> str:
             f'border-radius:12px;padding:16px 18px;margin-bottom:14px">'
             f'<h3 style="font-size:14px;font-weight:600;color:#0b0b0b;'
             f'margin:0 0 10px">{title}</h3>{body}</div>')
+
+
+def _institutional_html(row: dict) -> str:
+    """13F position adds + insider buying — both from data the scanner
+    actually fetches (t.institutional_holders, t.insider_purchases).
+    No hyperscaler-order / government-contract / "new fund" data here:
+    yfinance has no such fields and the scanner has no other source for
+    them, so per this file's no-placeholder-fundamentals rule they're
+    left out rather than shown empty."""
+    added = row.get("Inst_13F_Added") or []
+    added_html = "".join(
+        f'<div style="display:flex;justify-content:space-between;gap:10px;'
+        f'padding:5px 0;border-bottom:0.5px solid #f1efea;font-size:12px">'
+        f'<span style="color:#0b0b0b">{_html.escape(h["holder"])}</span>'
+        f'<span style="color:#0F6E56;font-weight:600">+{h["pct_change"]:.1f}% '
+        f'<span style="color:#898781;font-weight:400">({h["pct_held"]:.1f}% held)</span>'
+        f'</span></div>' for h in added
+    ) or '<span style="font-size:12px;color:#898781">No 13F position increases reported this filing period.</span>'
+
+    ins = row.get("Insider_Buy_6m")
+    if ins and (ins.get("buy_trans") or ins.get("sell_trans")):
+        insider_html = _table([
+            ("Buy transactions (6mo)", f'{int(ins["buy_trans"] or 0)} '
+             f'({int(ins["buy_shares"] or 0):,} sh)'),
+            ("Sell transactions (6mo)", f'{int(ins["sell_trans"] or 0)} '
+             f'({int(ins["sell_shares"] or 0):,} sh)'),
+            ("Net shares bought (sold)", f'{int(ins["net_shares"] or 0):,}'),
+        ])
+    else:
+        insider_html = '<span style="font-size:12px;color:#898781">No insider Form 4 activity in the last 6 months.</span>'
+
+    return (
+        f'<div style="margin-bottom:14px">'
+        f'<h4 style="font-size:12px;font-weight:600;color:#52514e;margin:0 0 8px">'
+        f'13F Added (institutions increasing position)</h4>{added_html}</div>'
+        f'<div><h4 style="font-size:12px;font-weight:600;color:#52514e;margin:0 0 8px">'
+        f'Insider Buying (Form 4, last 6mo)</h4>{insider_html}</div>'
+    )
 
 
 def _range_bar(row: dict) -> str:
@@ -483,6 +527,17 @@ def _build_page(row: dict, charts: bool, fetch_news: bool) -> str:
          f'{_fmt(row.get("Prev-Day Low"))} / {_fmt(row.get("52W Low"))}'),
         ("Resistance (prev day / 52W high)",
          f'{_fmt(row.get("Prev-Day High"))} / {_fmt(row.get("52W High"))}'),
+        ("Key level — S1 / R1",
+         f'{_fmt(row.get("S1"))} / {_fmt(row.get("R1"))}'
+         + (f' · score {row["Key_Level_Score"]:.0f} ({row.get("Touches", "—")} touches)'
+            if row.get("Key_Level_Score") is not None else '')
+         + (' · volume ✓' if row.get("Volume_Confirmation")
+            else ' · volume ✗' if row.get("Volume_Confirmation") is False else '')),
+        ("Breakout / bounce probability",
+         (f'{row["Breakout_Probability"]:.0f}%' if row.get("Breakout_Probability") is not None else "—")
+         + " / "
+         + (f'{row["Bounce_Probability"]:.0f}%' if row.get("Bounce_Probability") is not None else "—")),
+        ("R:R to next resistance", f'{_v(row, "RR_to_Resistance", "—")}'),
     ])
 
     fund = _table([
@@ -496,6 +551,7 @@ def _build_page(row: dict, charts: bool, fetch_news: bool) -> str:
         ("CANSLIM composite", _yn(row.get("CANSLIM_Pass"))),
     ])
 
+    inst_html = _institutional_html(row)
     cat_html = _table(_catalysts(row, fetch_news), cols=1)
     news_section = (_news_section_block(ticker) if fetch_news else
                     NEWS_START + NEWS_END)   # empty markers: updatable later
@@ -558,6 +614,7 @@ def _build_page(row: dict, charts: bool, fetch_news: bool) -> str:
 {_section("Trade Plan", plan_html)}
 {_section("Technical Analysis", tech)}
 {_section("Fundamentals", fund)}
+{_section("Institutional", inst_html)}
 {_section("Catalysts", cat_html)}
 {news_section}
 {_section("Strategy Scores", scores)}
@@ -594,6 +651,25 @@ def _save_research_index(output_dir: Path, index: dict) -> None:
     (output_dir / INDEX_FILENAME).write_text(json.dumps(index, indent=1))
 
 
+def _json_safe(value):
+    """Coerce a pipeline value to something json.dumps can round-trip. `row`
+    comes straight out of get_metrics()/categorize()/enrich_rows() — numpy
+    scalars, pandas Timestamps, etc. — not a CSV round-trip like the scan
+    output, so it isn't pre-sanitized the way pandas.to_csv() would do it."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    for cast in (lambda v: v.item(), lambda v: v.isoformat(), str):
+        try:
+            return cast(value)
+        except Exception:
+            continue
+    return None
+
+
 def _update_research_index(output_dir: Path, rows: list[dict],
                            written: set) -> None:
     """Merge fresh per-ticker entries into the index (existing entries for
@@ -605,19 +681,53 @@ def _update_research_index(output_dir: Path, rows: list[dict],
         ticker = row.get("Ticker")
         if ticker not in written:
             continue
-        index[ticker] = {
+        levels = row.get("_levels") or {}
+        # Every column the scan/research pipeline computed for this ticker
+        # (same fields stock_scan_*.csv has), keyed by original name — powers
+        # the Research Library's "Detailed Metrics" view. The curated fields
+        # below are a renamed subset of this same data for the table.
+        raw = {k: v for k, v in row.items() if not k.startswith("_")}
+        entry = {
             "ticker": ticker, "sector": _v(row, "Sector", "Unknown"),
             "category": _v(row, "Category"), "grade": _v(row, "Grade"),
             "price": row.get("Current Price"),
+            "week52_low": row.get("52W Low"),
+            "week52_high": row.get("52W High"),
+            "days_to_earnings": row.get("Days_To_Earnings"),
             "conv_overall": row.get("Conv_Overall"),
             "conv_stars": row.get("Conv_Stars"),
             "conv_action": row.get("Conv_Action"),
             "investment_score": row.get("Investment_Score"),
             "swing_score": row.get("Swing_Score"),
             "daytrade_score": row.get("DayTrade_Score"),
+            "earnings_date": row.get("EarningsDate"),
+            "forward_pe": row.get("Forward_PE"),
+            "peg_ratio": row.get("PEG_Ratio"),
+            "inst_own_pct": row.get("Inst_Own%"),
+            "inst_own_chg": row.get("Inst_Own_Chg"),
+            "rs_rank": row.get("RS_Rank"),
+            "canslim_pass": row.get("CANSLIM_Pass"),
+            "entry_zone": levels.get("entry"),
+            "stop_level": levels.get("stop"),
+            "s1": row.get("S1"),
+            "r1": row.get("R1"),
+            "key_level_score": row.get("Key_Level_Score"),
+            "touches": row.get("Touches"),
+            "volume_confirmation": row.get("Volume_Confirmation"),
+            "dist_to_support_pct": row.get("Dist_to_Support%"),
+            "dist_to_resistance_pct": row.get("Dist_to_Resistance%"),
+            "rr_to_resistance": row.get("RR_to_Resistance"),
+            "breakout_probability": row.get("Breakout_Probability"),
+            "bounce_probability": row.get("Bounce_Probability"),
             "updated_at": stamp,
             "news_updated_at": index.get(ticker, {}).get("news_updated_at"),
+            "raw": raw,
         }
+        # One sweep sanitizes both the curated fields and "raw" (json_safe
+        # recurses into dicts) — the pipeline's row values (numpy scalars,
+        # pandas Timestamps) aren't pre-cleaned the way a CSV round-trip
+        # would leave them.
+        index[ticker] = _json_safe(entry)
     _save_research_index(output_dir, index)
 
 

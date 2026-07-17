@@ -51,6 +51,11 @@ COLUMN_ORDER = [
     "Pre-Market Low", "Pre-Market High",
     "Prev-Day Low", "Prev-Day High",
 
+    # Key levels (support/resistance)
+    "S1", "R1", "Key_Level_Score", "Touches", "Volume_Confirmation",
+    "Dist_to_Support%", "Dist_to_Resistance%", "RR_to_Resistance",
+    "Breakout_Probability", "Bounce_Probability",
+
     # Volatility
     "ATR20", "ATR_Pct", "ATR Shrinking",
 

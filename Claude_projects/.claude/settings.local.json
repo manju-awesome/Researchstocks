@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(PYTHONPATH=src python3 -m stockanalysis.scanners.market_movers --tickers NVDA AMD --top 2)"
+      "Bash(PYTHONPATH=src python3 -m stockanalysis.scanners.market_movers --tickers NVDA AMD --top 2)",
+      "Bash(python3 -m unittest tests.test_key_levels -v)",
+      "Bash(python3 -c ' *)",
+      "Bash(grep -n \"root.innerHTML = \\\\`<table>\" src/stockanalysis/webapp/pages.py)",
+      "Bash(kill 41473)",
+      "Bash(nohup python3 src/stockanalysis/webapp/app.py --port 9000)",
+      "Bash(disown)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:9000/research)",
+      "Bash(python3 -m unittest discover tests)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('src/stockanalysis/webapp/pages.py'\\).read\\(\\)\\)\")",
+      "Bash(pkill -f \"app.py --port 9000\")"
     ]
   }
 }

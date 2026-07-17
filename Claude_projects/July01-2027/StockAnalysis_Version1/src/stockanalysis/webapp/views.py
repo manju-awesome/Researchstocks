@@ -25,6 +25,7 @@ OUTPUT_DIR   = PROJECT_ROOT / "data" / "output"
 DATA_DIR     = PROJECT_ROOT / "data"
 
 NAV = (("dashboard", "/", "🏠", "Dashboard"),
+       ("ai-sentiment", "/ai-sentiment", "🤖", "AI Sentiment"),
        ("scanner",   "/scanner", "📡", "Scanner"),
        ("research",  "/research", "🔎", "Research"),
        ("portfolio", "/portfolio", "💼", "Portfolio"),
@@ -300,6 +301,7 @@ setInterval(pollJobs, 1500);
 document.addEventListener('DOMContentLoaded', pollJobs);
 
 async function toggleWatchlist(name, ticker, btn) {
+  if (!name) { toast('Pick a list first', 'err'); return; }
   try {
     const res = await fetch('/api/watchlist/toggle', {
       method: 'POST',
@@ -332,9 +334,24 @@ def render_layout(active: str, title: str, body: str,
       <a class="btn secondary" href="/automation" style="text-decoration:none;display:inline-flex;align-items:center">Settings</a>
     """
 
-    universe_opts = "".join(
-        f'<option value="{u}">{u}</option>'
-        for u in ("daytrade", "watchlist", "longterm", "dividend", "sp500"))
+    try:
+        watchlists = json.loads((DATA_DIR / "watchlists.json").read_text())
+    except Exception:
+        watchlists = {}
+    builtin_universes = ("daytrade", "watchlist", "longterm", "dividend", "sp500")
+    universe_opts = '<optgroup label="Built-in">' + "".join(
+        f'<option value="{u}">{u}</option>' for u in builtin_universes
+    ) + '</optgroup>'
+    if watchlists:
+        universe_opts += '<optgroup label="Watchlists">' + "".join(
+            f'<option value="{esc(name)}">{esc(name)} ({len(tickers)})</option>'
+            for name, tickers in sorted(watchlists.items())
+            if tickers and name not in builtin_universes
+        ) + '</optgroup>'
+
+    watchlist_opts = "".join(
+        f'<option value="{esc(name)}">{esc(name)} ({len(tickers)})</option>'
+        for name, tickers in sorted(watchlists.items()) if tickers)
 
     modals = f"""
     <dialog id="modal-scan">
@@ -342,7 +359,8 @@ def render_layout(active: str, title: str, body: str,
         <h3>Run a scan</h3>
         <input type="hidden" name="action" value="scan">
         <div style="display:flex;flex-direction:column;gap:10px">
-          <select name="universe">{universe_opts}</select>
+          <select name="universe" multiple size="8">{universe_opts}</select>
+          <div style="font-size:10px;color:#898781;margin-top:-6px">⌘/Ctrl-click to scan several categories at once (none selected = daytrade)</div>
           <label style="font-size:12px;display:flex;gap:6px;align-items:center">
             <input type="checkbox" name="portfolio" checked> include Portfolio management</label>
         </div>
@@ -356,7 +374,11 @@ def render_layout(active: str, title: str, body: str,
       <form class="modal-body" onsubmit="submitJob(event, this, 'modal-research'); return false;">
         <h3>Refresh research pages</h3>
         <input type="hidden" name="action" value="research">
-        <input name="tickers" placeholder="tickers e.g. NVDA AMD (blank = day-trade list)" style="width:100%">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <select name="watchlist" multiple size="6">{watchlist_opts}</select>
+          <div style="font-size:10px;color:#898781;margin-top:-6px">⌘/Ctrl-click to combine categories</div>
+          <input name="tickers" placeholder="or type tickers e.g. NVDA AMD (blank = day-trade list; ignored if a category is picked)" style="width:100%">
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn secondary" onclick="closeModal('modal-research')">Cancel</button>
           <button class="btn">Refresh</button>
@@ -367,7 +389,11 @@ def render_layout(active: str, title: str, body: str,
       <form class="modal-body" onsubmit="submitJob(event, this, 'modal-news'); return false;">
         <h3>Update latest news</h3>
         <input type="hidden" name="action" value="news">
-        <input name="tickers" placeholder="tickers (blank = all research pages)" style="width:100%">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <select name="watchlist" multiple size="6">{watchlist_opts}</select>
+          <div style="font-size:10px;color:#898781;margin-top:-6px">⌘/Ctrl-click to combine categories</div>
+          <input name="tickers" placeholder="or type tickers (blank = all research pages; ignored if a category is picked)" style="width:100%">
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn secondary" onclick="closeModal('modal-news')">Cancel</button>
           <button class="btn">Scan news</button>

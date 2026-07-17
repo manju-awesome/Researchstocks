@@ -1,5 +1,6 @@
 pandas
 yfinance
+lxml
 pytz
 schedule
 resend
