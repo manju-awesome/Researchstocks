@@ -16,8 +16,10 @@ Design constraints:
     the static data/output server.
   - Offline-capable: charts need one yfinance fetch per ticker; pass
     charts=False to build pages without the network (chart shows a notice).
-  - Only metrics the scanner actually collects are shown — no placeholder
-    fundamentals (ROE / margins / analyst targets aren't fetched upstream).
+  - Only metrics the scanner actually collects are shown — analyst price
+    targets still aren't fetched upstream. Gross/operating margin and ROE
+    *are* now available (see core.metrics.get_metrics), reusing the same
+    `.info` call that already supplies Sector/LongName/MarketCap.
 
 Usage
 -----
@@ -28,6 +30,7 @@ Usage
 from __future__ import annotations
 
 import html as _html
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -216,6 +219,59 @@ def _section(title: str, body: str) -> str:
             f'border-radius:12px;padding:16px 18px;margin-bottom:14px">'
             f'<h3 style="font-size:14px;font-weight:600;color:#0b0b0b;'
             f'margin:0 0 10px">{title}</h3>{body}</div>')
+
+
+_MOAT_COLORS = {"Strong": ("#E1F5EE", "#0F6E56"),
+                "Moderate": ("#FAEEDA", "#8a6d1a"),
+                "Weak": ("#FCEBEB", "#A32D2D")}
+
+
+def _moat_html(row: dict) -> str:
+    """Badge + score + drivers from core.moat's quantitative proxy."""
+    from stockanalysis.core.moat import compute_moat
+    moat = compute_moat(row)
+    if moat["score"] is None:
+        return ('<span style="font-size:12px;color:#898781">— '
+                f'({moat["drivers"][0]})</span>')
+    bg, fg = _MOAT_COLORS.get(moat["label"], ("#F1EFE8", "#444441"))
+    drivers = " · ".join(_html.escape(d) for d in moat["drivers"])
+    return (f'<span style="background:{bg};color:{fg};font-weight:700;'
+            f'padding:2px 10px;border-radius:10px;font-size:12px">'
+            f'{moat["label"]} · {moat["score"]}/100</span>'
+            f'<div style="font-size:10px;color:#898781;margin-top:4px">{drivers}</div>')
+
+
+def _company_overview_html(row: dict) -> str:
+    """What the company does (yfinance's own business-summary text,
+    trimmed to ~2 sentences for a "brief" description) plus margin/ROE
+    figures and core.moat's quantitative moat proxy. The proxy is a
+    financial-fingerprint score, deliberately NOT a Wide/Narrow/None
+    verdict — brand, network effects, and switching costs are qualitative
+    calls the footnote leaves to the reader."""
+    summary = _v(row, "BusinessSummary")
+    if not summary:
+        return '<span style="font-size:12px;color:#898781">No company description available.</span>'
+
+    sentences = re.split(r"(?<=[.!?])\s+", summary.strip())
+    brief = " ".join(sentences[:2])
+
+    employees = row.get("FullTimeEmployees")
+    facts = _table([
+        ("Industry", _html.escape(str(_v(row, "Industry", "—")))),
+        ("Employees", f"{employees:,}" if isinstance(employees, (int, float)) else "—"),
+        ("Gross margin", _pct(row.get("GrossMargin%"))),
+        ("Operating margin", _pct(row.get("OperatingMargin%"))),
+        ("Return on equity", _pct(row.get("ReturnOnEquity%"))),
+        ("Moat signals", _moat_html(row)),
+    ])
+
+    return (
+        f'<p style="font-size:13px;line-height:1.6;color:#52514e;margin:0 0 10px">'
+        f'{_html.escape(brief)}</p>{facts}'
+        f'<p style="font-size:10px;color:#898781;margin-top:8px">Moat signals score '
+        f'the financial fingerprint of a durable advantage (margins, returns on '
+        f'capital, scale) — it can\'t see brand, network effects, or switching '
+        f'costs, so treat it as one input, not a verdict.</p>')
 
 
 def _institutional_html(row: dict) -> str:
@@ -607,6 +663,7 @@ def _build_page(row: dict, charts: bool, fetch_news: bool) -> str:
   <span style="margin-left:auto;font-size:11px;color:#898781">scan {ts}</span>
 </div>
 
+{_section("Company Overview", _company_overview_html(row))}
 {_section("AI Summary", f'<p style="font-size:13px;line-height:1.6;color:#52514e;margin:0">{_html.escape(_summary_text(row))}</p>')}
 {_section("Chart — 1y daily · 8/21 EMA · 50/200 MA · volume · plan levels", chart_html)}
 {_section("Overview", overview)}
@@ -691,6 +748,8 @@ def _update_research_index(output_dir: Path, rows: list[dict],
             "ticker": ticker, "sector": _v(row, "Sector", "Unknown"),
             "category": _v(row, "Category"), "grade": _v(row, "Grade"),
             "price": row.get("Current Price"),
+            "market_cap": row.get("MarketCap"),
+            "eps_growth": row.get("EPS_Growth%"),
             "week52_low": row.get("52W Low"),
             "week52_high": row.get("52W High"),
             "days_to_earnings": row.get("Days_To_Earnings"),
@@ -864,6 +923,14 @@ def generate_research_pages(rows: list[dict], output_dir: str | Path,
     for row in rows:
         ticker = row.get("Ticker")
         if not ticker or _v(row, "Category") == "Error":
+            continue
+        # A row with no price is a failed fetch (Yahoo throttling), not a
+        # real scan result — get_metrics swallows per-field errors, so the
+        # husk arrives categorized "Avoid" ("MarketCap<1B, Price<$5") and
+        # would silently overwrite a good page/index entry with blanks.
+        if row.get("Current Price") is None:
+            print(f"[Research] {ticker}: fetch returned no price — "
+                  f"keeping the existing page/index entry")
             continue
         try:
             (out / f"{ticker}.html").write_text(

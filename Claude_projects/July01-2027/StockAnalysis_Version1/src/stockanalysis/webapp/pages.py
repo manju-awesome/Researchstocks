@@ -603,6 +603,21 @@ def research_page() -> tuple[str, str]:
     idx = _read_json(OUTPUT_DIR / "research_index.json") or {}
     watchlists = _read_json(DATA_DIR / "watchlists.json") or {}
     rows = sorted(idx.values(), key=lambda r: r.get("ticker") or "")
+    # market_cap joined the curated index fields later than most — entries
+    # written before then only carry it inside "raw", so backfill from there.
+    # Moat is computed here at render time (core.moat, pure function over raw
+    # scan fields) rather than stored in the index, so every entry has it
+    # regardless of when its page was last generated.
+    from stockanalysis.core.moat import compute_moat
+    for r in rows:
+        raw = r.get("raw") or {}
+        if r.get("market_cap") is None:
+            r["market_cap"] = raw.get("MarketCap")
+        if r.get("eps_growth") is None:
+            r["eps_growth"] = raw.get("EPS_Growth%")
+        m = compute_moat(raw)
+        r["moat_score"] = m["score"]
+        r["moat_label"] = m["label"]
     rows_json = json.dumps(rows)
     watch_names = sorted(set(list(watchlists.keys()) or []) |
                         {"AI", "Dividend", "Swing", "Breakout", "Earnings"})
@@ -623,6 +638,20 @@ def research_page() -> tuple[str, str]:
         <option value="table">Table view</option>
         <option value="grouped">Grouped by sector</option>
       </select>
+      <div id="colpicker-wrap" style="position:relative">
+        <button type="button" class="btn secondary" onclick="toggleColPicker()"
+                style="font-size:11px">Columns (<span id="colcount">…</span>) ▾</button>
+        <div id="colpicker" style="display:none;position:absolute;top:34px;left:0;z-index:50;
+             background:#fff;border:1px solid #d9d7ce;border-radius:8px;
+             box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;width:280px;
+             max-height:420px;overflow-y:auto">
+          <input id="colsearch" placeholder="Find column…" style="width:100%;margin-bottom:8px;font-size:12px"
+                 oninput="renderColPicker()">
+          <button type="button" class="btn secondary" style="font-size:10px;padding:3px 8px;margin-bottom:4px"
+                  onclick="resetCols()">Reset to default</button>
+          <div id="colpicker-list"></div>
+        </div>
+      </div>
       <div>
         <div style="display:flex;gap:6px;align-items:center">
           <select id="rwatch" multiple size="6" style="min-width:180px" onchange="renderResearch()">{watch_opts}</select>
@@ -660,6 +689,114 @@ def research_page() -> tuple[str, str]:
     const WATCHLISTS = {json.dumps(watchlists)};
     let sortKey = 'ticker', sortDir = 1;
     let actionFilter = '';
+
+    // ── Configurable columns ─────────────────────────────────────────────
+    // "Standard" = the curated table columns; "Detailed metrics" = every raw
+    // scan field (same data the Detailed Metrics modal shows). The user's
+    // selection persists in localStorage; column order always follows the
+    // canonical definition order, not click order.
+    const fmtMoney = v => v != null ? '$' + v.toFixed(2) : '—';
+    // Order = decision flow: quality (is it a good company?) → setup/verdict
+    // (is it a good trade?) → timing/plan (is now the moment?). The first 16
+    // are DEFAULT_COLS; the rest are picker-only level detail.
+    const CURATED_COLS = [
+      ['price', 'Price', r => fmtMoney(r.price)],
+      ['market_cap', 'Mkt Cap', r => fmtCap(r.market_cap)],
+      ['moat_score', 'Moat', r => r.moat_score != null
+        ? `<span style="color:${{r.moat_label === 'Strong' ? '#0F6E56' : r.moat_label === 'Moderate' ? '#8a6d1a' : '#A32D2D'}};font-weight:600">${{r.moat_label}} ${{r.moat_score}}</span>`
+        : '—'],
+      ['inst_own_pct', 'Inst Own%', r => (r.inst_own_pct != null ? r.inst_own_pct + '%' : '—') + instOwnChgHtml(r.inst_own_chg)],
+      ['eps_growth', 'EPS Gr%', r => r.eps_growth != null
+        ? `<span style="color:${{r.eps_growth > 0 ? '#0F6E56' : '#A32D2D'}}">${{r.eps_growth > 0 ? '+' : ''}}${{r.eps_growth}}%</span>` : '—'],
+      ['forward_pe', 'Fwd P/E', r => r.forward_pe ?? '—'],
+      ['category', 'Category', r => r.category || '—'],
+      ['conv_action', 'Action', r => `<span style="color:${{actionColor(r.conv_action)}};font-weight:600">${{r.conv_action || '—'}}</span>`],
+      ['conv_stars', 'Conv ★', r => r.conv_stars != null
+        ? `<span style="color:#c9a227;letter-spacing:1px">${{'★'.repeat(r.conv_stars)}}<span style="color:#d9d7ce">${{'☆'.repeat(Math.max(0, 5 - r.conv_stars))}}</span></span>` : '—'],
+      ['rs_rank', 'RS', r => r.rs_rank ?? '—'],
+      ['canslim_pass', 'CANSLIM', r => r.canslim_pass === true ? '✓' : r.canslim_pass === false ? '✗' : '—'],
+      ['entry_zone', 'Entry Zone', r => fmtMoney(r.entry_zone)],
+      ['rr_to_resistance', 'R:R', r => r.rr_to_resistance ?? '—'],
+      ['breakout_probability', 'Breakout%', r => r.breakout_probability != null ? r.breakout_probability + '%' : '—'],
+      ['days_to_earnings', 'DOE', r => r.days_to_earnings ?? '—'],
+      ['updated_at', 'Updated', r => `<span style="color:#898781">${{(r.updated_at || '').slice(5,16)}}</span>`],
+      // ── picker-only from here down ──
+      ['week52_low', '52W Low', r => fmtMoney(r.week52_low)],
+      ['week52_high', '52W High', r => fmtMoney(r.week52_high)],
+      ['earnings_date', 'Earnings Date', r => r.earnings_date && r.earnings_date !== 'N/A' ? `<span style="color:#898781">${{r.earnings_date}}</span>` : '—'],
+      ['peg_ratio', 'PEG', r => r.peg_ratio ?? '—'],
+      ['s1', 'S1', r => fmtMoney(r.s1)],
+      ['r1', 'R1', r => fmtMoney(r.r1)],
+      ['key_level_score', 'Key Level', r => r.key_level_score ?? '—'],
+      ['touches', 'Touches', r => r.touches ?? '—'],
+      ['volume_confirmation', 'Vol Conf', r => r.volume_confirmation === true ? '✓' : r.volume_confirmation === false ? '✗' : '—'],
+      ['dist_to_support_pct', 'Dist S1', r => r.dist_to_support_pct != null ? r.dist_to_support_pct + '%' : '—'],
+      ['dist_to_resistance_pct', 'Dist R1', r => r.dist_to_resistance_pct != null ? r.dist_to_resistance_pct + '%' : '—'],
+      ['bounce_probability', 'Bounce%', r => r.bounce_probability != null ? r.bounce_probability + '%' : '—'],
+    ].map(([key, label, cell]) => ({{key, label, cell, group: 'Standard'}}));
+
+    // Raw fields already represented by a Standard column stay out of the
+    // picker's Detailed list — one name per fact, no duplicates.
+    const RAW_SKIP = new Set(['Ticker', 'BusinessSummary',
+      'Current Price', 'MarketCap', 'EPS_Growth%', 'Forward_PE', 'PEG_Ratio',
+      'Inst_Own%', 'Inst_Own_Chg', 'Category', 'Conv_Action', 'Conv_Stars',
+      'RS_Rank', 'CANSLIM_Pass', 'RR_to_Resistance', 'Breakout_Probability',
+      'Bounce_Probability', 'Days_To_Earnings', 'EarningsDate',
+      '52W High', '52W Low', 'S1', 'R1', 'Key_Level_Score', 'Touches',
+      'Volume_Confirmation', 'Dist_to_Support%', 'Dist_to_Resistance%']);
+    const RAW_KEYS = [...new Set(RESEARCH_ROWS.flatMap(r => Object.keys(r.raw || {{}})))]
+      .filter(k => !RAW_SKIP.has(k)).sort();
+    const RAW_COLS = RAW_KEYS.map(k => ({{
+      key: 'raw:' + k, label: k, group: 'Detailed metrics',
+      cell: r => `<span style="max-width:180px;display:inline-block;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">${{fmtDetailVal((r.raw || {{}})[k])}}</span>`,
+    }}));
+    const ALL_COLS = [...CURATED_COLS, ...RAW_COLS];
+    const COL_BY_KEY = Object.fromEntries(ALL_COLS.map(c => [c.key, c]));
+    const DEFAULT_COLS = ['price', 'market_cap', 'moat_score', 'inst_own_pct',
+      'eps_growth', 'forward_pe', 'category', 'conv_action', 'conv_stars',
+      'rs_rank', 'canslim_pass', 'entry_zone', 'rr_to_resistance',
+      'breakout_probability', 'days_to_earnings', 'updated_at'];
+    const COLS_LS_KEY = 'research_visible_cols_v1';
+    let visibleCols = (() => {{
+      try {{
+        const saved = JSON.parse(localStorage.getItem(COLS_LS_KEY) || 'null');
+        if (Array.isArray(saved) && saved.length) return saved.filter(k => COL_BY_KEY[k]);
+      }} catch (e) {{}}
+      return [...DEFAULT_COLS];
+    }})();
+    function saveCols() {{ localStorage.setItem(COLS_LS_KEY, JSON.stringify(visibleCols)); }}
+    function toggleCol(key) {{
+      if (visibleCols.includes(key)) visibleCols = visibleCols.filter(k => k !== key);
+      else visibleCols = ALL_COLS.map(c => c.key).filter(k => visibleCols.includes(k) || k === key);
+      saveCols(); renderColPicker(); renderResearch();
+    }}
+    function resetCols() {{
+      visibleCols = [...DEFAULT_COLS];
+      saveCols(); renderColPicker(); renderResearch();
+    }}
+    function toggleColPicker() {{
+      const p = document.getElementById('colpicker');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+      if (p.style.display === 'block') renderColPicker();
+    }}
+    function renderColPicker() {{
+      const q = (document.getElementById('colsearch').value || '').toUpperCase();
+      document.getElementById('colpicker-list').innerHTML = ['Standard', 'Detailed metrics'].map(g => {{
+        const items = ALL_COLS.filter(c => c.group === g && (!q || c.label.toUpperCase().includes(q)));
+        if (!items.length) return '';
+        return `<div style="font-size:10px;font-weight:700;color:#898781;margin:8px 0 4px;text-transform:uppercase">${{g}}</div>`
+          + items.map(c => `<label style="display:flex;gap:6px;align-items:center;font-size:12px;padding:2px 0;cursor:pointer">
+              <input type="checkbox" ${{visibleCols.includes(c.key) ? 'checked' : ''}} onchange="toggleCol('${{c.key}}')">${{c.label}}</label>`).join('');
+      }}).join('');
+      document.getElementById('colcount').textContent = visibleCols.length;
+    }}
+    document.addEventListener('click', e => {{
+      const p = document.getElementById('colpicker');
+      if (p && p.style.display === 'block' && !e.target.closest('#colpicker-wrap')) p.style.display = 'none';
+    }});
+    function colVal(r, key) {{
+      return key.startsWith('raw:') ? (r.raw || {{}})[key.slice(4)] : r[key];
+    }}
     function starredIn(name, ticker) {{ return (WATCHLISTS[name] || []).includes(ticker); }}
     function actionColor(a) {{ return a === 'READY' ? '#0F6E56' : a === 'WATCH' ? '#8a6d1a' : a === 'AVOID' ? '#A32D2D' : '#898781'; }}
     function setActionFilter(a) {{ actionFilter = a; renderResearch(); }}
@@ -675,6 +812,13 @@ def research_page() -> tuple[str, str]:
                  color:${{active ? '#fff' : color}}">${{label}} (${{count}})</button>`;
       }}).join('');
     }}
+    function fmtCap(v) {{
+      if (v == null) return '—';
+      if (v >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+      if (v >= 1e9)  return '$' + (v / 1e9).toFixed(1) + 'B';
+      if (v >= 1e6)  return '$' + (v / 1e6).toFixed(0) + 'M';
+      return '$' + Math.round(v).toLocaleString();
+    }}
     function instOwnChgHtml(chg) {{
       if (chg == null) return '';
       const color = chg > 0 ? '#0F6E56' : chg < 0 ? '#A32D2D' : '#898781';
@@ -683,7 +827,7 @@ def research_page() -> tuple[str, str]:
     }}
     function sortRows(rows) {{
       return [...rows].sort((a, b) => {{
-        const av = a[sortKey] ?? '', bv = b[sortKey] ?? '';
+        const av = colVal(a, sortKey) ?? '', bv = colVal(b, sortKey) ?? '';
         return (av > bv ? 1 : av < bv ? -1 : 0) * sortDir;
       }});
     }}
@@ -715,62 +859,18 @@ def research_page() -> tuple[str, str]:
       const arrow = key => sortKey === key ? (sortDir === 1 ? ' ▲' : ' ▼') : '';
       const th = (key, label) =>
         `<th style="cursor:pointer;white-space:nowrap" onclick="setSort('${{key}}')">${{label}}${{arrow(key)}}</th>`;
+      const defs = visibleCols.map(k => COL_BY_KEY[k]).filter(Boolean);
+      document.getElementById('colcount').textContent = visibleCols.length;
       root.innerHTML = `<table style="width:auto;min-width:100%;white-space:nowrap"><thead><tr>
         <th></th>
         ${{th('ticker', 'Ticker')}}
-        ${{th('price', 'Price')}}
-        ${{th('week52_low', '52W Low')}}
-        ${{th('week52_high', '52W High')}}
-        ${{th('category', 'Category')}}
-        ${{th('conv_action', 'Action')}}
-        ${{th('earnings_date', 'Earnings Date')}}
-        ${{th('days_to_earnings', 'DOE')}}
-        ${{th('forward_pe', 'Fwd P/E')}}
-        ${{th('peg_ratio', 'PEG')}}
-        ${{th('inst_own_pct', 'Inst Own%')}}
-        ${{th('rs_rank', 'RS')}}
-        ${{th('canslim_pass', 'CANSLIM')}}
-        ${{th('entry_zone', 'Entry Zone')}}
-        ${{th('s1', 'S1')}}
-        ${{th('r1', 'R1')}}
-        ${{th('key_level_score', 'Key Level')}}
-        ${{th('touches', 'Touches')}}
-        ${{th('volume_confirmation', 'Vol Conf')}}
-        ${{th('dist_to_support_pct', 'Dist S1')}}
-        ${{th('dist_to_resistance_pct', 'Dist R1')}}
-        ${{th('rr_to_resistance', 'R:R')}}
-        ${{th('breakout_probability', 'Breakout%')}}
-        ${{th('bounce_probability', 'Bounce%')}}
-        ${{th('updated_at', 'Updated')}}
+        ${{defs.map(d => th(d.key, d.label)).join('')}}
         <th></th></tr></thead><tbody>
         ${{rows.map(r => `<tr>
           <td><button onclick="toggleWatchlist(document.getElementById('rwatch').value, '${{r.ticker}}', this)"
               style="background:none;border:none;font-size:14px;color:#c9a227">${{starredIn(document.getElementById('rwatch').value, r.ticker) ? '★' : '☆'}}</button></td>
           <td><b>${{r.ticker}}</b></td>
-          <td style="font-size:11px">${{r.price != null ? '$' + r.price.toFixed(2) : '—'}}</td>
-          <td style="font-size:11px">${{r.week52_low != null ? '$' + r.week52_low.toFixed(2) : '—'}}</td>
-          <td style="font-size:11px">${{r.week52_high != null ? '$' + r.week52_high.toFixed(2) : '—'}}</td>
-          <td style="font-size:11px">${{r.category || '—'}}</td>
-          <td><span style="color:${{actionColor(r.conv_action)}};font-weight:600;font-size:11px">${{r.conv_action || '—'}}</span></td>
-          <td style="font-size:11px;color:#898781">${{r.earnings_date && r.earnings_date !== 'N/A' ? r.earnings_date : '—'}}</td>
-          <td style="font-size:11px">${{r.days_to_earnings ?? '—'}}</td>
-          <td style="font-size:11px">${{r.forward_pe ?? '—'}}</td>
-          <td style="font-size:11px">${{r.peg_ratio ?? '—'}}</td>
-          <td style="font-size:11px">${{r.inst_own_pct != null ? r.inst_own_pct + '%' : '—'}}${{instOwnChgHtml(r.inst_own_chg)}}</td>
-          <td style="font-size:11px">${{r.rs_rank ?? '—'}}</td>
-          <td style="font-size:11px">${{r.canslim_pass === true ? '✓' : r.canslim_pass === false ? '✗' : '—'}}</td>
-          <td style="font-size:11px">${{r.entry_zone != null ? '$' + r.entry_zone.toFixed(2) : '—'}}</td>
-          <td style="font-size:11px">${{r.s1 != null ? '$' + r.s1.toFixed(2) : '—'}}</td>
-          <td style="font-size:11px">${{r.r1 != null ? '$' + r.r1.toFixed(2) : '—'}}</td>
-          <td style="font-size:11px">${{r.key_level_score ?? '—'}}</td>
-          <td style="font-size:11px">${{r.touches ?? '—'}}</td>
-          <td style="font-size:11px">${{r.volume_confirmation === true ? '✓' : r.volume_confirmation === false ? '✗' : '—'}}</td>
-          <td style="font-size:11px">${{r.dist_to_support_pct != null ? r.dist_to_support_pct + '%' : '—'}}</td>
-          <td style="font-size:11px">${{r.dist_to_resistance_pct != null ? r.dist_to_resistance_pct + '%' : '—'}}</td>
-          <td style="font-size:11px">${{r.rr_to_resistance ?? '—'}}</td>
-          <td style="font-size:11px">${{r.breakout_probability != null ? r.breakout_probability + '%' : '—'}}</td>
-          <td style="font-size:11px">${{r.bounce_probability != null ? r.bounce_probability + '%' : '—'}}</td>
-          <td style="font-size:11px;color:#898781">${{(r.updated_at || '').slice(5,16)}}</td>
+          ${{defs.map(d => `<td style="font-size:11px">${{d.cell(r)}}</td>`).join('')}}
           <td style="display:flex;gap:4px">
             <a href="/research/${{r.ticker}}.html" class="btn secondary" style="text-decoration:none;padding:3px 10px;font-size:11px">Open</a>
             <button type="button" onclick="openDetail('${{r.ticker}}')" class="btn secondary" style="padding:3px 10px;font-size:11px">Detailed Metrics</button>
@@ -1146,6 +1246,590 @@ async function deletePosition(ticker) {
   } catch (e) { toast('Request failed: ' + e, 'err'); }
 }
 """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOURNAL — AI-coached trade journal (plan/execution/psychology/checklist in,
+# grades + coaching advice out). Storage and analytics math live in
+# core/trading_journal.py; this section is presentation only.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _grade_status(grade: str | None) -> str:
+    if not grade:
+        return "muted"
+    g = grade[0].upper()
+    return {"A": "good", "B": "good", "C": "watch"}.get(g, "bad")
+
+
+def journal_page() -> tuple[str, str]:
+    from stockanalysis.core import trading_journal as journal
+
+    trades = journal.load_trades()
+    trades_sorted = sorted(
+        trades, key=lambda t: (t.get("date") or "", t.get("time") or ""), reverse=True)
+
+    metrics = journal.aggregate_metrics(trades)
+    summary = _journal_summary_cards(metrics)
+
+    analytics = ""
+    if metrics.get("count"):
+        analytics = (
+            _journal_breakdown_card("Setup Performance", "🎯", journal.setup_performance(trades))
+            + _journal_breakdown_card("Time of Day", "🕐", journal.time_of_day_performance(trades))
+            + _journal_breakdown_card("Day of Week", "📅", journal.day_of_week_performance(trades))
+            + _journal_breakdown_card("Higher-TF Trend", "📈", journal.trend_performance(trades))
+            + _journal_emotion_card(journal.emotion_correlation(trades))
+            + _journal_violation_card(journal.rule_violation_stats(trades))
+            + _journal_monthly_card(journal.monthly_review(trades))
+        )
+
+    rows = "".join(_journal_row(t) for t in trades_sorted) or (
+        f'<tr><td colspan="7">{empty("No trades logged yet — click + Log Trade to start.")}</td></tr>')
+    log_table = f"""<table><thead><tr>
+      <th>Date</th><th>Ticker</th><th>Setup</th><th style="text-align:right">R</th>
+      <th style="text-align:right">Return %</th><th>AI Grade</th><th></th></tr></thead>
+      <tbody>{rows}</tbody></table>"""
+
+    body = (
+        card("Performance Summary", summary, "📓",
+            right='<button type="button" class="btn" style="font-size:11px;padding:4px 10px" '
+                  'onclick="openJournalModal(null)">+ Log Trade</button>')
+        + analytics
+        + card("Trade Log", log_table, "📜")
+        + _journal_modal()
+    )
+    return body, _journal_js
+
+
+def _journal_summary_cards(m: dict) -> str:
+    if not m.get("count"):
+        return empty("No completed trades yet (needs both an actual entry and "
+                     "exit) — log one below to start building analytics.")
+
+    def stat(label, value, status=None):
+        v = badge(str(value), status) if status else esc(value)
+        return (f'<div><div style="font-size:11px;color:#898781">{esc(label)}</div>'
+                f'<div style="font-size:20px;font-weight:650">{v}</div></div>')
+
+    avg_r = m["avg_r"]
+    r_status = "good" if avg_r >= 0 else "bad"
+    dd = m["max_drawdown_r"]
+    return f"""
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:16px">
+      {stat("Trades", m["count"])}
+      {stat("Win Rate", f'{m["win_rate"]}%')}
+      {stat("Avg R", f'{avg_r:+.2f}R', r_status)}
+      {stat("Expectancy", f'{m["expectancy"]:+.2f}R', r_status)}
+      {stat("Profit Factor", m["profit_factor"] if m["profit_factor"] is not None else "—")}
+      {stat("Max Drawdown", f'{dd:.2f}R', "bad" if dd < 0 else "muted")}
+      {stat("Best Streak", f'{m["max_consecutive_wins"]}W / {m["max_consecutive_losses"]}L')}
+    </div>"""
+
+
+def _journal_breakdown_card(title: str, icon: str, buckets: list[dict]) -> str:
+    if not buckets:
+        return ""
+
+    def row(b):
+        color = "#0F6E56" if b["avg_r"] >= 0 else "#A32D2D"
+        return (f'<tr><td>{esc(b["key"])}</td><td style="text-align:right">{b["count"]}</td>'
+                f'<td style="text-align:right">{b["win_rate"]}%</td>'
+                f'<td style="text-align:right;color:{color}">{b["avg_r"]:+.2f}R</td></tr>')
+
+    table = (f'<table><thead><tr><th>{esc(title)}</th><th style="text-align:right">Trades</th>'
+            f'<th style="text-align:right">Win %</th><th style="text-align:right">Avg R</th></tr></thead>'
+            f'<tbody>{"".join(row(b) for b in buckets)}</tbody></table>')
+    return card(title, table, icon)
+
+
+def _journal_emotion_card(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+
+    def row(r):
+        hi = r["avg_r_high"] if r["avg_r_high"] is not None else "—"
+        lo = r["avg_r_low"] if r["avg_r_low"] is not None else "—"
+        corr = r["correlation_with_r"] if r["correlation_with_r"] is not None else "—"
+        return (f'<tr><td style="text-transform:capitalize">{esc(r["dimension"])}</td>'
+                f'<td style="text-align:right">{hi}</td><td style="text-align:right">{lo}</td>'
+                f'<td style="text-align:right">{corr}</td></tr>')
+
+    table = (f'<table><thead><tr><th>Dimension</th><th style="text-align:right">Avg R (score ≥7)</th>'
+            f'<th style="text-align:right">Avg R (score ≤4)</th><th style="text-align:right">Corr. w/ R</th></tr></thead>'
+            f'<tbody>{"".join(row(r) for r in rows)}</tbody></table>')
+    return card("Emotion Correlation", table, "🧠")
+
+
+def _journal_violation_card(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+
+    def row(r):
+        absent = f'{r["avg_r_when_absent"]:+.2f}R' if r["avg_r_when_absent"] is not None else "—"
+        return (f'<tr><td>{esc(r["violation"])}</td><td style="text-align:right">{r["count"]}</td>'
+                f'<td style="text-align:right;color:#A32D2D">{r["avg_r_when_present"]:+.2f}R</td>'
+                f'<td style="text-align:right">{absent}</td></tr>')
+
+    table = (f'<table><thead><tr><th>Violation</th><th style="text-align:right">Times</th>'
+            f'<th style="text-align:right">Avg R when present</th>'
+            f'<th style="text-align:right">Avg R when absent</th></tr></thead>'
+            f'<tbody>{"".join(row(r) for r in rows)}</tbody></table>')
+    return card("Rule Violations & Cost", table, "⚠️")
+
+
+def _journal_monthly_card(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+
+    def row(m):
+        win = f'{m["win_rate"]}%' if m["win_rate"] is not None else "—"
+        avg_r = f'{m["avg_r"]:+.2f}R' if m["avg_r"] is not None else "—"
+        return (f'<tr><td>{esc(m["month"])}</td><td style="text-align:right">{m["count"]}</td>'
+                f'<td style="text-align:right">{win}</td><td style="text-align:right">{avg_r}</td>'
+                f'<td>{esc(m.get("best_setup") or "—")}</td>'
+                f'<td>{esc(m.get("top_recurring_mistake") or "—")}</td></tr>')
+
+    table = (f'<table><thead><tr><th>Month</th><th style="text-align:right">Trades</th>'
+            f'<th style="text-align:right">Win %</th><th style="text-align:right">Avg R</th>'
+            f'<th>Best Setup</th><th>Top Recurring Mistake</th></tr></thead>'
+            f'<tbody>{"".join(row(m) for m in rows)}</tbody></table>')
+    return card("Monthly Review", table, "🗓️")
+
+
+def _journal_row(t: dict) -> str:
+    from stockanalysis.core import trading_journal as journal
+    result = t.get("trade_result", {})
+    r = result.get("r_multiple")
+    r_html = f'<span style="color:{"#0F6E56" if r >= 0 else "#A32D2D"}">{r:+.2f}R</span>' if r is not None else "—"
+    ret = result.get("return_pct")
+    ret_html = fmt_pct(ret) if ret is not None else "—"
+    ai = t.get("ai_feedback")
+    grade_html = badge(ai["overall_grade"], _grade_status(ai.get("overall_grade"))) if ai else empty("not reviewed")
+    trade_id = esc(t["id"])
+    review_btn = "" if ai else (
+        f'<form style="display:inline" onsubmit="submitJob(event, this, null); return false;">'
+        f'<input type="hidden" name="action" value="journal_review">'
+        f'<input type="hidden" name="trade_id" value="{trade_id}">'
+        f'<button class="btn secondary" style="font-size:10px;padding:2px 8px">AI Review</button></form>')
+    edit_payload = esc(json.dumps(journal.trade_to_form_dict(t)))
+    edit_btn = (f'<button type="button" class="btn secondary" style="font-size:10px;padding:2px 8px" '
+               f'''data-trade='{edit_payload}' onclick="openJournalModal(JSON.parse(this.dataset.trade))">Edit</button>''')
+    detail_id = f"jd-{trade_id}"
+    return f"""
+    <tr>
+      <td>{esc(t.get('date') or '—')} {esc(t.get('time') or '')}</td>
+      <td><b>{esc(t.get('ticker'))}</b> <span style="font-size:10px;color:#898781">{esc(t.get('direction'))}</span></td>
+      <td>{esc(t.get('trade_plan', {}).get('setup_name') or '—')}</td>
+      <td style="text-align:right">{r_html}</td>
+      <td style="text-align:right">{ret_html}</td>
+      <td>{grade_html}</td>
+      <td style="display:flex;gap:4px">
+        <button type="button" class="btn secondary" style="font-size:10px;padding:2px 8px" onclick="toggleJournalDetail('{detail_id}')">Details</button>
+        {edit_btn}
+        {review_btn}
+        <button type="button" class="btn secondary" style="font-size:10px;padding:2px 8px;color:#791F1F" onclick="deleteJournalTrade('{trade_id}')">Delete</button>
+      </td>
+    </tr>
+    <tr id="{detail_id}" style="display:none"><td colspan="7">{_journal_detail_html(t)}</td></tr>"""
+
+
+def _journal_detail_html(t: dict) -> str:
+    plan, ctx = t.get("trade_plan", {}), t.get("market_context", {})
+    execu = t.get("execution", {})
+    psych, chk = t.get("psychology", {}), t.get("rule_checklist", {})
+    review = t.get("post_trade_review", {})
+    ai = t.get("ai_feedback")
+
+    def kv(label, value):
+        v = esc(value) if value not in (None, "") else "—"
+        return f'<div style="margin-bottom:3px"><span style="color:#898781">{esc(label)}:</span> {v}</div>'
+
+    plan_html = "".join([
+        kv("Why", plan.get("why")),
+        kv("Setup", f"{plan.get('setup_name') or '—'} ({plan.get('setup_grade') or '—'})"),
+        kv("HTF trend", plan.get("higher_tf_trend")), kv("LTF trigger", plan.get("lower_tf_trigger")),
+        kv("Entry/Stop/T1/T2", f"{plan.get('entry')} / {plan.get('stop')} / {plan.get('target1')} / {plan.get('target2')}"),
+        kv("Risk % / R:R", f"{plan.get('risk_pct')} / {plan.get('risk_reward')}"),
+        kv("Max loss / gain", f"{plan.get('max_loss_accepted')} / {plan.get('max_gain_expected')}"),
+        kv("Context notes", ctx.get("notes")),
+    ])
+    exec_flags = ", ".join(k.replace("_", " ") for k in
+                          ("deviated_from_plan", "hesitation", "late_entry", "early_exit",
+                           "fomo", "revenge_trade", "overtrading") if execu.get(k)) or "none"
+    exec_html = "".join([
+        kv("Actual entry/exit", f"{execu.get('actual_entry')} / {execu.get('actual_exit')}"),
+        kv("Position size", execu.get("position_size")), kv("Scaling", execu.get("scaling")),
+        kv("Partial exits", execu.get("partial_exits")),
+        kv("Duration (min)", execu.get("duration_minutes")),
+        kv("MFE / MAE", f"{execu.get('mfe')} / {execu.get('mae')}"),
+        kv("Flags", exec_flags),
+    ])
+    psych_html = "".join([
+        kv("Before", psych.get("before")), kv("During", psych.get("during")), kv("After", psych.get("after")),
+        kv("Stress/Confidence/Discipline/Patience/Focus",
+           f"{psych.get('stress')}/{psych.get('confidence')}/{psych.get('discipline')}/{psych.get('patience')}/{psych.get('focus')}"),
+        kv("Fear/Greed/Hope/Regret", f"{psych.get('fear')}/{psych.get('greed')}/{psych.get('hope')}/{psych.get('regret')}"),
+    ])
+    chk_flags = ", ".join(k.replace("_", " ") for k in
+                          ("impulsive", "stop_moved", "target_changed", "averaged_down", "emotional")
+                          if chk.get(k)) or "none"
+    chk_html = kv("Rules broken", chk.get("rules_broken")) + kv("Flags", chk_flags)
+    review_html = "".join([
+        kv("What worked", review.get("what_worked")), kv("What failed", review.get("what_failed")),
+        kv("Repeat", review.get("repeat")), kv("Never again", review.get("never_again")),
+    ])
+
+    ai_html = empty("Not yet reviewed by the AI coach.")
+    if ai:
+        score_fields = [
+            ("Execution", "execution_score"), ("Planning", "planning_score"),
+            ("Psychology", "psychology_score"), ("Risk Mgmt", "risk_management_score"),
+            ("Setup Quality", "setup_quality_score"), ("Edge", "edge_score"),
+        ]
+        scores = "".join(
+            f'<div><div style="font-size:10px;color:#898781">{esc(label)}</div>'
+            f'<div style="font-size:15px;font-weight:650">{esc(ai.get(key, "—"))}</div></div>'
+            for label, key in score_fields)
+        mistakes = "".join(f"<li>{esc(m)}</li>" for m in ai.get("top_mistakes") or []) or "<li>—</li>"
+        strengths = "".join(f"<li>{esc(s)}</li>" for s in ai.get("top_strengths") or []) or "<li>—</li>"
+        suggestions = "".join(f"<li>{esc(s)}</li>" for s in ai.get("improvement_suggestions") or []) or "<li>—</li>"
+        ai_html = (
+            f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-bottom:10px">{scores}</div>'
+            f'<div style="margin-bottom:6px"><b>Top mistakes</b><ul style="margin:4px 0 0 18px">{mistakes}</ul></div>'
+            f'<div style="margin-bottom:6px"><b>Top strengths</b><ul style="margin:4px 0 0 18px">{strengths}</ul></div>'
+            f'<div style="margin-bottom:6px"><b>Improvement suggestions</b><ul style="margin:4px 0 0 18px">{suggestions}</ul></div>'
+            f'<div style="margin-bottom:6px"><b>Confidence in similar setup:</b> {esc(ai.get("confidence_in_future_similar_setup"))}</div>'
+            f'<div style="font-style:italic">“{esc(ai.get("coaching_advice"))}”</div>'
+        )
+
+    return f"""
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;font-size:12px;padding:10px 4px">
+      <div><b>Trade Plan</b>{plan_html}</div>
+      <div><b>Execution</b>{exec_html}</div>
+      <div><b>Psychology</b>{psych_html}</div>
+      <div><b>Checklist</b>{chk_html}<b style="display:block;margin-top:8px">Lessons</b>{review_html}</div>
+    </div>
+    <div style="border-top:0.5px solid #e1e0d9;margin-top:8px;padding-top:10px;font-size:12px">
+      <b>AI Coach Review</b><div style="margin-top:6px">{ai_html}</div>
+    </div>"""
+
+
+def _journal_modal() -> str:
+    return """
+    <dialog id="modal-journal" style="max-width:640px;width:92vw">
+      <form class="modal-body" onsubmit="submitJournalTrade(event, this); return false;" style="max-height:80vh;overflow-y:auto">
+        <h3 id="journal-modal-title">Log a trade</h3>
+        <input type="hidden" name="trade_id" value="">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:8px">
+            <input name="ticker" placeholder="Ticker" required style="flex:1;text-transform:uppercase">
+            <select name="direction" style="flex:1">
+              <option>Long</option><option>Short</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input name="date" type="date" style="flex:1">
+            <input name="time" type="time" style="flex:1">
+          </div>
+          <div style="display:flex;gap:8px">
+            <input name="market" placeholder="Market (stocks/options/futures)" style="flex:1">
+            <input name="sector" placeholder="Sector" style="flex:1">
+          </div>
+
+          <details open>
+            <summary style="cursor:pointer;font-weight:600;font-size:12px;margin:6px 0">Trade Plan</summary>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+              <textarea name="plan_why" placeholder="Why was this trade taken?" rows="2"></textarea>
+              <div style="display:flex;gap:8px">
+                <input name="plan_setup_name" placeholder="Setup (e.g. EMA Pullback)" style="flex:2">
+                <select name="plan_setup_grade" style="flex:1">
+                  <option value="">Setup grade</option>
+                  <option>A+</option><option>A</option><option>B</option><option>C</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:8px">
+                <input name="plan_htf_trend" placeholder="Higher timeframe trend" style="flex:1">
+                <input name="plan_ltf_trigger" placeholder="Lower timeframe trigger" style="flex:1">
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input name="plan_entry" type="number" step="any" placeholder="Entry" style="flex:1;min-width:90px">
+                <input name="plan_stop" type="number" step="any" placeholder="Stop" style="flex:1;min-width:90px">
+                <input name="plan_target1" type="number" step="any" placeholder="Target 1" style="flex:1;min-width:90px">
+                <input name="plan_target2" type="number" step="any" placeholder="Target 2" style="flex:1;min-width:90px">
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input name="plan_risk_pct" type="number" step="any" placeholder="Risk %" style="flex:1;min-width:90px">
+                <input name="plan_expected_reward" type="number" step="any" placeholder="Expected reward" style="flex:1;min-width:110px">
+                <input name="plan_max_loss" type="number" step="any" placeholder="Max loss accepted" style="flex:1;min-width:110px">
+                <input name="plan_max_gain" type="number" step="any" placeholder="Max gain expected" style="flex:1;min-width:110px">
+              </div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+                <label><input type="checkbox" name="ctx_earnings"> Earnings considered</label>
+                <label><input type="checkbox" name="ctx_fed"> Fed considered</label>
+                <label><input type="checkbox" name="ctx_vix"> VIX considered</label>
+                <label><input type="checkbox" name="ctx_yields"> Yields considered</label>
+                <label><input type="checkbox" name="ctx_news"> News considered</label>
+              </div>
+              <input name="ctx_notes" placeholder="Market context notes">
+            </div>
+          </details>
+
+          <details>
+            <summary style="cursor:pointer;font-weight:600;font-size:12px;margin:6px 0">Execution</summary>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input name="exec_actual_entry" type="number" step="any" placeholder="Actual entry" style="flex:1;min-width:90px">
+                <input name="exec_actual_exit" type="number" step="any" placeholder="Actual exit" style="flex:1;min-width:90px">
+                <input name="exec_duration_minutes" type="number" step="any" placeholder="Duration (min)" style="flex:1;min-width:110px">
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input name="exec_mfe" type="number" step="any" placeholder="Max favorable excursion" style="flex:1;min-width:140px">
+                <input name="exec_mae" type="number" step="any" placeholder="Max adverse excursion" style="flex:1;min-width:140px">
+              </div>
+              <input name="exec_position_size" placeholder="Position sizing">
+              <input name="exec_scaling" placeholder="Scaling (adds/trims)">
+              <input name="exec_partial_exits" placeholder="Partial exits">
+              <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+                <label><input type="checkbox" name="exec_deviated_from_plan"> Deviated from plan</label>
+                <label><input type="checkbox" name="exec_hesitation"> Hesitation</label>
+                <label><input type="checkbox" name="exec_late_entry"> Late entry</label>
+                <label><input type="checkbox" name="exec_early_exit"> Early exit</label>
+                <label><input type="checkbox" name="exec_fomo"> FOMO</label>
+                <label><input type="checkbox" name="exec_revenge"> Revenge trade</label>
+                <label><input type="checkbox" name="exec_overtrading"> Overtrading</label>
+              </div>
+            </div>
+          </details>
+
+          <details>
+            <summary style="cursor:pointer;font-weight:600;font-size:12px;margin:6px 0">Psychology</summary>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+              <input name="psych_before" placeholder="Emotional state before">
+              <input name="psych_during" placeholder="Emotional state during">
+              <input name="psych_after" placeholder="Emotional state after">
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <input name="psych_stress" type="number" min="1" max="10" placeholder="Stress 1-10" style="flex:1;min-width:80px">
+                <input name="psych_confidence" type="number" min="1" max="10" placeholder="Confidence 1-10" style="flex:1;min-width:80px">
+                <input name="psych_discipline" type="number" min="1" max="10" placeholder="Discipline 1-10" style="flex:1;min-width:80px">
+                <input name="psych_patience" type="number" min="1" max="10" placeholder="Patience 1-10" style="flex:1;min-width:80px">
+                <input name="psych_focus" type="number" min="1" max="10" placeholder="Focus 1-10" style="flex:1;min-width:80px">
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input name="psych_fear" placeholder="Fear" style="flex:1;min-width:90px">
+                <input name="psych_greed" placeholder="Greed" style="flex:1;min-width:90px">
+                <input name="psych_hope" placeholder="Hope" style="flex:1;min-width:90px">
+                <input name="psych_regret" placeholder="Regret" style="flex:1;min-width:90px">
+              </div>
+              <input name="psych_fomo_note" placeholder="FOMO note">
+            </div>
+          </details>
+
+          <details>
+            <summary style="cursor:pointer;font-weight:600;font-size:12px;margin:6px 0">Checklist</summary>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+              <input name="chk_rules_broken" placeholder="Which rules were broken, if any">
+              <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+                <label><input type="checkbox" name="chk_impulsive"> Impulsive decision</label>
+                <label><input type="checkbox" name="chk_stop_moved"> Stop moved</label>
+                <label><input type="checkbox" name="chk_target_changed"> Target changed</label>
+                <label><input type="checkbox" name="chk_averaged_down"> Averaged down</label>
+                <label><input type="checkbox" name="chk_emotional"> Emotional decision</label>
+              </div>
+            </div>
+          </details>
+
+          <details>
+            <summary style="cursor:pointer;font-weight:600;font-size:12px;margin:6px 0">Lessons</summary>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+              <textarea name="rev_worked" placeholder="What worked?" rows="2"></textarea>
+              <textarea name="rev_failed" placeholder="What failed?" rows="2"></textarea>
+              <textarea name="rev_repeat" placeholder="What should be repeated?" rows="2"></textarea>
+              <textarea name="rev_never_again" placeholder="What should never happen again?" rows="2"></textarea>
+            </div>
+          </details>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('modal-journal')">Cancel</button>
+          <button class="btn">Save trade</button>
+        </div>
+      </form>
+    </dialog>"""
+
+
+_journal_js = r"""
+function openJournalModal(payload) {
+  const dialog = document.getElementById('modal-journal');
+  const form = dialog.querySelector('form');
+  form.reset();
+  // Editing an existing trade: expand every section so prefilled values in
+  // collapsed <details> (e.g. Psychology, Checklist) are actually visible
+  // instead of looking like the edit silently did nothing.
+  form.querySelectorAll('details').forEach(d => { d.open = !!payload; });
+  document.getElementById('journal-modal-title').textContent = payload ? 'Edit trade' : 'Log a trade';
+  if (payload) {
+    for (const [key, value] of Object.entries(payload)) {
+      const el = form.elements[key];
+      if (!el) continue;
+      if (el.type === 'checkbox') el.checked = !!value;
+      else el.value = (value === null || value === undefined) ? '' : value;
+    }
+  }
+  openModal('modal-journal');
+}
+async function submitJournalTrade(event, form) {
+  event.preventDefault();
+  const fd = new FormData(form);
+  try {
+    const res = await fetch('/api/journal/save', { method: 'POST', body: new URLSearchParams(fd) });
+    const data = await res.json();
+    if (data.ok) {
+      toast(data.message || 'Trade logged', 'ok');
+      closeModal('modal-journal');
+      setTimeout(() => location.reload(), 600);
+    } else { toast(data.message || 'Save failed', 'err'); }
+  } catch (e) { toast('Request failed: ' + e, 'err'); }
+}
+async function deleteJournalTrade(id) {
+  if (!confirm('Delete this trade from the journal?')) return;
+  try {
+    const res = await fetch('/api/journal/delete', { method: 'POST', body: new URLSearchParams({ trade_id: id }) });
+    const data = await res.json();
+    if (data.ok) { toast(data.message || 'Removed', 'ok'); setTimeout(() => location.reload(), 500); }
+    else { toast(data.message || 'Delete failed', 'err'); }
+  } catch (e) { toast('Request failed: ' + e, 'err'); }
+}
+function toggleJournalDetail(id) {
+  const row = document.getElementById(id);
+  row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+function onJobFinished(j) {
+  if (j.kind === 'journal_review') setTimeout(() => location.reload(), 1200);
+}
+"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ALERTS — the "personal trading assistant" feed: active watchlist
+# conditions (core.watchlist_alerts, deduped/prioritized by core.alerts) and
+# the latest Pre-Market Brief (core.premarket_brief). Both run on a
+# schedule (see scheduler.py) and can be triggered on demand from here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PRIORITY_STATUS = {"CRITICAL": "bad", "HIGH": "watch", "MEDIUM": "info", "LOW": "muted"}
+
+
+def alerts_page() -> tuple[str, str]:
+    from stockanalysis.core import alerts as alerts_mod
+    from stockanalysis.core.premarket_brief import load_latest_brief
+
+    active = alerts_mod.load_active()
+    active_alerts = sorted((v["alert"] for v in active.values()),
+                          key=lambda a: alerts_mod.priority_rank(a["priority"]))
+
+    def _toolbar_form(action: str, label: str, primary: bool = False) -> str:
+        btn_class = "btn" if primary else "btn secondary"
+        return (f'<form style="display:inline" onsubmit="submitJob(event, this, null); return false;">'
+               f'<input type="hidden" name="action" value="{action}">'
+               f'<button class="{btn_class}" style="font-size:11px;padding:4px 10px">{esc(label)}</button></form> ')
+
+    toolbar = (
+        _toolbar_form("watchlist_scan", "Scan Watchlist Now")
+        + _toolbar_form("news_scan", "Scan News Now")
+        + _toolbar_form("earnings_scan", "Check Earnings Now")
+        + _toolbar_form("premarket_brief", "Generate Brief Now", primary=True)
+    )
+
+    active_html = (empty("No active alerts — conditions are being checked every 10 minutes "
+                         "during market hours (Scanner runs the same checks on demand above).")
+                  if not active_alerts else "".join(_alert_card(a) for a in active_alerts))
+
+    log_rows = alerts_mod.load_log(30)
+    log_html = empty("No alerts have fired yet.") if not log_rows else (
+        '<table><thead><tr><th>When</th><th>Priority</th><th>Category</th><th>Ticker</th><th>Headline</th>'
+        '<th style="text-align:right">Confidence</th></tr></thead><tbody>'
+        + "".join(
+            f'<tr><td>{esc(a["created_at"])}</td><td>{badge(a["priority"], _PRIORITY_STATUS.get(a["priority"], "muted"), "small")}</td>'
+            f'<td>{esc(a.get("category") or "—")}</td>'
+            f'<td>{esc(a.get("ticker") or "—")}</td><td>{esc(a["headline"])}</td>'
+            f'<td style="text-align:right">{a["confidence"]}%</td></tr>'
+            for a in log_rows)
+        + '</tbody></table>')
+
+    brief = load_latest_brief()
+    brief_html = _premarket_brief_html(brief)
+
+    body = (
+        card("Active Alerts", active_html, "🔔", right=toolbar)
+        + card("Latest Pre-Market Brief", brief_html, "📰")
+        + card("Recent Alert Log", log_html, "🗒️")
+    )
+    extra_js = ("function onJobFinished(j) { if (['watchlist_scan', 'news_scan', 'earnings_scan', "
+               "'premarket_brief'].includes(j.kind)) setTimeout(() => location.reload(), 1200); }")
+    return body, extra_js
+
+
+def _alert_card(a: dict) -> str:
+    color = {"CRITICAL": "#791F1F", "HIGH": "#8a6d1a", "MEDIUM": "#185FA5", "LOW": "#898781"}.get(a["priority"], "#898781")
+    return f"""
+    <div style="border-left:3px solid {color};padding:8px 14px;margin-bottom:10px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:3px">
+        {badge(a["priority"], _PRIORITY_STATUS.get(a["priority"], "muted"))}
+        <span style="font-size:9px;color:#898781;text-transform:uppercase;letter-spacing:.3px">{esc(a.get("category") or "")}</span>
+        <b style="font-size:13px">{esc(a.get("ticker") or "")} {esc(a["headline"])}</b>
+      </div>
+      <div style="font-size:12px;color:#444441">Why it matters: {esc(a["why_it_matters"])}</div>
+      <div style="font-size:12px;color:#444441">Expected impact: {esc(a["expected_impact"])}</div>
+      <div style="font-size:12px;color:#444441">Suggested action: {esc(a["suggested_action"])}</div>
+      <div style="font-size:11px;color:#898781;margin-top:2px">Confidence {a["confidence"]}% · {esc(a["time_sensitivity"])} · since {esc(a["created_at"])}</div>
+    </div>"""
+
+
+def _premarket_brief_html(brief: dict | None) -> str:
+    if not brief:
+        return empty('No brief generated yet — click "Generate Brief Now" above '
+                     "(it also runs automatically at 7:00 AM ET on trading days).")
+
+    def stat(label, value):
+        return (f'<div><div style="font-size:11px;color:#898781">{esc(label)}</div>'
+                f'<div style="font-size:14px;font-weight:600">{esc(value)}</div></div>')
+
+    vix = brief.get("vix") or {}
+    y = brief.get("yield_10y") or {}
+    d = brief.get("dollar_index") or {}
+    macro_stats = []
+    if vix.get("level") is not None:
+        macro_stats.append(stat("VIX", f'{vix["level"]:.2f} ({vix.get("change_pct", 0):+.1f}%)'))
+    for f in brief.get("futures") or []:
+        macro_stats.append(stat(f["label"], f'{f["price"]:.2f} ({f["chg_pct"]:+.2f}%)'))
+    for m in brief.get("macro") or []:
+        macro_stats.append(stat(m["label"], f'{m["price"]:.2f} ({m["chg_pct"]:+.2f}%)'))
+    if y.get("level_pct") is not None:
+        macro_stats.append(stat("10Y Yield", f'{y["level_pct"]:.3f}% ({y.get("change_bps", 0):+d}bp)'))
+    if d.get("level") is not None:
+        macro_stats.append(stat("Dollar Index", f'{d["level"]:.2f} ({d.get("change_pct", 0):+.2f}%)'))
+
+    def chips(items, fmt):
+        return "".join(f'<span class="chip">{esc(fmt(i))}</span>' for i in items) or empty("—")
+
+    sections = f"""
+    <div style="font-size:11px;color:#898781;margin-bottom:10px">Generated {esc(brief["generated_at"][:16].replace("T", " "))}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px;margin-bottom:14px">
+      {"".join(macro_stats) or empty("—")}
+    </div>
+    <div style="margin-bottom:10px"><b style="font-size:12px">Trending sectors</b><br>
+      {chips(brief.get("sectors_trending") or [], lambda s: f'{s["label"]} {s["chg_pct"]:+.1f}%')}</div>
+    <div style="margin-bottom:10px"><b style="font-size:12px">Lagging sectors</b><br>
+      {chips(brief.get("sectors_lagging") or [], lambda s: f'{s["label"]} {s["chg_pct"]:+.1f}%')}</div>
+    <div style="margin-bottom:10px"><b style="font-size:12px">Pre-market gainers</b><br>
+      {chips(brief.get("gainers") or [], lambda g: f'{g["ticker"]} +{g["chg_pct"]:.1f}%')}</div>
+    <div style="margin-bottom:10px"><b style="font-size:12px">Pre-market losers</b><br>
+      {chips(brief.get("losers") or [], lambda l: f'{l["ticker"]} {l["chg_pct"]:.1f}%')}</div>
+    <div style="margin-bottom:10px"><b style="font-size:12px">Earnings today</b><br>
+      {chips(brief.get("earnings_today") or [], lambda e: e["ticker"])}</div>
+    <div style="margin-bottom:0"><b style="font-size:12px">Near a key level</b><br>
+      {chips(brief.get("near_breakout") or [], lambda a: f'{a["ticker"]} ({a["headline"]})')}</div>
+    """
+    return sections
 
 
 # ─────────────────────────────────────────────────────────────────────────────

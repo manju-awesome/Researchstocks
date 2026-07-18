@@ -187,6 +187,10 @@ SP500_TICKERS     = _load_universe("sp500")
 LONGTERM_TICKERS  = _load_universe("longterm")
 DIVIDEND_STOCKS   = _load_universe("dividend")
 
+# sector_focus="auto" applies the regime/sector funnel only at or above this
+# size — big index universes get pruned, curated watchlists scan in full
+FOCUS_MIN_UNIVERSE = 100
+
 READY_TICKERS = [
     "ACLS",
     "APH",
@@ -510,13 +514,20 @@ def categorize(row: dict) -> tuple:
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
-def main(tickers: list, progress_cb=None) -> list:
+def main(tickers: list, progress_cb=None, sector_focus: str = "auto") -> list:
     """
     progress_cb, if given, is called as progress_cb(stage: str, done: int,
     total: int) at each pipeline phase — "fetch_qqq" once, then "scan" after
     every ticker, then "grade"/"strategy_scores"/"tracking"/"writing" once
     each. Callers (e.g. the webapp) use it to render live progress; a raising
     callback never aborts the scan — failures are logged and swallowed.
+
+    sector_focus ("auto" | "on" | "off") controls the market funnel
+    (Universe → Regime → Sector Strength → Scanner, scanners.sector_filter):
+    "auto" applies it only to big universes (>= FOCUS_MIN_UNIVERSE tickers,
+    i.e. sp500), leaving curated watchlists — where every name was picked
+    deliberately — untouched. The funnel fails open: if any input is
+    unavailable the full universe scans as before.
     """
     def _progress(stage, done, total):
         if progress_cb is None:
@@ -534,6 +545,15 @@ def main(tickers: list, progress_cb=None) -> list:
         log.info("Removed %d duplicate ticker(s) from universe",
                  len(tickers) - len(deduped))
     tickers = deduped
+
+    if sector_focus == "on" or (sector_focus == "auto"
+                                and len(tickers) >= FOCUS_MIN_UNIVERSE):
+        _progress("focus", 0, len(tickers))
+        from stockanalysis.scanners.sector_filter import apply_market_funnel
+        funnel = apply_market_funnel(tickers)
+        print(f"[Funnel] {funnel['note']}")
+        if funnel["applied"]:
+            tickers = funnel["tickers"]
 
     run_ts = datetime.now().strftime("%Y%m%d_%H%M")
     print("Fetching QQQ 3-month return …")
@@ -866,6 +886,15 @@ def cli() -> None:
         action="store_true",
         help="Print all available universes and their tickers, then exit",
     )
+    focus_group = parser.add_mutually_exclusive_group()
+    focus_group.add_argument(
+        "--focus", action="store_true",
+        help="Force the regime/sector-strength funnel on (any universe size)",
+    )
+    focus_group.add_argument(
+        "--no-focus", action="store_true",
+        help="Disable the funnel and scan the full universe",
+    )
     args = parser.parse_args()
 
     # ── Universe resolution ───────────────────────────────────────────────────────
@@ -893,7 +922,8 @@ def cli() -> None:
         universe_name = args.universe
         print(f"[Universe] {args.universe} ({len(universe)} tickers)")
 
-    rows = main(universe)   # main() dedupes the universe itself
+    sector_focus = "on" if args.focus else ("off" if args.no_focus else "auto")
+    rows = main(universe, sector_focus=sector_focus)   # main() dedupes the universe itself
 
     SEP = "=" * 100
 

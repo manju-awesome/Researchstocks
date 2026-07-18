@@ -29,6 +29,8 @@ NAV = (("dashboard", "/", "🏠", "Dashboard"),
        ("scanner",   "/scanner", "📡", "Scanner"),
        ("research",  "/research", "🔎", "Research"),
        ("portfolio", "/portfolio", "💼", "Portfolio"),
+       ("journal",   "/journal", "📓", "Journal"),
+       ("alerts",    "/alerts", "🔔", "Alerts"),
        ("automation","/automation", "⚙️", "Automation"))
 
 _STATUS = {

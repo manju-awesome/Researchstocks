@@ -51,6 +51,8 @@ ROUTES = {
     "/scanner":     ("scanner",   "Scanner",   pages.scanner_page),
     "/research":    ("research",  "Research",  pages.research_page),
     "/portfolio":   ("portfolio", "Portfolio", pages.portfolio_page),
+    "/journal":     ("journal",   "Journal",   pages.journal_page),
+    "/alerts":      ("alerts",    "Alerts",    pages.alerts_page),
     "/automation":  ("automation","Automation",pages.automation_page),
 }
 
@@ -121,6 +123,15 @@ class WorkstationHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/portfolio/delete":
             ticker = (form.get("ticker") or [""])[0]
             self._send_json(api.portfolio_delete(ticker))
+            return
+
+        if self.path == "/api/journal/save":
+            self._send_json(api.journal_save(form))
+            return
+
+        if self.path == "/api/journal/delete":
+            trade_id = (form.get("trade_id") or [""])[0]
+            self._send_json(api.journal_delete(trade_id))
             return
 
         self.send_error(404)

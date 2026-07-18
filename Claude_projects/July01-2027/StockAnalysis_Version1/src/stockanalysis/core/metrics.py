@@ -41,8 +41,38 @@ except ImportError:
     print("yfinance not installed. Run: pip install yfinance", file=sys.stderr)
     sys.exit(1)
 import logging
+import time
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
+
+# ── Yahoo throttling retry ───────────────────────────────────────────────────
+# Yahoo rate-limits aggressively under heavy scanning. A throttled call either
+# raises (YFRateLimitError / HTTP 429) or silently returns partial data. The
+# raising cases get retried here with exponential backoff, because one 429 on
+# a load-bearing fetch husks the whole row: no price → entry gate fails →
+# a mega cap comes back categorized "Avoid" with every column blank.
+RETRY_ATTEMPTS = 3          # 1 try + 2 retries
+RETRY_BASE_DELAY = 2.0      # seconds; doubles per retry (2s, then 4s)
+
+
+def _is_throttle(e: Exception) -> bool:
+    s = str(e).lower()
+    return "rate limit" in s or "too many requests" in s or "429" in s
+
+
+def _with_retry(fn, ticker: str, what: str):
+    """fn() with backoff retries on rate-limit errors ONLY — anything else
+    (delisted ticker, bad symbol, network down) raises immediately, since
+    retrying can't fix it and would stall the scan loop."""
+    for attempt in range(RETRY_ATTEMPTS):
+        try:
+            return fn()
+        except Exception as e:
+            if not _is_throttle(e) or attempt == RETRY_ATTEMPTS - 1:
+                raise
+            delay = RETRY_BASE_DELAY * (2 ** attempt)
+            log.warning("%s: %s throttled — retrying in %.0fs", ticker, what, delay)
+            time.sleep(delay)
 
 MARKET_TZ       = pytz.timezone("America/New_York")
 PREMARKET_START = datetime.strptime("04:00", "%H:%M").time()
@@ -403,7 +433,7 @@ def get_metrics(ticker: str, qqq_return_3m: float) -> dict:
 
     # ── 1. INFO ───────────────────────────────────────────────────────────────
     try:
-        info = t.info or {}
+        info = _with_retry(lambda: t.info or {}, ticker, ".info")
         row["Sector"]    = info.get("sector") or info.get("quoteType") or "N/A"
         row["LongName"]  = info.get("longName") or ticker
         row["MarketCap"] = info.get("marketCap")
@@ -411,6 +441,36 @@ def get_metrics(ticker: str, qqq_return_3m: float) -> dict:
         row["Sector"]    = "N/A"
         row["LongName"]  = ticker
         row["MarketCap"] = None
+
+    # Yahoo throttles .info's quote endpoint under heavy scanning and returns
+    # a PARTIAL dict — sector present, marketCap/longName missing — so a bare
+    # info.get() silently loses the cap. fast_info hits a lighter endpoint
+    # that usually still answers.
+    if row["MarketCap"] is None:
+        try:
+            cap = _with_retry(lambda: t.fast_info["market_cap"], ticker, "market_cap")
+            row["MarketCap"] = int(cap) if cap else None
+        except Exception:
+            pass
+
+    # Company overview for the research page — same `info` dict already
+    # fetched above, so this is free (no extra network call). No attempt at
+    # a "moat rating" here (that's a qualitative Morningstar-style judgment
+    # this data can't support) — just the raw margin figures that are one
+    # input into that kind of judgment, left for the reader to weigh.
+    try:
+        row["Industry"]           = info.get("industry")
+        row["BusinessSummary"]    = info.get("longBusinessSummary")
+        row["FullTimeEmployees"]  = info.get("fullTimeEmployees")
+        gm = info.get("grossMargins")
+        om = info.get("operatingMargins")
+        roe = info.get("returnOnEquity")
+        row["GrossMargin%"]     = round(gm * 100, 1) if gm is not None else None
+        row["OperatingMargin%"] = round(om * 100, 1) if om is not None else None
+        row["ReturnOnEquity%"]  = round(roe * 100, 1) if roe is not None else None
+    except Exception:
+        row["Industry"] = row["BusinessSummary"] = row["FullTimeEmployees"] = None
+        row["GrossMargin%"] = row["OperatingMargin%"] = row["ReturnOnEquity%"] = None
 
     try:
         row["Revenue"] = (
@@ -561,9 +621,10 @@ def get_metrics(ticker: str, qqq_return_3m: float) -> dict:
 
     # ── 3. CURRENT PRICE ─────────────────────────────────────────────────────
     try:
-        row["Current Price"] = round(float(t.fast_info["last_price"]), 2)
+        row["Current Price"] = round(float(
+            _with_retry(lambda: t.fast_info["last_price"], ticker, "price")), 2)
     except Exception as e:
-        log.debug("%s: current price failed (%s)", ticker, e)
+        log.warning("%s: current price failed (%s)", ticker, e)
         row["Current Price"] = None
 
     # ── 4. DAILY HISTORY (1 year) ────────────────────────────────────────────
@@ -571,7 +632,9 @@ def get_metrics(ticker: str, qqq_return_3m: float) -> dict:
     # raw closes drop on every ex-div date, skewing MAs/RSI/RS/52W stats.
     # (fetch_qqq_return() uses the same flag so RS subtracts like from like.)
     try:
-        daily = t.history(period="1y", interval="1d", auto_adjust=True)
+        daily = _with_retry(
+            lambda: t.history(period="1y", interval="1d", auto_adjust=True),
+            ticker, "daily history")
         computed = compute_daily_metrics(
             daily, qqq_return_3m,
             current_price=row["Current Price"],

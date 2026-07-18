@@ -87,6 +87,7 @@ def fetch_earnings_history(ticker: str, lookback: int = 8) -> dict:
 
     out = {
         "next_earnings_date": None, "days_to_earnings": None,
+        "consensus_eps": None,
         "history": [], "beat_count": 0, "miss_count": 0, "beat_rate": None,
         "streak": 0, "avg_move_pct": None, "avg_abs_move_pct": None,
         "gap_up_freq": None, "gap_down_freq": None, "error": None,
@@ -104,6 +105,7 @@ def fetch_earnings_history(ticker: str, lookback: int = 8) -> dict:
             out["next_earnings_date"] = str(next_dt.date())
             days = (next_dt.tz_localize(None) - datetime.now()).days
             out["days_to_earnings"] = max(days, 0)
+            out["consensus_eps"] = _num(upcoming.iloc[0].get("EPS Estimate"))
 
         past = ed[ed["Reported EPS"].notna()].head(lookback)
         if past.empty:

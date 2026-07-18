@@ -726,6 +726,86 @@ def _start_scheduler() -> None:
     def job_full_close():
         run("full", tickers=FULL_TICKERS)
 
+    # ── Pre-Market Brief (7:00 AM ET) ────────────────────────────
+    # One composed email — macro/movers/earnings/breakout context already
+    # fetched elsewhere, see core/premarket_brief.py for why this isn't a
+    # fresh data source.
+    def job_premarket_brief():
+        if datetime.now(ET).weekday() >= 5:
+            return
+        from stockanalysis.core.premarket_brief import send_premarket_brief
+        try:
+            send_premarket_brief()
+            _log("📰 Pre-market brief sent")
+        except Exception as e:
+            _log(f"Pre-market brief failed: {e}")
+
+    # ── Watchlist Alert Monitor (every 10 min, market hours only) ────────
+    # Guard is inside the job (schedule's every().day.at() only does fixed
+    # times; `every(10).minutes` fires around the clock, same pattern as
+    # _friday_scan's own weekday() check below). News scanning rides along
+    # on the same cadence — it's a cheap per-ticker headline fetch, not
+    # worth a second market-hours-guarded loop.
+    def job_watchlist_alerts():
+        now = datetime.now(ET)
+        if now.weekday() >= 5 or not ((9, 30) <= (now.hour, now.minute) <= (16, 0)):
+            return
+        from stockanalysis.core.watchlist_alerts import scan_rows_for_alerts, default_alert_tickers
+        from stockanalysis.core.news_monitor import scan_news_for_alerts
+        from stockanalysis.reporting.research import generate_research_pages
+        from stockanalysis.scanners import scan_universe as su
+        tickers = default_alert_tickers()
+        if not tickers:
+            return
+        try:
+            rows = su.main(tickers)
+        except Exception as e:
+            _log(f"Watchlist alert scan failed: {e}")
+            return
+        new_alerts = scan_rows_for_alerts(rows)
+        if new_alerts:
+            _log(f"🔔 {len(new_alerts)} new watchlist alert(s): "
+                + ", ".join(a["dedup_key"] for a in new_alerts))
+        # Keeps the Research Library's columns current from the same rows
+        # already fetched for the alert scan — see job_watchlist_scan in
+        # webapp/api.py (the on-demand button) for the full rationale.
+        try:
+            generate_research_pages(rows, REPORTS_DIR, charts=False, fetch_news=False)
+        except Exception as e:
+            _log(f"Research library refresh failed: {e}")
+        try:
+            new_news = scan_news_for_alerts(tickers)
+            if new_news:
+                _log(f"📰 {len(new_news)} new breaking-news alert(s): "
+                    + ", ".join(a["dedup_key"] for a in new_news))
+        except Exception as e:
+            _log(f"News monitor scan failed: {e}")
+
+    # ── Earnings Alert Monitor (6:30 AM ET, daily) ───────────────────────
+    # Runs before the market-hours window (and before the 7:00 AM brief)
+    # since earnings releases happen before the open or after the close,
+    # not during 9:30-16:00 — the watchlist scan's guard would miss them.
+    def job_earnings_alerts():
+        if datetime.now(ET).weekday() >= 5:
+            return
+        from stockanalysis.core.earnings_alerts import scan_earnings_for_alerts
+        from stockanalysis.core.watchlist_alerts import default_alert_tickers
+        tickers = default_alert_tickers()
+        if not tickers:
+            return
+        try:
+            new_alerts = scan_earnings_for_alerts(tickers)
+            if new_alerts:
+                _log(f"📅 {len(new_alerts)} new earnings alert(s): "
+                    + ", ".join(a["dedup_key"] for a in new_alerts))
+        except Exception as e:
+            _log(f"Earnings alert scan failed: {e}")
+
+    schedule.every().day.at("06:30").do(job_earnings_alerts)
+
+    schedule.every().day.at("07:00").do(job_premarket_brief)
+    schedule.every(10).minutes.do(job_watchlist_alerts)
+
     schedule.every().day.at("08:00").do(job_swing_premarket)
     schedule.every().day.at("08:05").do(job_calls_premarket)
     schedule.every().day.at("09:30").do(job_daytrade_open)

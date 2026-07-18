@@ -129,6 +129,94 @@ def job_earnings_analysis(ticker: str, progress: jobstore.Progress) -> str:
             + (f" · expected move ±{move:.1f}%" if move is not None else ""))
 
 
+def job_journal_review(trade_id: str, progress: jobstore.Progress) -> str:
+    """Send one journal trade to the AI coach (core.trading_journal) and
+    write its feedback back into data/journal_trades.json. Runs as a job
+    (rather than inline in the save request) because it's a network call to
+    Anthropic — same reasoning as job_earnings_analysis."""
+    from stockanalysis.core import trading_journal as journal
+    trade = journal.get_trade(trade_id)
+    if not trade:
+        raise ValueError(f"trade {trade_id} not found")
+    progress.stage(f"reviewing {trade.get('ticker')} trade with AI coach")
+    feedback = journal.run_ai_coach_review(trade)
+    journal.update_trade(trade_id, {"ai_feedback": feedback})
+    progress.stage("done")
+    return f"{trade.get('ticker')}: grade {feedback.get('overall_grade')} · edge {feedback.get('edge_score')}/100"
+
+
+def job_premarket_brief(progress: jobstore.Progress) -> str:
+    """On-demand "Generate Now" for the Pre-Market Brief — the same
+    function the 7:00 AM scheduler job calls, so a manual run and the
+    scheduled one always agree (see core/premarket_brief.py)."""
+    from stockanalysis.core.premarket_brief import send_premarket_brief
+    progress.stage("gathering macro, movers, earnings, breakout context")
+    brief = send_premarket_brief()
+    progress.stage("done")
+    return f"brief generated and emailed ({len(brief.get('earnings_today') or [])} earnings today)"
+
+
+def job_watchlist_scan(progress: jobstore.Progress) -> str:
+    """On-demand "Scan Now" for the Watchlist Alert monitor — the same
+    condition scan the 10-minute background job runs during market hours.
+    Also updates the Research Library (research_index.json + each
+    ticker's research/<T>.html page) from the same freshly-fetched rows —
+    scan_universe.main() already runs the full categorize/grade/score
+    pipeline, identical to what a regular Scanner "+ New Scan" produces, so
+    skipping this step (the original version of this job did) just meant
+    the Research Library silently went stale after a watchlist scan.
+    charts=False/fetch_news=False: chart bars and news are already fetched
+    elsewhere (Research page charts, core.news_monitor's own headline
+    scan) — regenerating them here on every 10-minute cycle would be
+    redundant network cost for no new information."""
+    from stockanalysis.core.watchlist_alerts import scan_rows_for_alerts, default_alert_tickers
+    from stockanalysis.reporting.research import generate_research_pages
+    from stockanalysis.scanners import scan_universe as su
+
+    tickers = default_alert_tickers()
+    if not tickers:
+        raise ValueError('no tickers in the "watchlist" list (data/watchlists.json)')
+
+    progress.stage(f"scanning {len(tickers)} watchlist ticker(s)", 0, len(tickers))
+    rows = su.main(tickers, progress_cb=lambda stage, done, total: progress.stage(stage, done, total))
+    new_alerts = scan_rows_for_alerts(rows)
+    progress.stage("updating research library")
+    written = generate_research_pages(rows, OUTPUT_DIR, charts=False, fetch_news=False)
+    progress.stage("done")
+    return (f"{len(new_alerts)} new alert(s) from {len(rows)} ticker(s); "
+           f"research library refreshed for {len(written)}")
+
+
+def job_news_scan(progress: jobstore.Progress) -> str:
+    """On-demand "Scan News Now" for the Breaking News monitor."""
+    from stockanalysis.core.news_monitor import scan_news_for_alerts
+    from stockanalysis.core.watchlist_alerts import default_alert_tickers
+
+    tickers = default_alert_tickers()
+    if not tickers:
+        raise ValueError('no tickers in the "watchlist" list (data/watchlists.json)')
+
+    progress.stage(f"checking recent headlines for {len(tickers)} ticker(s)")
+    new_alerts = scan_news_for_alerts(tickers)
+    progress.stage("done")
+    return f"{len(new_alerts)} new alert(s) from {len(tickers)} ticker(s)"
+
+
+def job_earnings_scan(progress: jobstore.Progress) -> str:
+    """On-demand "Check Earnings Now" for the Earnings Alert monitor."""
+    from stockanalysis.core.earnings_alerts import scan_earnings_for_alerts
+    from stockanalysis.core.watchlist_alerts import default_alert_tickers
+
+    tickers = default_alert_tickers()
+    if not tickers:
+        raise ValueError('no tickers in the "watchlist" list (data/watchlists.json)')
+
+    progress.stage(f"checking earnings dates for {len(tickers)} ticker(s)")
+    new_alerts = scan_earnings_for_alerts(tickers)
+    progress.stage("done")
+    return f"{len(new_alerts)} new alert(s) from {len(tickers)} ticker(s)"
+
+
 def job_cleanup(days: int, progress: jobstore.Progress) -> str:
     from stockanalysis.scheduling.scheduler import cleanup_outputs
     progress.stage("scanning output directory")
@@ -280,6 +368,29 @@ def dispatch_run(action: str, form: dict) -> str:
         return jobstore.start("earnings", f"earnings analysis: {ticker}",
                               lambda p: job_earnings_analysis(ticker, p))
 
+    if action == "journal_review":
+        trade_id = first("trade_id")
+        if not trade_id:
+            return "no trade_id given"
+        return jobstore.start("journal_review", f"AI coach review: {trade_id}",
+                              lambda p: job_journal_review(trade_id, p))
+
+    if action == "premarket_brief":
+        return jobstore.start("premarket_brief", "Pre-Market Brief (manual)",
+                              lambda p: job_premarket_brief(p))
+
+    if action == "watchlist_scan":
+        return jobstore.start("watchlist_scan", "Watchlist alert scan (manual)",
+                              lambda p: job_watchlist_scan(p))
+
+    if action == "news_scan":
+        return jobstore.start("news_scan", "Breaking news scan (manual)",
+                              lambda p: job_news_scan(p))
+
+    if action == "earnings_scan":
+        return jobstore.start("earnings_scan", "Earnings alert scan (manual)",
+                              lambda p: job_earnings_scan(p))
+
     if action == "cleanup":
         try:
             days = max(0, int(first("days", "7")))
@@ -359,3 +470,36 @@ def portfolio_delete(ticker: str) -> dict:
         return {"ok": False, "message": "no ticker given"}
     delete_position(ticker)
     return {"ok": True, "message": f"{ticker.upper()} removed"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOURNAL — save/delete are immediate (no network call); the AI coach review
+# itself runs as a background job (see job_journal_review above)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def journal_save(form: dict) -> dict:
+    """Handles both "+ Log Trade" (no trade_id) and "Edit" (trade_id set) —
+    a trade logged with only partial detail (e.g. just the plan, before it
+    closes) can be reopened and completed later without creating a
+    duplicate row."""
+    from stockanalysis.core import trading_journal as journal
+    ticker = (form.get("ticker") or [""])[0].strip()
+    if not ticker:
+        return {"ok": False, "message": "ticker is required"}
+    trade_id = (form.get("trade_id") or [""])[0].strip()
+    if trade_id:
+        trade = journal.update_trade_from_form(trade_id, form)
+        if not trade:
+            return {"ok": False, "message": f"trade {trade_id} not found"}
+        return {"ok": True, "message": f"{trade['ticker']} trade updated", "id": trade["id"]}
+    trade = journal.add_trade(form)
+    return {"ok": True, "message": f"{trade['ticker']} trade logged", "id": trade["id"]}
+
+
+def journal_delete(trade_id: str) -> dict:
+    from stockanalysis.core import trading_journal as journal
+    trade_id = (trade_id or "").strip()
+    if not trade_id:
+        return {"ok": False, "message": "no trade_id given"}
+    ok = journal.delete_trade(trade_id)
+    return {"ok": ok, "message": "trade removed" if ok else "trade not found"}

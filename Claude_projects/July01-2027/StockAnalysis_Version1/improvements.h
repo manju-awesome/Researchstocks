@@ -1,457 +1,433 @@
-UX improvements:
-I analyzed the control panel HTML you uploaded. Overall, you've built a power-user trading workstation rather than a consumer web app. It already exposes your stock pipeline (scan → dashboard → research → news), but there are several opportunities to make it feel more like a professional Bloomberg/TradingView-style application instead of a collection of forms.
-Overall Rating
-Area	Score	Comments
-Functionality	⭐⭐⭐⭐⭐ (9.5/10)	Very capable backend
-UI Design	⭐⭐⭐ (6/10)	Functional but plain
-User Experience	⭐⭐⭐ (6.5/10)	Too many manual actions
-Navigation	⭐⭐⭐ (6/10)	Needs organization
-Scalability	⭐⭐⭐⭐ (8.5/10)	Good architecture
-Production Readiness	⭐⭐⭐ (7/10)	Missing auth, progress, status
-What Works Well
-Your application already has clear functional separation:
-Research generation
-Stock scanning
-News updates
-Dashboard history
-Research library
-CSV downloads
-Job history
-This is a solid foundation.
-Biggest UX Problems
-1. Too many forms
-Currently the user sees four independent forms:
-Refresh Research
+I am working professional but I also want to do trading to build my portfolio, My biggest constraint isn't finding trades—it's filtering out noise. Your AI dashboard should function like a personal trading assistant that monitors the market continuously and only alerts you when something meets your predefined criteria.
+Rather than showing everything, focus on high-signal, low-noise alerts.
+
+Master AI Dashboard Prompt
+You are my AI Trading Assistant.
+
+I am a working professional and cannot monitor the market continuously.
+
+Your job is to filter market information and notify me only when high-probability opportunities or important risks occur.
+
+Do not send unnecessary alerts.
+
+Prioritize quality over quantity.
+
+For every alert include:
+
+• Priority (Critical, High, Medium, Low)
+• Why it matters
+• Expected impact
+• Suggested action
+• Confidence (0-100)
+• Time sensitivity
+• Supporting data
+1. Pre-Market Brief (7:00–8:30 AM)
+Prompt:
+Generate today's pre-market briefing.
+
+Include:
+
+• Major overnight news
+• Futures movement
+• VIX
+• Treasury yields
+• Dollar Index
+• Oil
+• Gold
+• Bitcoin
+• Top gainers
+• Top losers
+• Stocks with unusual pre-market volume
+• Today's earnings
+• Important economic events
+• Fed speakers
+• Options market highlights
+• Stocks near breakout levels
+• Trending sectors
+
+Summarize everything in under 5 minutes of reading.
+
+Highlight only information likely to affect today's trading.
+2. Earnings Alert
+Monitor earnings continuously.
+
+Notify me only when:
+
+• Company is on my watchlist
+• Market cap > $2B
+• Expected move >5%
+• IV Rank >50
+• Strong options activity
+• Analyst revisions increased
+• Previous earnings average move >6%
+
+For each company include:
+
+• Earnings date/time
+• Before or after market
+• Expected move
+• Historical earnings behavior
+• Consensus EPS
+• Revenue estimate
+• Bullish/Bearish sentiment
+• Key risks
+• Suggested preparation
+
+Email me 24 hours before earnings and again 1 hour before the release.
+3. Breaking News Monitor
+Monitor news in real time.
+
+Alert only if news is likely to move the stock more than 3%.
+
+Examples:
+
+• FDA approval
+• Acquisition
+• CEO resignation
+• Share buyback
+• SEC investigation
+• Product launch
+• Large contract
+• Dividend change
+• Credit downgrade
+• Guidance revision
+• Earnings preannouncement
+• Lawsuit
+• Government policy
+
+Ignore low-impact articles.
+
+Provide:
+
+Summary
 
-Run Scan
+Expected impact
 
-Scan News
+Risk level
 
-Cleanup
-This feels like an admin page.
-Instead create one toolbar:
+Likely market reaction
 
-+ New Scan
-+ Refresh Research
-+ Update News
-+ Portfolio
-+ Settings
-This immediately modernizes the interface.
-2. Missing Dashboard
-The first thing a trader should see is NOT buttons.
-It should be
+Confidence
+4. Trade Setup Scanner
+Scan my watchlist every 5 minutes.
 
-Market Status
+Alert only when all selected conditions are satisfied.
 
-Portfolio
-
-Today's Opportunities
-
-Open Positions
-
-Alerts
-Instead of
-Refresh research
-Run scan
-Cleanup
-3. Dashboard should become Homepage
-Current
-Trading Workstation
-
-Actions
-
-Jobs
-
-Dashboards
-
-Research
-
-CSV
-Instead
-Trading Workstation
-------------------------------------
-
-Market Status
-
-Portfolio Value
-
-Today's Scan
-
-Top Opportunities
-
-Recent Alerts
-
-Latest News
-
-Open Positions
-
-Recent Research
-
-Recent Dashboards
-4. Search
-You have 104 research pages.
-That list is unusable.
-
-Instead
-
-🔍 Search ticker
-
-NVDA
-
-AMD
-
-PLTR
-Autocomplete
-NV
-↓
-
-NVDA
-
-NVO
-
-NVR
-would make navigation much faster.
-5. Research Pages Need Categories
-Instead of
-AAOI
-
-ABBV
-
-AMD
-
-AMZN
-
-...
-Group them:
-Semiconductors
-
-AMD
-
-NVDA
-
-MRVL
-
-AVGO
-
-Software
-
-CRM
-
-SNOW
-
-MDB
-
-Healthcare
-
-LLY
-
-ABBV
-
-UNH
-6. Add Favorite Watchlists
-⭐ AI
-
-⭐ Dividend
-
-⭐ Swing
-
-⭐ Breakout
-
-⭐ Earnings
-
-⭐ Portfolio
-7. Job Progress
-Currently
-DONE
-News Scan
-Instead
-Scanning
-
-████████░░ 84%
-
-Reading Financials
-
-██████░░░░ 55%
-
-Generating Charts
-
-██████████
-8. Notifications
-Instead of refreshing
-Show
-
-✓ Dashboard updated
-
-✓ Research complete
-
-✓ News updated
-Toast notifications.
-9. Scan Pipeline
-Instead of a single button
-Run Scan
-Show steps
-Market Data
-
-↓
-
-Fundamentals
-
-↓
-
-Technical Analysis
-
-↓
-
-CANSLIM
-
-↓
-
-Research
-
-↓
-
-Dashboard
-
-↓
-
-Complete
-10. Large Research Library
-104 buttons become impossible.
-Use
-
-Table
-
-Ticker
-
-Sector
-
-Score
-
-Updated
-
-Action
-Example
-NVDA
-
-Semis
-
-96
-
-2 mins ago
-
-Open
-11. Portfolio
-Currently missing.
-Should include
-
-Portfolio Value
-
-Today's Gain
-
-Risk
-
-Allocation
-
-Cash
-
-Buying Power
-12. Opportunity Dashboard
-Instead of CSV downloads
-Create cards
-
-🔥 Day Trade
-
-CRWD
-
-95
+Example setups:
 
 Breakout
 
-Buy
+Price above 20 EMA
 
---------------------------------
+Above 50 EMA
 
-🚀 Swing
+Volume >2x average
 
-MRVL
+RSI between 55-70
 
-92
+MACD bullish crossover
+
+Near resistance breakout
+
+Relative strength improving
+
+OR
 
 Pullback
 
---------------------------------
+Uptrend intact
 
-💎 Long Term
+Price touches 20 EMA
 
-NVDA
+Bullish candle
 
-97
+Increasing volume
 
-CANSLIM
-13. Market Heatmap
-Top of page
-SPY +0.7%
+Strong sector
 
-QQQ +1.4%
+Return:
 
-VIX -3%
+Setup quality (0-100)
 
-Breadth
+Entry
 
-Advance/Decline
+Stop
 
-Volume
-14. AI Summary
-Very valuable.
-Today's Summary
+Target 1
 
-The market is bullish.
+Target 2
 
-Semiconductors remain strongest.
+Risk:Reward
 
-Healthcare weak.
+Confidence
 
-7 new breakout candidates.
+Reason
+5. Sector Rotation Monitor
+Monitor sector performance.
 
-3 earnings tomorrow.
+Notify me when:
 
-Portfolio risk moderate.
-15. Alerts
-Instead of manual research
-🔔 NVDA reached buy zone
+Sector outperforms SPY by more than 2%
 
-🔔 AMD broke 200MA
+Sector receives unusual institutional buying
 
-🔔 PLTR earnings tomorrow
+Sector ETF breaks out
 
-🔔 TSLA volume spike
-16. Card Layout
-Current
-Forms
-Modern
-Portfolio
+Industry leadership changes
 
-Today's Scan
+Top stocks within the sector
 
-Watchlist
+Strong earnings trend
 
-Research
+Analyst upgrades
 
-Jobs
+Rank sectors:
 
-Market
-
-News
-Each inside a card.
-17. Better Color Coding
-Current
-Blue buttons.
-
-Instead
-
-Green
+Strong Bullish
 
 Bullish
-Yellow
-Watch
-Red
+
+Neutral
+
+Weak
+
 Avoid
-Blue
-Information
-18. Better Charts
-Add
-TradingView embedded chart
-Relative Strength chart
-Volume profile
-Earnings history
-Quarterly growth chart
-Institutional ownership trend
-Price target distribution
-19. Quick Actions
-Each ticker card
-Research
+6. Watchlist Alert
+Monitor my watchlist continuously.
 
-Chart
+Alert when:
 
-News
+Price reaches support
 
-Technical
+Price reaches resistance
 
-Fundamental
+Breakout
 
-Portfolio
+Breakdown
 
-Add Watchlist
-instead of navigating multiple pages.
-20. Sidebar
-Dashboard
+Gap >3%
 
-Portfolio
+Volume spike
 
-Day Trade
+Unusual options flow
 
-Swing
+Institutional buying
 
-Long Term
+RSI oversold
 
-Research
+RSI overbought
 
-Market
+MACD crossover
 
-News
+EMA crossover
 
-Backtesting
+Only notify once until condition changes.
+7. Macro Alert
+Monitor:
 
-Settings
-This feels much more like a trading platform.
-Architecture Improvements
-I also recommend evolving the backend architecture:
-FastAPI
+Fed
 
-↓
+Treasury yields
 
-Background Workers
+VIX
 
-↓
+CPI
 
-Redis Queue
+PPI
 
-↓
+NFP
 
-PostgreSQL
+GDP
 
-↓
+FOMC
 
-WebSocket
+Dollar
 
-↓
+Oil
 
-Dashboard
-This enables long-running scans without blocking the UI and supports real-time updates.
-Features I'd Prioritize Next
-Priority	Feature	Impact
-⭐⭐⭐⭐⭐	Portfolio Dashboard	Very High
-⭐⭐⭐⭐⭐	Search + Filters	Very High
-⭐⭐⭐⭐⭐	Top Trade Cards	Very High
-⭐⭐⭐⭐⭐	Live Scan Progress	Very High
-⭐⭐⭐⭐	AI Market Summary	High
-⭐⭐⭐⭐	Risk Management Panel	High
-⭐⭐⭐⭐	Interactive Charts	High
-⭐⭐⭐⭐	Screener Filters	High
-⭐⭐⭐	Dark Mode	Medium
-⭐⭐⭐	Notifications	Medium
-⭐⭐⭐	Watchlists	Medium
-⭐⭐⭐	Calendar (earnings/dividends/economic events)	Medium
-A redesign tailored to your workflow
-Based on the trading dashboard and research pipeline you've been building, I'd restructure the application into five main pages:
-Executive Dashboard – Portfolio summary, market regime, AI-generated market summary, top day/swing/long-term opportunities, and alerts.
-Market Scanner – Interactive screener with filters, sortable rankings, allocation suggestions, and links to research pages.
-Research Center – Per-ticker pages with technical, fundamental, news, catalysts, valuation, and risk analysis (building on the HTML pages you're already generating).
-Portfolio & Risk – Holdings, allocation by sector/market cap, P&L, exposure, position sizing, stop-loss recommendations, and watchlists.
-Automation Center – Scan controls, job history, scheduler, logs, settings, and API status.
-This organization separates trading decisions from system administration, making the app feel like a professional trading platform rather than a collection of utilities.
-Overall assessment: the backend capabilities are already close to a professional research workstation (I'd rate them around 9.5/10). Most of the remaining work is in UX: reducing clicks, surfacing the most important information first, and making the interface more visual and interactive. Those changes would have a much larger impact on usability than adding more analytics.
+Gold
 
+Alert only if market expectation changes significantly.
 
+Explain:
 
+What happened
 
+Why it matters
+
+Affected sectors
+
+Likely winners
+
+Likely losers
+
+Confidence
+8. Portfolio Risk Monitor
+Monitor my portfolio.
+
+Alert when:
+
+Single position exceeds risk limit
+
+Sector concentration >30%
+
+Correlation too high
+
+Portfolio beta > target
+
+Large unrealized loss
+
+Large unrealized gain
+
+Upcoming earnings
+
+Dividend announcement
+
+Target reached
+
+Stop reached
+
+Suggest possible actions.
+9. Options Flow Monitor
+Alert only when:
+
+Large call buying
+
+Large put buying
+
+Sweep orders
+
+Block trades
+
+Dark pool activity
+
+High gamma exposure
+
+High open interest
+
+Unusual IV expansion
+
+Explain:
+
+Institutional bias
+
+Possible price movement
+
+Supporting evidence
+
+Confidence
+10. Swing Trading Opportunities
+Find swing trades lasting 3–15 trading days.
+
+Criteria:
+
+Uptrend
+
+Strong earnings
+
+Strong sector
+
+Institutional accumulation
+
+Positive analyst revisions
+
+Healthy balance sheet
+
+Volume expansion
+
+Good risk:reward (>2)
+
+Return:
+
+Ticker
+
+Setup
+
+Catalyst
+
+Entry
+
+Stop
+
+Target
+
+Risk %
+
+Confidence
+
+Expected duration
+11. End-of-Day Summary
+Generate an end-of-day report.
+
+Include:
+
+Portfolio performance
+
+Market summary
+
+Best sectors
+
+Worst sectors
+
+Watchlist changes
+
+Trades triggered
+
+Missed opportunities
+
+Tomorrow's earnings
+
+Tomorrow's economic events
+
+AI recommendations
+
+Maximum 5 minutes to read.
+12. Weekly Portfolio Review
+Every weekend generate:
+
+Portfolio return
+
+Benchmark comparison
+
+Win rate
+
+Best trade
+
+Worst trade
+
+Risk metrics
+
+Sector allocation
+
+Upcoming earnings
+
+Upcoming macro events
+
+Stocks to remove
+
+Stocks to add
+
+Action plan for next week
+Suggested AI Dashboard Layout
+To keep the interface useful rather than overwhelming, organize it into these widgets:
+Widget	Refresh Frequency
+Daily Market Brief	Before market open
+Breaking News	Real time
+Earnings Calendar	Daily + email reminders
+Trade Setup Scanner	Every 5–15 minutes
+Watchlist Alerts	Real time
+Sector Rotation Heatmap	Every 30–60 minutes
+Options Flow	Every 15 minutes
+Economic Calendar	Daily
+Portfolio Risk Monitor	Real time
+AI Trade Ideas	After market close and pre-market
+End-of-Day Summary	After market close
+Weekly Portfolio Review	Every weekend
+Smart alert rules for a busy professional
+To avoid alert fatigue, define severity levels and delivery methods:
+Priority	Examples	Delivery
+🔴 Critical	Stop-loss hit, major earnings surprise, Fed announcement, breaking company news	Push notification + email
+🟠 High	High-quality trade setup, watchlist breakout, unusual options flow	Push notification
+🟡 Medium	Sector rotation, analyst upgrades, approaching earnings	In-app notification + digest
+🔵 Low	General market commentary, routine summaries	Daily or weekly email
+This approach helps ensure you receive only actionable information during the workday while preserving more detailed analysis for scheduled summaries.

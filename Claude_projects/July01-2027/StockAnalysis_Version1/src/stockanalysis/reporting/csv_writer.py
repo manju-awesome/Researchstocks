@@ -82,7 +82,9 @@ COLUMN_ORDER = [
 ]
 
 # Columns to exclude from the CSV (internal calc helpers)
-_EXCLUDE = {"_prior_52w_high", "_prior_52w_low"}
+_EXCLUDE = {"_prior_52w_high", "_prior_52w_low",
+           "BusinessSummary"}  # full paragraph text — belongs on the research
+                              # page (research.py), not a scan CSV column
 
 
 def _fmt(value) -> str:
