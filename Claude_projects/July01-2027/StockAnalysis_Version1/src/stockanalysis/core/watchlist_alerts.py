@@ -213,10 +213,192 @@ def _macd_crossover(row: dict) -> dict | None:
         confidence=45, time_sensitivity="ongoing", supporting_data={"macd_state": state})
 
 
+WEEK52_TOUCH_PCT = 0.3  # within this % of the recorded 52-week extreme counts as "hitting" it
+
+
+def _52w_high(row: dict) -> dict | None:
+    """Dist_52W_High% >= 0 means the live price is at/above the highest daily
+    High seen over the trailing year (core.metrics computes both from the
+    same fetch) — i.e. the stock just made a fresh 52-week high."""
+    dist = _num(row, "Dist_52W_High%")
+    if dist is None or dist < -WEEK52_TOUCH_PCT:
+        return None
+    ticker = row["Ticker"]
+    return alerts.make_alert(
+        dedup_key=f"{ticker}:52w_high", category="watchlist", priority="HIGH",
+        ticker=ticker, headline="hit a new 52-week high",
+        why_it_matters="Price is trading at or above its highest level in the past year — "
+                       "no overhead supply left to absorb.",
+        expected_impact="Momentum names often continue trending once they clear the prior "
+                        "52-week ceiling.",
+        suggested_action="Consider a breakout entry with a stop below the prior high, "
+                         "or trail a stop on an existing position.",
+        confidence=65, time_sensitivity="today",
+        supporting_data={"dist_52w_high_pct": dist, "52w_high": row.get("52W High"),
+                         "price": row.get("Current Price")})
+
+
+def _52w_low(row: dict) -> dict | None:
+    """Pct_From_52W_Low% <= 0 means the live price is at/below the lowest
+    daily Low seen over the trailing year — a fresh 52-week low."""
+    pct_low = _num(row, "Pct_From_52W_Low%")
+    if pct_low is None or pct_low > WEEK52_TOUCH_PCT:
+        return None
+    ticker = row["Ticker"]
+    return alerts.make_alert(
+        dedup_key=f"{ticker}:52w_low", category="watchlist", priority="HIGH",
+        ticker=ticker, headline="hit a new 52-week low",
+        why_it_matters="Price is trading at or below its lowest level in the past year — "
+                       "the prior floor has given way.",
+        expected_impact="Downside can accelerate once a 52-week low breaks, as stops and "
+                        "technical selling often cluster there.",
+        suggested_action="Reassess the thesis on any long position; a short/put idea should "
+                         "confirm with volume before acting.",
+        confidence=60, time_sensitivity="today",
+        supporting_data={"pct_from_52w_low_pct": pct_low, "52w_low": row.get("52W Low"),
+                         "price": row.get("Current Price")})
+
+
+PUT_SCORE_ALERT_MIN = 8      # exclusive — Put_Score must EXCEED this to alert
+
+
+def _put_score_high(row: dict) -> dict | None:
+    """Put_Score > PUT_SCORE_ALERT_MIN: a rare, high-conviction bearish
+    setup (raw additive score, observed range ≈ -1..10; disqualified names
+    are forced to 0 upstream, so a high score is never a disqualified one).
+    HIGH priority — emails and lands in the ALERT_TICKERS watchlist."""
+    score = _num(row, "Put_Score")
+    if score is None or score <= PUT_SCORE_ALERT_MIN:
+        return None
+    ticker = row["Ticker"]
+    reason = row.get("Put_Reason") or "multiple bearish factors aligned"
+    return alerts.make_alert(
+        dedup_key=f"{ticker}:put_score_high", category="put_setup", priority="HIGH",
+        ticker=ticker, headline=f"put setup score {score:.0f} — high-conviction bearish",
+        why_it_matters=f"Put screen factors stacking up: {reason}",
+        expected_impact="Downside continuation is the base case while the score holds this high.",
+        suggested_action="Review the put candidate (strike/expiry per the scan report); "
+                         "if holding the stock, reassess or hedge.",
+        confidence=min(95, 50 + int(score) * 5), time_sensitivity="today",
+        supporting_data={"put_score": score, "put_reason": row.get("Put_Reason"),
+                         "put_candidate": row.get("Put_Candidate"),
+                         "price": row.get("Current Price")})
+
+
+CALL_SCORE_ALERT_MIN = 8     # exclusive — a stricter bar than the module's
+                             # own STRONG tier (Call_Score >= 7), same cut as puts
+
+
+def _call_score_high(row: dict) -> dict | None:
+    """Call_Score > CALL_SCORE_ALERT_MIN: high-conviction turnaround call
+    setup (additive score, STRONG tier starts at 7; disqualified names are
+    zeroed upstream). HIGH priority — emails and lands in ALERT_TICKERS."""
+    score = _num(row, "Call_Score")
+    if score is None or score <= CALL_SCORE_ALERT_MIN:
+        return None
+    ticker = row["Ticker"]
+    reason = row.get("Call_Reason") or "multiple turnaround factors aligned"
+    return alerts.make_alert(
+        dedup_key=f"{ticker}:call_score_high", category="call_setup", priority="HIGH",
+        ticker=ticker, headline=f"call setup score {score:.0f} — high-conviction turnaround",
+        why_it_matters=f"Call screen factors stacking up: {reason}",
+        expected_impact="Asymmetric upside if the reversal holds — defined risk via premium.",
+        suggested_action="Review the call candidate (strike/expiry per the scan report) "
+                         "and size as a defined-risk options position.",
+        confidence=min(95, 50 + int(score) * 4), time_sensitivity="today",
+        supporting_data={"call_score": score, "call_reason": row.get("Call_Reason"),
+                         "call_strength": row.get("Call_Strength"),
+                         "call_strike_hint": row.get("Call_Strike_Hint"),
+                         "price": row.get("Current Price")})
+
+
+# A+ thresholds mirror the scheduler's GRADE_BANDS (day >= 80, swing >= 95,
+# both over the dashboard card-rank formulas in core.strategy_scores); the
+# long-term equivalent is all six Investment primary filters green AND
+# Investment_Score >= 80 — there is no scheduler band for long-term.
+A_PLUS_DAY_MIN = 80
+A_PLUS_SWING_MIN = 95
+A_PLUS_LT_SCORE_MIN = 80
+
+
+def _a_plus_setup(row: dict) -> dict | None:
+    """Any strategy hitting its A+ band fires ONE alert per ticker naming
+    every strategy that qualified. HIGH priority — emails and lands in
+    ALERT_TICKERS. Resolves when no strategy holds its band any more."""
+    from stockanalysis.core.strategy_scores import day_card_rank, swing_card_rank
+    ticker = row.get("Ticker")
+    if not ticker:
+        return None
+    hits = []
+    swing = swing_card_rank(row)
+    if swing >= A_PLUS_SWING_MIN:
+        hits.append(f"swing (rank {swing:.0f})")
+    day = day_card_rank(row)
+    if day >= A_PLUS_DAY_MIN:
+        hits.append(f"day (rank {day:.0f})")
+    inv_score = _num(row, "Investment_Score")
+    if row.get("Investment_Pass") and inv_score is not None and inv_score >= A_PLUS_LT_SCORE_MIN:
+        hits.append(f"long-term (score {inv_score:.0f}, all filters green)")
+    if not hits:
+        return None
+    cat = row.get("Category") or "—"
+    return alerts.make_alert(
+        dedup_key=f"{ticker}:a_plus_setup", category="a_plus_setup", priority="HIGH",
+        ticker=ticker, headline=f"A+ {' + '.join(h.split(' ')[0] for h in hits)} setup ({cat})",
+        why_it_matters="Scored in the top band for: " + "; ".join(hits) + ".",
+        expected_impact="Highest-conviction tier the scanner produces — these are the "
+                        "setups the grade filter emails for.",
+        suggested_action="Open the research page and review the entry/stop/target plan "
+                         "before the setup ages.",
+        confidence=85, time_sensitivity="today",
+        supporting_data={"strategies": hits, "category": cat,
+                         "swing_rank": swing if swing > -999 else None,
+                         "day_rank": day if day > -999 else None,
+                         "investment_score": inv_score,
+                         "entry": row.get("Entry"), "stop": row.get("Stop"),
+                         "target": row.get("Target"), "grade": row.get("Grade"),
+                         "price": row.get("Current Price")})
+
+
 _CONDITIONS = (
     _support_touch, _resistance_touch, _breakout, _breakdown, _gap,
     _volume_spike, _rsi_oversold, _rsi_overbought, _ema_crossover, _macd_crossover,
+    _put_score_high, _call_score_high, _a_plus_setup, _52w_high, _52w_low,
 )
+
+_OPTION_CONDITIONS = ((_put_score_high, "put_score_high"),
+                      (_call_score_high, "call_score_high"),
+                      (_a_plus_setup, "a_plus_setup"),
+                      (_52w_high, "52w_high"),
+                      (_52w_low, "52w_low"))
+
+
+def scan_rows_for_option_alerts(rows: list[dict]) -> list[dict]:
+    """The put/call-score, A+ setup, and 52-week high/low conditions, for
+    the main scan pipeline: every scan (any category universe, ad-hoc
+    tickers, or day-trade scan) checks its rows on the way through, so a
+    high-conviction setup or a fresh 52-week extreme alerts no matter which
+    scan found it — not just the 10-minute watchlist monitor. Same dedup
+    keys as the monitor's conditions, so both paths share one alert state."""
+    current, checked_keys = [], set()
+    for row in rows:
+        ticker = row.get("Ticker")
+        if not ticker:
+            continue
+        for condition, key in _OPTION_CONDITIONS:
+            checked_keys.add(f"{ticker}:{key}")
+            found = condition(row)
+            if found:
+                current.append(found)
+    new_alerts = alerts.raise_alerts(current, checked_keys)
+    from stockanalysis.core import trade_proposals
+    trade_proposals.sync_from_alerts()
+    return new_alerts
+
+
+# Original name of the put-only scanner, kept callable — same behavior,
+# now also covering calls.
+scan_rows_for_put_alerts = scan_rows_for_option_alerts
 
 
 def default_alert_tickers() -> list[str]:
@@ -250,7 +432,10 @@ def scan_rows_for_alerts(rows: list[dict]) -> list[dict]:
                 checked_keys.add(found["dedup_key"])
             else:
                 checked_keys.update(_possible_keys(condition, ticker))
-    return alerts.raise_alerts(current, checked_keys)
+    new_alerts = alerts.raise_alerts(current, checked_keys)
+    from stockanalysis.core import trade_proposals
+    trade_proposals.sync_from_alerts()
+    return new_alerts
 
 
 def _possible_keys(condition, ticker: str) -> set[str]:

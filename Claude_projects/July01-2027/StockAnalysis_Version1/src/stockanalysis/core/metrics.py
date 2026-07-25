@@ -465,12 +465,28 @@ def get_metrics(ticker: str, qqq_return_3m: float) -> dict:
         gm = info.get("grossMargins")
         om = info.get("operatingMargins")
         roe = info.get("returnOnEquity")
+        de = info.get("debtToEquity")
         row["GrossMargin%"]     = round(gm * 100, 1) if gm is not None else None
         row["OperatingMargin%"] = round(om * 100, 1) if om is not None else None
         row["ReturnOnEquity%"]  = round(roe * 100, 1) if roe is not None else None
+        row["DebtToEquity"]     = round(de, 1) if de is not None else None
     except Exception:
         row["Industry"] = row["BusinessSummary"] = row["FullTimeEmployees"] = None
         row["GrossMargin%"] = row["OperatingMargin%"] = row["ReturnOnEquity%"] = None
+        row["DebtToEquity"] = None
+
+    # Balance-sheet strength fields for the Financial Health score — same
+    # `info` dict, no extra network call.
+    try:
+        cr = info.get("currentRatio")
+        qr = info.get("quickRatio")
+        row["CurrentRatio"] = round(cr, 2) if cr is not None else None
+        row["QuickRatio"]   = round(qr, 2) if qr is not None else None
+        row["TotalCash"]    = info.get("totalCash")
+        row["TotalDebt"]    = info.get("totalDebt")
+    except Exception:
+        row["CurrentRatio"] = row["QuickRatio"] = None
+        row["TotalCash"] = row["TotalDebt"] = None
 
     try:
         row["Revenue"] = (
@@ -583,9 +599,13 @@ def get_metrics(ticker: str, qqq_return_3m: float) -> dict:
 
     try:
         fcf = info.get("freeCashflow")
+        revenue = info.get("totalRevenue")
         row["FCF_Positive"] = bool(fcf > 0) if fcf is not None else None
+        row["FCF_Margin%"] = (round(fcf / revenue * 100, 1)
+                               if fcf is not None and revenue else None)
     except Exception:
         row["FCF_Positive"] = None
+        row["FCF_Margin%"] = None
 
     try:
         si = info.get("shortPercentOfFloat")

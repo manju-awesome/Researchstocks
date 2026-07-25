@@ -116,6 +116,10 @@ class WorkstationHandler(SimpleHTTPRequestHandler):
             self._send_json({"ok": True, "watchlists": watchlists})
             return
 
+        if self.path == "/api/schedule/save":
+            self._send_json(api.schedule_save(form))
+            return
+
         if self.path == "/api/portfolio/save":
             self._send_json(api.portfolio_save(form))
             return

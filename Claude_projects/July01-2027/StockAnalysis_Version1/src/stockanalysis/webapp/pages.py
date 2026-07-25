@@ -19,7 +19,7 @@ from pathlib import Path
 from . import jobstore
 from .views import (
     OUTPUT_DIR, DATA_DIR, esc, badge, stars, action_badge, progress_bar,
-    card, empty, fmt_money, fmt_pct,
+    card, empty, fmt_money, fmt_pct, tv_url,
 )
 
 
@@ -134,8 +134,9 @@ def dashboard_page() -> tuple[str, str]:
         if not items:
             return f'<div style="flex:1;min-width:200px"><div style="font-size:12px;font-weight:600;margin-bottom:8px">{icon} {title}</div>{empty("none qualified")}</div>'
         rows = "".join(
-            f'<a href="/research/{r["ticker"]}.html" style="display:block;text-decoration:none;color:#0b0b0b;'
-            f'padding:8px 10px;border-radius:8px;background:#f9f9f7;margin-bottom:6px">'
+            f'<a href="{tv_url(r["ticker"])}" target="_blank" style="display:block;text-decoration:none;color:#0b0b0b;'
+            f'padding:8px 10px;border-radius:8px;background:#f9f9f7;margin-bottom:6px" '
+            f'title="Open TradingView chart">'
             f'<div style="display:flex;justify-content:space-between;align-items:center">'
             f'<b>{r["ticker"]}</b>{action_badge(r.get("action"), "small")}</div>'
             f'<div style="font-size:11px;color:#898781;margin-top:2px">'
@@ -162,7 +163,7 @@ def dashboard_page() -> tuple[str, str]:
     # ── Recovery watch + econ headlines (compact) ───────────────────────────
     recovery = snap.get("recovery") or []
     rec_html = "".join(
-        f'<a href="/research/{r["ticker"]}.html" class="chip">'
+        f'<a href="{tv_url(r["ticker"])}" target="_blank" class="chip" title="Open TradingView chart">'
         f'{ {"Bottoming":"🔴","Recovering":"🟡","Trend Confirmed":"🟢"}.get(r.get("stage"), "") } '
         f'{r["ticker"]}</a>' for r in recovery) or empty("none identified")
 
@@ -305,14 +306,39 @@ def ai_sentiment_page() -> tuple[str, str]:
         '⚠ All three AI tiers are red while the broader market (SPY) is flat — '
         'this looks like an AI-specific rotation, not a broad sell-off.</div>'
         if sentiment.get("ai_specific_rotation") else "")
+    # component strip: the six v2 formula inputs with their weights
+    comp_labels = {"momentum": "Momentum", "breadth": "Breadth",
+                   "rs_vs_qqq": "RS vs QQQ", "volume": "Volume",
+                   "macro": "Macro", "news_earnings": "News/Earnings"}
+    components = sentiment.get("components") or {}
+    weights = sentiment.get("weights") or {}
+    missing = set(sentiment.get("missing") or [])
+    comp_cells = ""
+    for key, label in comp_labels.items():
+        val = components.get(key)
+        if val is None:
+            continue
+        color = "#0F6E56" if val >= 70 else "#8a6d1a" if val >= 45 else "#A32D2D"
+        note = ' <span style="color:#898781">(no data)</span>' if key in missing else ""
+        comp_cells += (
+            f'<div style="min-width:96px"><div style="font-size:10px;color:#898781">'
+            f'{label} · {weights.get(key, 0) * 100:.0f}%</div>'
+            f'<div style="font-size:16px;font-weight:700;color:{color}">{val:.0f}{note}</div>'
+            f'<div style="background:#f1efea;border-radius:2px;height:4px">'
+            f'<div style="width:{val:.0f}%;height:4px;border-radius:2px;background:{color}"></div></div></div>')
+    comp_strip = (f'<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:14px">{comp_cells}</div>'
+                  if comp_cells else "")
+
     hero = (
         rotation_banner
         + '<div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">'
         + '<div><div style="font-size:11px;font-weight:600;color:#898781">AI MARKET SENTIMENT</div>'
         + f'<div style="font-size:40px;font-weight:650">{sentiment.get("score", "—")}'
         + '<span style="font-size:18px;color:#898781">/100</span></div></div>'
-        + f'<div style="flex:1;min-width:220px">{badge(sentiment.get("label", "—"), _SENTIMENT_STATUS(sentiment.get("score")))}</div>'
-        + '</div>')
+        + f'<div style="flex:1;min-width:220px">{badge(sentiment.get("label", "—"), _SENTIMENT_STATUS(sentiment.get("score")))}'
+        + '<div style="font-size:10px;color:#898781;margin-top:4px">15-name supply-chain basket · '
+          '40% momentum · 20% breadth · 15% RS vs QQQ · 10% volume · 10% macro · 5% news/earnings</div></div>'
+        + '</div>' + comp_strip)
 
     # ── Macro inputs strip ──────────────────────────────────────────────────
     yld_bps = yld.get("change_bps")
@@ -487,8 +513,86 @@ def ai_sentiment_page() -> tuple[str, str]:
         all_ai_html = empty("no data")
         all_ai_js = ""
 
+    # ── Supply-chain basket sections (v2) ────────────────────────────────────
+    breadth = snap.get("breadth") or {}
+    breadth_rows = ""
+    for label, pct in (breadth.get("conditions") or {}).items():
+        if pct is None:
+            continue
+        color = "#0F6E56" if pct >= 70 else "#8a6d1a" if pct >= 40 else "#A32D2D"
+        breadth_rows += (
+            f'<div style="display:flex;align-items:center;gap:10px;padding:4px 0">'
+            f'<span style="min-width:130px;font-size:11px">{esc(label)}</span>'
+            f'<div style="flex:1;background:#f1efea;border-radius:3px;height:8px">'
+            f'<div style="width:{pct}%;height:8px;border-radius:3px;background:{color}"></div></div>'
+            f'<span style="min-width:38px;text-align:right;font-size:12px;font-weight:600">{pct}%</span></div>')
+    breadth_html = (breadth_rows +
+                    f'<div style="font-size:10px;color:#898781;margin-top:6px">'
+                    f'{breadth.get("n", 0)} basket names · breadth often weakens before the leaders do</div>'
+                    ) if breadth_rows else empty("no breadth data")
+
+    leadership_rows = "".join(
+        f'<tr><td style="font-size:12px"><b>{esc(g["sector"])}</b>'
+        f' <span style="font-size:10px;color:#898781">{", ".join(g["tickers"])}</span></td>'
+        f'<td style="text-align:right;color:{"#0F6E56" if (g["chg_pct"] or 0) >= 0 else "#A32D2D"};font-weight:600">'
+        f'{fmt_pct(g["chg_pct"])}</td>'
+        f'<td style="text-align:right;color:{"#0F6E56" if (g["chg_5d_pct"] or 0) >= 0 else "#A32D2D"}">'
+        f'{fmt_pct(g["chg_5d_pct"])}</td></tr>'
+        for g in snap.get("leadership") or [])
+    leadership_html = (f'<table><thead><tr><th>Layer</th><th style="text-align:right">1d</th>'
+                      f'<th style="text-align:right">5d</th></tr></thead>'
+                      f'<tbody>{leadership_rows}</tbody></table>'
+                      if leadership_rows else empty("no leadership data"))
+
+    leading_html = ""
+    for g in snap.get("leading_groups") or []:
+        chg5 = g.get("chg_5d_pct")
+        chips = "".join(
+            f'<span class="chip" style="border-left:3px solid '
+            f'{"#0F6E56" if (m.get("day_chg_pct") or 0) >= 0 else "#A32D2D"}">'
+            f'{esc(m["ticker"])} {fmt_pct(m.get("day_chg_pct"))}</span>'
+            for m in g.get("members") or [])
+        warn = badge("⚠ ROLLING OVER", "bad", "small") if g.get("warning") else ""
+        leading_html += (
+            f'<div style="margin-bottom:8px"><span style="font-size:11px;font-weight:700">'
+            f'{esc(g["group"])}</span> <span style="font-size:10px;color:#898781">5d '
+            f'{fmt_pct(chg5) if chg5 is not None else "—"}</span> {warn}'
+            f'<div style="margin-top:3px">{chips}</div></div>')
+    leading_html = leading_html or empty("no leading-indicator data")
+
+    basket_v2 = snap.get("basket_v2") or []
+    flag = lambda v: "✓" if v is True else "✗" if v is False else "—"
+    basket_rows = "".join(
+        f'<tr><td><a href="/research/{esc(s["ticker"])}.html"><b>{esc(s["ticker"])}</b></a></td>'
+        f'<td style="font-size:11px">{esc(s.get("category") or "—")}</td>'
+        f'<td style="text-align:right;font-size:11px">{s.get("weight", 0)}%</td>'
+        f'<td style="text-align:right">{fmt_money(s.get("price")) if s.get("price") is not None else "—"}</td>'
+        f'<td style="text-align:right;color:{"#0F6E56" if (s.get("day_chg_pct") or 0) >= 0 else "#A32D2D"}">{fmt_pct(s.get("day_chg_pct"))}</td>'
+        f'<td style="text-align:right">{fmt_pct(s.get("chg_5d_pct"))}</td>'
+        f'<td style="text-align:right">{fmt_pct(s.get("chg_20d_pct"))}</td>'
+        f'<td style="text-align:right">{s.get("rsi_14") if s.get("rsi_14") is not None else "—"}</td>'
+        f'<td style="text-align:center">{flag(s.get("above_20ema"))}</td>'
+        f'<td style="text-align:center">{flag(s.get("above_200ema"))}</td>'
+        f'<td style="text-align:center">{flag(s.get("high_20d"))}</td>'
+        f'<td style="text-align:right">{s.get("vol_ratio") if s.get("vol_ratio") is not None else "—"}×</td></tr>'
+        for s in basket_v2)
+    basket_html = (
+        '<div style="overflow-x:auto"><table style="white-space:nowrap"><thead><tr>'
+        '<th>Ticker</th><th>Layer</th><th style="text-align:right">Wt</th>'
+        '<th style="text-align:right">Price</th><th style="text-align:right">1d</th>'
+        '<th style="text-align:right">5d</th><th style="text-align:right">20d</th>'
+        '<th style="text-align:right">RSI</th><th>20E</th><th>200E</th><th>20dH</th>'
+        f'<th style="text-align:right">Vol</th></tr></thead><tbody>{basket_rows}</tbody></table></div>'
+        if basket_rows else empty("no basket data — refresh to fetch"))
+
     body = (
         card("", hero, pad="20px 24px")
+        + f"""<div style="display:flex;gap:16px;flex-wrap:wrap">
+             <div style="flex:1;min-width:300px">{card("AI Breadth", breadth_html, "📶")}</div>
+             <div style="flex:1;min-width:300px">{card("Relative Leadership (supply chain)", leadership_html, "🥇")}</div>
+           </div>"""
+        + card(f"AI Supply-Chain Basket ({len(basket_v2)})", basket_html, "🧺")
+        + card("Leading Indicators (early-warning names)", leading_html, "🚨")
         + card("Macro Inputs", inputs_html, "📉")
         + tier_cols
         + f"""<div style="display:flex;gap:16px;flex-wrap:wrap">
@@ -532,27 +636,77 @@ def scanner_page() -> tuple[str, str]:
 
     watchlists = _read_json(DATA_DIR / "watchlists.json") or {}
     builtin_universes = ("daytrade", "watchlist", "longterm", "dividend", "sp500")
-    universe_opts = '<optgroup label="Built-in">' + "".join(
-        f'<option value="{u}">{u}</option>' for u in builtin_universes
-    ) + '</optgroup>'
-    if watchlists:
-        universe_opts += '<optgroup label="Watchlists">' + "".join(
-            f'<option value="{esc(name)}">{esc(name)} ({len(tickers)})</option>'
-            for name, tickers in sorted(watchlists.items())
-            if tickers and name not in builtin_universes
-        ) + '</optgroup>'
+    # Expandable per-category ticker browser + editor: a + button per category
+    # unfolds its ticker list (chips deep-link into the Research Library);
+    # each list supports add / edit / remove via /api/watchlist/toggle. Chips
+    # render client-side from UNIVERSE_DATA so edits update in place.
+    univ_names = [u for u in builtin_universes if watchlists.get(u)] + sorted(
+        n for n, t in watchlists.items() if t and n not in builtin_universes)
+    universe_data = {n: watchlists.get(n) or [] for n in univ_names}
+    # Integrated universe panel: replaces the old <select multiple> — the
+    # checkbox picks categories to scan (serializes as name="universe", same
+    # as the select did), the + expands the category in place for viewing
+    # and add/edit/remove of its tickers.
+    def _univ_row(i: int, name: str) -> str:
+        return (
+            f'<div style="border-top:0.5px solid #f1efea;padding:3px 0">'
+            f'<div style="display:flex;gap:6px;align-items:center">'
+            f'<input type="checkbox" name="universe" value="{esc(name)}" '
+            f'title="Include {esc(name)} in the scan">'
+            f'<button type="button" id="univ-btn-{i}" onclick="toggleUniv({i})" '
+            f'title="Show tickers" style="background:none;border:1px solid #d9d7ce;'
+            f'border-radius:4px;width:18px;height:18px;line-height:1;cursor:pointer;'
+            f'font-weight:700;flex-shrink:0;font-size:11px">+</button>'
+            f'<b style="font-size:11px;flex:1;min-width:0;overflow:hidden;'
+            f'text-overflow:ellipsis;white-space:nowrap" title="{esc(name)}">{esc(name)}</b>'
+            f'<span id="univ-count-{i}" style="font-size:10px;color:#898781">'
+            f'({len(universe_data[name])})</span></div>'
+            f'<div id="univ-wrap-{i}" style="display:none;margin:5px 0 4px 24px">'
+            f'<div style="display:flex;gap:4px;margin-bottom:5px">'
+            f'<input id="univ-add-{i}" placeholder="Add ticker…" '
+            f'style="width:110px;font-size:11px" '
+            f'onkeydown="if(event.key===\'Enter\'){{event.preventDefault();univAdd({i});}}">'
+            f'<button type="button" class="btn secondary" style="font-size:10px;padding:2px 8px" '
+            f'onclick="univAdd({i})">Add</button></div>'
+            f'<div id="univ-list-{i}" style="max-height:170px;overflow-y:auto"></div>'
+            f'</div></div>')
+
+    def _univ_header(label: str) -> str:
+        return (f'<div style="font-size:9px;font-weight:700;color:#898781;'
+                f'text-transform:uppercase;letter-spacing:.4px;padding:5px 0 2px">{label}</div>')
+
+    n_builtin = sum(1 for n in univ_names if n in builtin_universes)
+    panel_rows = _univ_header("Built-in") + "".join(
+        _univ_row(i, name) for i, name in enumerate(univ_names[:n_builtin]))
+    if len(univ_names) > n_builtin:
+        panel_rows += _univ_header("Watchlists") + "".join(
+            _univ_row(i + n_builtin, name)
+            for i, name in enumerate(univ_names[n_builtin:]))
+    universe_panel = (
+        f'<div style="width:280px;max-height:300px;overflow-y:auto;'
+        f'border:1px solid #d9d7ce;border-radius:8px;background:#fff;'
+        f'padding:2px 10px 6px">{panel_rows}</div>')
+
     form = f"""
     <form onsubmit="submitJob(event, this, null); return false;" style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
       <input type="hidden" name="action" value="scan">
       <div>
-        <select name="universe" multiple size="8" style="min-width:200px">{universe_opts}</select>
-        <div style="font-size:10px;color:#898781;margin-top:3px">⌘/Ctrl-click to scan several categories at once (none selected = daytrade)</div>
+        {universe_panel}
+        <div style="font-size:10px;color:#898781;margin-top:3px">
+          ✓ tick categories to scan · + expands a category to view / add / ✎ edit / × remove tickers</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
+        <div>
+          <input name="tickers" placeholder="NVDA, AMD, MU…" style="min-width:220px">
+          <div style="font-size:10px;color:#898781;margin-top:3px">
+            optional tickers (comma or space separated) — added to the selected
+            categories, or scanned alone if none selected</div>
+        </div>
         <label style="font-size:12px;display:flex;gap:6px;align-items:center">
           <input type="checkbox" name="portfolio" checked> include Portfolio management</label>
         <button class="btn">Run Scan</button>
-        <span style="font-size:11px;color:#898781">writes CSVs, research pages, and a fresh dashboard</span>
+        <span style="font-size:11px;color:#898781">writes CSVs, research pages, and a fresh dashboard
+          · nothing selected = daytrade</span>
       </div>
     </form>"""
 
@@ -566,7 +720,77 @@ def scanner_page() -> tuple[str, str]:
         f'<span style="color:#898781">{datetime.fromtimestamp(f.stat().st_mtime):%b %d %H:%M}</span></div>'
         for f in csvs) or empty("none yet")
 
-    extra_js = """
+    extra_js = (
+        "const UNIVERSE_DATA = " + json.dumps(universe_data) + ";\n"
+        "const UNIV_NAMES = " + json.dumps(univ_names) + ";\n"
+        + """
+    function renderUnivList(i) {
+      const name = UNIV_NAMES[i];
+      const tickers = UNIVERSE_DATA[name] || [];
+      document.getElementById('univ-count-' + i).textContent = '(' + tickers.length + ')';
+      document.getElementById('univ-list-' + i).innerHTML = tickers.map(t => `
+        <span class="chip" style="font-size:10px;padding:2px 7px;display:inline-flex;gap:6px;align-items:center">
+          <a href="/research?ticker=${t}" style="text-decoration:none">${t}</a>
+          <a onclick="univEdit(${i}, '${t}')" title="Edit ${t}" style="cursor:pointer;color:#898781">✎</a>
+          <a onclick="univDelete(${i}, '${t}')" title="Remove ${t}" style="cursor:pointer;color:#A32D2D;font-weight:700">×</a>
+        </span>`).join('') || '<span style="font-size:11px;color:#898781">empty</span>';
+    }
+    function toggleUniv(i) {
+      const wrap = document.getElementById('univ-wrap-' + i);
+      const btn = document.getElementById('univ-btn-' + i);
+      const open = wrap.style.display === 'none';
+      wrap.style.display = open ? 'block' : 'none';
+      btn.textContent = open ? '−' : '+';
+      if (open) renderUnivList(i);
+    }
+    async function univToggleApi(name, ticker) {
+      const res = await fetch('/api/watchlist/toggle', {
+        method: 'POST', body: new URLSearchParams({name, ticker})});
+      return res.json();
+    }
+    async function univAdd(i) {
+      const name = UNIV_NAMES[i];
+      const input = document.getElementById('univ-add-' + i);
+      const t = (input.value || '').trim().toUpperCase();
+      if (!t) return;
+      if ((UNIVERSE_DATA[name] || []).includes(t)) {
+        toast(t + ' is already in ' + name, 'err'); return;
+      }
+      try {
+        const r = await univToggleApi(name, t);
+        UNIVERSE_DATA[name] = (r.watchlists || {})[name] || [];
+        input.value = '';
+        renderUnivList(i);
+        toast(t + ' added to ' + name, 'ok');
+      } catch (e) { toast('Add failed: ' + e, 'err'); }
+    }
+    async function univDelete(i, t) {
+      const name = UNIV_NAMES[i];
+      if (!confirm('Remove ' + t + ' from "' + name + '"?')) return;
+      try {
+        const r = await univToggleApi(name, t);
+        UNIVERSE_DATA[name] = (r.watchlists || {})[name] || [];
+        renderUnivList(i);
+        toast(t + ' removed from ' + name, 'ok');
+      } catch (e) { toast('Remove failed: ' + e, 'err'); }
+    }
+    async function univEdit(i, t) {
+      const name = UNIV_NAMES[i];
+      const nu = prompt('Replace ' + t + ' in "' + name + '" with:', t);
+      if (!nu) return;
+      const T = nu.trim().toUpperCase();
+      if (T === t) return;
+      if ((UNIVERSE_DATA[name] || []).includes(T)) {
+        toast(T + ' is already in ' + name, 'err'); return;
+      }
+      try {
+        await univToggleApi(name, t);             // remove old
+        const r = await univToggleApi(name, T);   // add new
+        UNIVERSE_DATA[name] = (r.watchlists || {})[name] || [];
+        renderUnivList(i);
+        toast(t + ' → ' + T + ' in ' + name, 'ok');
+      } catch (e) { toast('Edit failed: ' + e, 'err'); }
+    }
     function onJobRunning(j) {
       if (j.kind !== 'scan') return;
       document.getElementById('scan-progress-wrap').style.display = 'block';
@@ -586,7 +810,7 @@ def scanner_page() -> tuple[str, str]:
       document.querySelectorAll('[id^="step-"]').forEach(el => { el.style.background = '#f1efea'; el.style.color = '#898781'; });
       if (j.status === 'done') setTimeout(() => location.reload(), 1200);
     }
-    """
+    """)
 
     return (
         card("Scan Pipeline", pipeline, "📡")
@@ -605,19 +829,45 @@ def research_page() -> tuple[str, str]:
     rows = sorted(idx.values(), key=lambda r: r.get("ticker") or "")
     # market_cap joined the curated index fields later than most — entries
     # written before then only carry it inside "raw", so backfill from there.
-    # Moat is computed here at render time (core.moat, pure function over raw
-    # scan fields) rather than stored in the index, so every entry has it
-    # regardless of when its page was last generated.
-    from stockanalysis.core.moat import compute_moat
+    # The three company scores are computed here at render time
+    # (core.company_scores, pure functions over raw scan fields) rather than
+    # stored in the index, so every entry has them regardless of when its
+    # page was last generated.
+    from stockanalysis.core.company_scores import (
+        compute_business_quality, compute_economic_moat, compute_financial_health)
+    from stockanalysis.core.buy_zone import compute_buy_zone
+    from stockanalysis.core.strategy_scores import day_card_rank, swing_card_rank
     for r in rows:
         raw = r.get("raw") or {}
         if r.get("market_cap") is None:
             r["market_cap"] = raw.get("MarketCap")
         if r.get("eps_growth") is None:
             r["eps_growth"] = raw.get("EPS_Growth%")
-        m = compute_moat(raw)
-        r["moat_score"] = m["score"]
-        r["moat_label"] = m["label"]
+        for field, raw_key in (("swing_score", "Swing_Score"),
+                               ("daytrade_score", "DayTrade_Score"),
+                               ("call_score", "Call_Score"),
+                               ("put_score", "Put_Score")):
+            if r.get(field) is None:
+                r[field] = raw.get(raw_key)
+        # Dashboard card-rank scores (the Top-5 cards' "Score 113" badge
+        # numbers), same formulas via core.strategy_scores; -999 (entry gate
+        # failed / Avoid) renders as not-rankable
+        sw, dy = swing_card_rank(raw), day_card_rank(raw)
+        r["swing_rank"] = sw if sw > -999 else None
+        r["day_rank"] = dy if dy > -999 else None
+        bq = compute_business_quality(raw)
+        moat = compute_economic_moat(raw)
+        fh = compute_financial_health(raw)
+        r["business_quality_score"] = bq["score"]
+        r["business_quality_label"] = bq["label"]
+        r["economic_moat_passed"] = moat["passed"]
+        r["economic_moat_total"] = moat["total"]
+        r["economic_moat_label"] = moat["label"]
+        r["financial_health_score"] = fh["score"]
+        r["financial_health_label"] = fh["label"]
+        bz = compute_buy_zone(raw)
+        r["buy_zone_score"] = bz["score"]
+        r["buy_zone_label"] = bz["label"]
     rows_json = json.dumps(rows)
     watch_names = sorted(set(list(watchlists.keys()) or []) |
                         {"AI", "Dividend", "Swing", "Breakout", "Earnings"})
@@ -649,6 +899,8 @@ def research_page() -> tuple[str, str]:
                  oninput="renderColPicker()">
           <button type="button" class="btn secondary" style="font-size:10px;padding:3px 8px;margin-bottom:4px"
                   onclick="resetCols()">Reset to default</button>
+          <button type="button" class="btn secondary" style="font-size:10px;padding:3px 8px;margin-bottom:4px"
+                  onclick="resetColWidths()">Reset widths</button>
           <div id="colpicker-list"></div>
         </div>
       </div>
@@ -663,6 +915,7 @@ def research_page() -> tuple[str, str]:
       <span style="font-size:11px;color:#898781;margin-left:auto">
         <span id="rcount">{len(rows)}</span> tickers</span>
     </div>
+    <div style="font-size:10px;color:#898781;margin-bottom:4px">Drag a column header to reorder it · drag its right edge to resize</div>
     <div id="research-root" style="overflow-x:auto"></div>
     <dialog id="modal-detail" style="max-width:640px;width:90vw">
       <div class="modal-body">
@@ -670,6 +923,15 @@ def research_page() -> tuple[str, str]:
         <div id="detail-body" style="max-height:60vh;overflow-y:auto"></div>
         <div class="modal-actions">
           <button type="button" class="btn secondary" onclick="closeModal('modal-detail')">Close</button>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="modal-ta" style="max-width:680px;width:90vw">
+      <div class="modal-body">
+        <h3 id="ta-title">AI Technical Analysis</h3>
+        <div id="ta-body" style="max-height:65vh;overflow-y:auto"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('modal-ta')">Close</button>
         </div>
       </div>
     </dialog>
@@ -693,17 +955,29 @@ def research_page() -> tuple[str, str]:
     // ── Configurable columns ─────────────────────────────────────────────
     // "Standard" = the curated table columns; "Detailed metrics" = every raw
     // scan field (same data the Detailed Metrics modal shows). The user's
-    // selection persists in localStorage; column order always follows the
-    // canonical definition order, not click order.
+    // selection AND column order persist in localStorage: newly-checked
+    // columns append at the end, and the rendered header's drag-and-drop
+    // (see onColDragStart/onColDrop below) lets the user reorder from there.
     const fmtMoney = v => v != null ? '$' + v.toFixed(2) : '—';
+    const fmtScore = v => v == null ? '—'
+      : `<span style="font-weight:600;color:${{v >= 70 ? '#0F6E56' : v >= 45 ? '#8a6d1a' : '#898781'}}">${{v}}</span>`;
     // Order = decision flow: quality (is it a good company?) → setup/verdict
     // (is it a good trade?) → timing/plan (is now the moment?). The first 16
     // are DEFAULT_COLS; the rest are picker-only level detail.
     const CURATED_COLS = [
       ['price', 'Price', r => fmtMoney(r.price)],
       ['market_cap', 'Mkt Cap', r => fmtCap(r.market_cap)],
-      ['moat_score', 'Moat', r => r.moat_score != null
-        ? `<span style="color:${{r.moat_label === 'Strong' ? '#0F6E56' : r.moat_label === 'Moderate' ? '#8a6d1a' : '#A32D2D'}};font-weight:600">${{r.moat_label}} ${{r.moat_score}}</span>`
+      ['business_quality_score', 'Quality', r => r.business_quality_score != null
+        ? `<span style="color:${{r.business_quality_label === 'Strong' ? '#0F6E56' : r.business_quality_label === 'Moderate' ? '#8a6d1a' : '#A32D2D'}};font-weight:600">${{r.business_quality_label}} ${{r.business_quality_score}}</span>`
+        : '—'],
+      ['economic_moat_label', 'Moat', r => r.economic_moat_label != null
+        ? `<span style="color:${{r.economic_moat_label === 'Strong signals' ? '#0F6E56' : r.economic_moat_label === 'Moderate signals' ? '#8a6d1a' : '#A32D2D'}};font-weight:600">${{r.economic_moat_label.replace(' signals', '')}} ${{r.economic_moat_passed}}/${{r.economic_moat_total}}</span>`
+        : '—'],
+      ['financial_health_score', 'Health', r => r.financial_health_score != null
+        ? `<span style="color:${{r.financial_health_label === 'Strong' ? '#0F6E56' : r.financial_health_label === 'Moderate' ? '#8a6d1a' : '#A32D2D'}};font-weight:600">${{r.financial_health_label}} ${{r.financial_health_score}}</span>`
+        : '—'],
+      ['buy_zone_score', 'Buy Zone', r => r.buy_zone_score != null
+        ? `<span style="color:${{r.buy_zone_score >= 80 ? '#0F6E56' : r.buy_zone_score >= 60 ? '#8a6d1a' : '#A32D2D'}};font-weight:600">${{r.buy_zone_label}} ${{r.buy_zone_score}}</span>`
         : '—'],
       ['inst_own_pct', 'Inst Own%', r => (r.inst_own_pct != null ? r.inst_own_pct + '%' : '—') + instOwnChgHtml(r.inst_own_chg)],
       ['eps_growth', 'EPS Gr%', r => r.eps_growth != null
@@ -713,6 +987,12 @@ def research_page() -> tuple[str, str]:
       ['conv_action', 'Action', r => `<span style="color:${{actionColor(r.conv_action)}};font-weight:600">${{r.conv_action || '—'}}</span>`],
       ['conv_stars', 'Conv ★', r => r.conv_stars != null
         ? `<span style="color:#c9a227;letter-spacing:1px">${{'★'.repeat(r.conv_stars)}}<span style="color:#d9d7ce">${{'☆'.repeat(Math.max(0, 5 - r.conv_stars))}}</span></span>` : '—'],
+      ['swing_score', 'Swing', r => fmtScore(r.swing_score)],
+      ['daytrade_score', 'Day', r => fmtScore(r.daytrade_score)],
+      ['swing_rank', 'Swing Rank', r => r.swing_rank != null ? `<b>${{r.swing_rank}}</b>` : '—'],
+      ['day_rank', 'Day Rank', r => r.day_rank != null ? `<b>${{r.day_rank}}</b>` : '—'],
+      ['call_score', 'Call', r => fmtScore(r.call_score)],
+      ['put_score', 'Put', r => fmtScore(r.put_score)],
       ['rs_rank', 'RS', r => r.rs_rank ?? '—'],
       ['canslim_pass', 'CANSLIM', r => r.canslim_pass === true ? '✓' : r.canslim_pass === false ? '✗' : '—'],
       ['entry_zone', 'Entry Zone', r => fmtMoney(r.entry_zone)],
@@ -722,6 +1002,7 @@ def research_page() -> tuple[str, str]:
       ['updated_at', 'Updated', r => `<span style="color:#898781">${{(r.updated_at || '').slice(5,16)}}</span>`],
       // ── picker-only from here down ──
       ['week52_low', '52W Low', r => fmtMoney(r.week52_low)],
+      ['dist_from_52w_low_pct', 'Dist 52W Low', r => r.dist_from_52w_low_pct != null ? r.dist_from_52w_low_pct + '%' : '—'],
       ['week52_high', '52W High', r => fmtMoney(r.week52_high)],
       ['earnings_date', 'Earnings Date', r => r.earnings_date && r.earnings_date !== 'N/A' ? `<span style="color:#898781">${{r.earnings_date}}</span>` : '—'],
       ['peg_ratio', 'PEG', r => r.peg_ratio ?? '—'],
@@ -740,10 +1021,13 @@ def research_page() -> tuple[str, str]:
     const RAW_SKIP = new Set(['Ticker', 'BusinessSummary',
       'Current Price', 'MarketCap', 'EPS_Growth%', 'Forward_PE', 'PEG_Ratio',
       'Inst_Own%', 'Inst_Own_Chg', 'Category', 'Conv_Action', 'Conv_Stars',
+      'Swing_Score', 'DayTrade_Score', 'Call_Score', 'Put_Score',
+      'Buy_Zone_Score', 'Buy_Zone_Label',
       'RS_Rank', 'CANSLIM_Pass', 'RR_to_Resistance', 'Breakout_Probability',
       'Bounce_Probability', 'Days_To_Earnings', 'EarningsDate',
       '52W High', '52W Low', 'S1', 'R1', 'Key_Level_Score', 'Touches',
-      'Volume_Confirmation', 'Dist_to_Support%', 'Dist_to_Resistance%']);
+      'Volume_Confirmation', 'Dist_to_Support%', 'Dist_to_Resistance%',
+      'Pct_From_52W_Low%']);
     const RAW_KEYS = [...new Set(RESEARCH_ROWS.flatMap(r => Object.keys(r.raw || {{}})))]
       .filter(k => !RAW_SKIP.has(k)).sort();
     const RAW_COLS = RAW_KEYS.map(k => ({{
@@ -752,8 +1036,10 @@ def research_page() -> tuple[str, str]:
     }}));
     const ALL_COLS = [...CURATED_COLS, ...RAW_COLS];
     const COL_BY_KEY = Object.fromEntries(ALL_COLS.map(c => [c.key, c]));
-    const DEFAULT_COLS = ['price', 'market_cap', 'moat_score', 'inst_own_pct',
+    const DEFAULT_COLS = ['price', 'market_cap', 'business_quality_score',
+      'economic_moat_label', 'financial_health_score', 'buy_zone_score', 'inst_own_pct',
       'eps_growth', 'forward_pe', 'category', 'conv_action', 'conv_stars',
+      'swing_score', 'daytrade_score', 'call_score', 'put_score',
       'rs_rank', 'canslim_pass', 'entry_zone', 'rr_to_resistance',
       'breakout_probability', 'days_to_earnings', 'updated_at'];
     const COLS_LS_KEY = 'research_visible_cols_v1';
@@ -766,13 +1052,88 @@ def research_page() -> tuple[str, str]:
     }})();
     function saveCols() {{ localStorage.setItem(COLS_LS_KEY, JSON.stringify(visibleCols)); }}
     function toggleCol(key) {{
+      // newly-checked columns append to the end rather than re-sorting into
+      // canonical order — that would silently undo any drag-to-reorder the
+      // user has already done to visibleCols.
       if (visibleCols.includes(key)) visibleCols = visibleCols.filter(k => k !== key);
-      else visibleCols = ALL_COLS.map(c => c.key).filter(k => visibleCols.includes(k) || k === key);
+      else visibleCols = [...visibleCols, key];
       saveCols(); renderColPicker(); renderResearch();
     }}
     function resetCols() {{
       visibleCols = [...DEFAULT_COLS];
       saveCols(); renderColPicker(); renderResearch();
+    }}
+    // ── Drag-to-reorder column headers ───────────────────────────────────
+    let _dragColKey = null;
+    function onColDragStart(e, key) {{
+      _dragColKey = key;
+      e.dataTransfer.effectAllowed = 'move';
+      e.target.style.opacity = '0.4';
+    }}
+    function onColDragEnd(e) {{ e.target.style.opacity = '1'; }}
+    function onColDragOver(e) {{ e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+    function onColDragEnter(e) {{ if (_dragColKey) e.currentTarget.style.borderLeft = '2px solid #0F6E56'; }}
+    function onColDragLeave(e) {{ e.currentTarget.style.borderLeft = ''; }}
+    function onColDrop(e, targetKey) {{
+      e.preventDefault();
+      e.currentTarget.style.borderLeft = '';
+      const dragged = _dragColKey;
+      _dragColKey = null;
+      if (!dragged || dragged === targetKey) return;
+      const from = visibleCols.indexOf(dragged);
+      const to = visibleCols.indexOf(targetKey);
+      if (from === -1 || to === -1) return;
+      visibleCols.splice(from, 1);
+      visibleCols.splice(to, 0, dragged);
+      saveCols(); renderResearch();
+    }}
+    // ── Drag-to-resize column widths ─────────────────────────────────────
+    // Widths persist per column key in localStorage, same pattern as
+    // visibleCols/colOrder above. Columns without a saved width fall back
+    // to a size guessed from the label so the table looks reasonable
+    // before the user has resized anything.
+    const COLWIDTHS_LS_KEY = 'research_col_widths_v1';
+    let colWidths = (() => {{
+      try {{
+        const saved = JSON.parse(localStorage.getItem(COLWIDTHS_LS_KEY) || 'null');
+        if (saved && typeof saved === 'object') return saved;
+      }} catch (e) {{}}
+      return {{}};
+    }})();
+    function saveColWidths() {{ localStorage.setItem(COLWIDTHS_LS_KEY, JSON.stringify(colWidths)); }}
+    function defaultColWidth(label) {{ return Math.max(64, label.length * 7 + 28); }}
+    function colW(key, label) {{ return colWidths[key] || defaultColWidth(label); }}
+    function resetColWidths() {{
+      colWidths = {{}};
+      saveColWidths(); renderResearch();
+    }}
+    let _resizeKey = null, _resizeStartX = 0, _resizeStartW = 0;
+    function onColResizeStart(e, key) {{
+      e.preventDefault(); e.stopPropagation();
+      _resizeKey = key;
+      _resizeStartX = e.clientX;
+      _resizeStartW = colW(key, key === 'ticker' ? 'Ticker' : (COL_BY_KEY[key] || {{}}).label || '');
+      e.currentTarget.classList.add('active');
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onColResizeMove);
+      document.addEventListener('mouseup', onColResizeEnd);
+    }}
+    function onColResizeMove(e) {{
+      if (!_resizeKey) return;
+      const w = Math.max(44, _resizeStartW + (e.clientX - _resizeStartX));
+      colWidths[_resizeKey] = w;
+      document.querySelectorAll(`[data-colw="${{_resizeKey}}"]`).forEach(el => {{
+        el.style.width = w + 'px';
+        el.style.maxWidth = w + 'px';
+      }});
+    }}
+    function onColResizeEnd() {{
+      if (_resizeKey) saveColWidths();
+      _resizeKey = null;
+      document.body.style.userSelect = '';
+      document.querySelectorAll('.col-resizer.active').forEach(el => el.classList.remove('active'));
+      document.removeEventListener('mousemove', onColResizeMove);
+      document.removeEventListener('mouseup', onColResizeEnd);
     }}
     function toggleColPicker() {{
       const p = document.getElementById('colpicker');
@@ -857,24 +1218,61 @@ def research_page() -> tuple[str, str]:
       }}
       rows = sortRows(rows);
       const arrow = key => sortKey === key ? (sortDir === 1 ? ' ▲' : ' ▼') : '';
-      const th = (key, label) =>
-        `<th style="cursor:pointer;white-space:nowrap" onclick="setSort('${{key}}')">${{label}}${{arrow(key)}}</th>`;
+      // Resize handle on the right edge of each header cell. draggable="false"
+      // on the handle excludes it from the header's own HTML5 drag-to-reorder
+      // (see onColDragStart) so a mousedown here starts a resize instead;
+      // click is also stopped so it doesn't trigger setSort.
+      const resizer = key => `<span class="col-resizer" draggable="false"
+             onmousedown="onColResizeStart(event,'${{key}}')" onclick="event.stopPropagation()"></span>`;
+      // Width is enforced on an inner inline-block span (max-width + ellipsis),
+      // not on the <th>/<td> box itself — table-layout:fixed column widths
+      // aren't reliably honored for short-content cells in every rendering
+      // engine this runs under, but a capped inline-block always is (same
+      // technique the Detailed-metrics raw columns already use below).
+      // Only a column the user has actually dragged (colWidths[key] set)
+      // gets a forced 'width' — that's what makes short content (e.g. "—")
+      // visibly fill the wider column instead of just capping how far it
+      // COULD grow. Untouched columns stay natural-width-up-to-a-cap so the
+      // table isn't padded out to every column's default guess by default.
+      const cellSpan = (key, label, w) => {{
+        const sizing = colWidths[key] != null ? `width:${{w}}px;max-width:${{w}}px` : `max-width:${{w}}px`;
+        return `<span data-colw="${{key}}" style="display:inline-block;${{sizing}};
+             overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${{label}}</span>`;
+      }};
+      const th = (key, label) => {{
+        const w = colW(key, label);
+        return `<th draggable="true" title="Drag to reorder — drag right edge to resize"
+             style="cursor:grab;white-space:nowrap;position:relative"
+             onclick="setSort('${{key}}')"
+             ondragstart="onColDragStart(event,'${{key}}')" ondragend="onColDragEnd(event)"
+             ondragover="onColDragOver(event)" ondragenter="onColDragEnter(event)"
+             ondragleave="onColDragLeave(event)" ondrop="onColDrop(event,'${{key}}')"
+             >${{cellSpan(key, label + arrow(key), w)}}${{resizer(key)}}</th>`;
+      }};
       const defs = visibleCols.map(k => COL_BY_KEY[k]).filter(Boolean);
       document.getElementById('colcount').textContent = visibleCols.length;
+      // star + Ticker cells are sticky-left so the ticker stays visible
+      // while scrolling the wide table horizontally
+      const tickerW = colW('ticker', 'Ticker');
+      const stickyStar = 'position:sticky;left:0;background:#fff;z-index:2;width:26px;min-width:26px;max-width:26px';
+      const stickyTicker = 'position:sticky;left:26px;background:#fff;z-index:2;border-right:1px solid #f1efea';
       root.innerHTML = `<table style="width:auto;min-width:100%;white-space:nowrap"><thead><tr>
-        <th></th>
-        ${{th('ticker', 'Ticker')}}
+        <th style="${{stickyStar}};z-index:3"></th>
+        <th style="${{stickyTicker}};z-index:3;cursor:pointer;white-space:nowrap"
+            onclick="setSort('ticker')">${{cellSpan('ticker', 'Ticker' + arrow('ticker'), tickerW)}}${{resizer('ticker')}}</th>
         ${{defs.map(d => th(d.key, d.label)).join('')}}
         <th></th></tr></thead><tbody>
         ${{rows.map(r => `<tr>
-          <td><button onclick="toggleWatchlist(document.getElementById('rwatch').value, '${{r.ticker}}', this)"
-              style="background:none;border:none;font-size:14px;color:#c9a227">${{starredIn(document.getElementById('rwatch').value, r.ticker) ? '★' : '☆'}}</button></td>
-          <td><b>${{r.ticker}}</b></td>
-          ${{defs.map(d => `<td style="font-size:11px">${{d.cell(r)}}</td>`).join('')}}
+          <td style="${{stickyStar}}"><button onclick="toggleWatchlist(document.getElementById('rwatch').value, '${{r.ticker}}', this)"
+              style="background:none;border:none;font-size:14px;color:#c9a227;padding:0">${{starredIn(document.getElementById('rwatch').value, r.ticker) ? '★' : '☆'}}</button></td>
+          <td style="${{stickyTicker}}"><a href="https://www.tradingview.com/chart/?symbol=${{r.ticker.replace('-', '.')}}"
+                 target="_blank" title="Open TradingView chart">${{cellSpan('ticker', `<b>${{r.ticker}}</b>`, tickerW)}}</a></td>
+          ${{defs.map(d => `<td style="font-size:11px">${{cellSpan(d.key, d.cell(r), colW(d.key, d.label))}}</td>`).join('')}}
           <td style="display:flex;gap:4px">
             <a href="/research/${{r.ticker}}.html" class="btn secondary" style="text-decoration:none;padding:3px 10px;font-size:11px">Open</a>
             <button type="button" onclick="openDetail('${{r.ticker}}')" class="btn secondary" style="padding:3px 10px;font-size:11px">Detailed Metrics</button>
             <button type="button" onclick="runEarningsAnalysis('${{r.ticker}}')" class="btn secondary" style="padding:3px 10px;font-size:11px">Earnings Analysis</button>
+            <button type="button" onclick="runTaAnalysis('${{r.ticker}}')" class="btn secondary" style="padding:3px 10px;font-size:11px">AI Technicals</button>
           </td>
         </tr>`).join('')}}
       </tbody></table>`;
@@ -907,7 +1305,26 @@ def research_page() -> tuple[str, str]:
         : '<span style="font-size:12px;color:#898781">No detailed metrics captured yet — re-run a scan or research refresh for this ticker.</span>';
       openModal('modal-detail');
     }}
-    document.addEventListener('DOMContentLoaded', renderResearch);
+    // Deep links from alert cards etc.: /research?ticker=NVDA&cols=all
+    // pre-fills the filter and shows EVERY column (standard + detailed) for
+    // this visit only — the user's saved column selection isn't overwritten.
+    document.addEventListener('DOMContentLoaded', () => {{
+      const params = new URLSearchParams(location.search);
+      if (params.get('cols') === 'all') {{
+        visibleCols = ALL_COLS.map(c => c.key);   // transient — no saveCols()
+      }}
+      const t = params.get('ticker');
+      if (t) {{
+        document.getElementById('rsearch').value = t;
+      }} else {{
+        // default view = the "watchlist" category, not all 562 tickers —
+        // skipped for deep links (the target may not be in the watchlist)
+        const wsel = document.getElementById('rwatch');
+        const opt = Array.from(wsel.options).find(o => o.value === 'watchlist');
+        if (opt) opt.selected = true;
+      }}
+      renderResearch();
+    }});
 
     // "Earnings Analysis": deterministic weighted-score engine (see
     // core/earnings_sentiment.py) run on demand via the job-tray pattern —
@@ -1013,6 +1430,81 @@ def research_page() -> tuple[str, str]:
       openModal('modal-earnings');
     }}
 
+    // "AI Technicals": multi-timeframe Claude analysis (core.technical_analysis)
+    // via the same job-tray pattern as Earnings Analysis.
+    let _pendingTaTicker = null;
+    async function runTaAnalysis(ticker) {{
+      toast('Analyzing ' + ticker + ' — Monthly/Weekly/Daily/4H frames, '
+           + 'indicators, then AI review (~30-60s)…', 'ok');
+      try {{
+        const res = await fetch('/run', {{
+          method: 'POST',
+          body: new URLSearchParams({{ action: 'ta_analysis', ticker }}),
+        }});
+        const data = await res.json();
+        if (!data.ok) {{ toast(data.message || 'Failed to start', 'err'); return; }}
+      }} catch (e) {{ toast('Request failed: ' + e, 'err'); return; }}
+      _pendingTaTicker = ticker;
+      pollJobs();
+    }}
+    function taPrice(v) {{ return v != null ? '$' + Number(v).toFixed(2) : '—'; }}
+    function renderTaModal(ticker, d) {{
+      document.getElementById('ta-title').textContent = ticker + ' — AI Technical Analysis';
+      if (d.error) {{
+        document.getElementById('ta-body').innerHTML =
+          `<div style="font-size:12px;color:#A32D2D">${{d.error}}</div>`;
+        openModal('modal-ta'); return;
+      }}
+      const t = d.current_trend || {{}};
+      const vColor = d.verdict === 'BUY_ZONE_VALID' ? '#0F6E56' : '#8a6d1a';
+      const trendChip = (label, v) => `<div><div style="font-size:10px;color:#898781">${{label}}</div>
+        <div style="font-size:12px;font-weight:600">${{v || '—'}}</div></div>`;
+      const list = arr => (arr && arr.length)
+        ? `<ul style="margin:4px 0 0;padding-left:16px">${{arr.map(x =>
+            `<li style="font-size:11px;margin-bottom:2px">${{x}}</li>`).join('')}}</ul>`
+        : '<div style="font-size:11px;color:#898781">none listed</div>';
+      document.getElementById('ta-body').innerHTML = `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+          <div><div style="font-size:11px;color:#898781">Verdict</div>
+            <div style="font-size:16px;font-weight:700;color:${{vColor}}">${{d.verdict === 'BUY_ZONE_VALID' ? 'Buy zone valid' : 'WAIT'}}</div></div>
+          <div><div style="font-size:11px;color:#898781">Overall Trend</div>
+            <div style="font-size:16px;font-weight:700">${{t.overall || '—'}}</div></div>
+          <div><div style="font-size:11px;color:#898781">Probability</div>
+            <div style="font-size:16px;font-weight:700">${{d.probability_score}}%</div></div>
+          <div><div style="font-size:11px;color:#898781">Price now</div>
+            <div style="font-size:16px;font-weight:700">${{taPrice(d.current_price)}}</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+          ${{trendChip('Monthly', t.monthly)}}${{trendChip('Weekly', t.weekly)}}
+          ${{trendChip('Daily', t.daily)}}${{trendChip('4H', t.four_hour)}}
+        </div>
+        ${{d.verdict !== 'BUY_ZONE_VALID' ? `
+        <div style="background:#FAEEDA;color:#633806;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:12px">
+          <b>Wait:</b> ${{d.wait_reason || ''}}
+          ${{d.better_entry_price != null ? ` · better entry ≈ <b>${{taPrice(d.better_entry_price)}}</b>` : ''}}
+        </div>` : ''}}
+        <table style="width:100%;font-size:12px;margin-bottom:12px"><tbody>
+          <tr><td style="color:#898781;width:150px">Buy zone</td>
+              <td><b>${{taPrice(d.buy_zone?.low)}} – ${{taPrice(d.buy_zone?.high)}}</b></td></tr>
+          <tr><td style="color:#898781">Ideal entry</td><td><b>${{taPrice(d.ideal_entry)}}</b></td></tr>
+          <tr><td style="color:#898781">Stop loss</td><td style="color:#A32D2D"><b>${{taPrice(d.stop_loss)}}</b></td></tr>
+          <tr><td style="color:#898781">Targets</td>
+              <td>T1 <b>${{taPrice(d.targets?.t1)}}</b> · T2 <b>${{taPrice(d.targets?.t2)}}</b> · T3 <b>${{taPrice(d.targets?.t3)}}</b></td></tr>
+          <tr><td style="color:#898781">Risk : Reward</td><td>${{d.risk_reward || '—'}}</td></tr>
+        </tbody></table>
+        <div style="font-size:11px;font-weight:600;color:#0C447C">CONFIRMATIONS REQUIRED BEFORE BUYING</div>
+        ${{list(d.confirmations_required)}}
+        <div style="font-size:11px;font-weight:600;color:#0F6E56;margin-top:10px">WHY HIGH-PROBABILITY</div>
+        ${{list(d.reasons)}}
+        <div style="font-size:11px;font-weight:600;color:#A32D2D;margin-top:10px">TRADE INVALIDATED IF</div>
+        ${{list(d.invalidations)}}
+        <div style="font-size:12px;color:#52514e;margin-top:10px;line-height:1.5">${{d.summary || ''}}</div>
+        <div style="font-size:10px;color:#898781;margin-top:10px">
+          ${{d.model || ''}} · ${{d.generated_at || ''}} · ${{(d.data_notes || []).join(' · ')}} ·
+          analysis, not financial advice</div>`;
+      openModal('modal-ta');
+    }}
+
     // A research/news job finishing means RESEARCH_ROWS is stale (updated
     // scores, new tickers, refreshed timestamps) — reload once to pick it up
     function onJobFinished(j) {{
@@ -1025,6 +1517,13 @@ def research_page() -> tuple[str, str]:
             .then(data => renderEarningsModal(ticker, data))
             .catch(e => toast('Could not load analysis: ' + e, 'err'));
         }}
+      }}
+      if (j.kind === 'ta' && _pendingTaTicker) {{
+        const ticker = _pendingTaTicker;
+        _pendingTaTicker = null;
+        fetch('/ta/' + ticker + '.json').then(r => r.json())
+          .then(data => renderTaModal(ticker, data))
+          .catch(e => toast('Could not load analysis: ' + e, 'err'));
       }}
     }}
     """
@@ -1722,9 +2221,9 @@ def alerts_page() -> tuple[str, str]:
     from stockanalysis.core import alerts as alerts_mod
     from stockanalysis.core.premarket_brief import load_latest_brief
 
-    active = alerts_mod.load_active()
-    active_alerts = sorted((v["alert"] for v in active.values()),
-                          key=lambda a: alerts_mod.priority_rank(a["priority"]))
+    # priority-sorted feed, minus LOW alerts older than LOW_TTL_HOURS (24h) —
+    # standing low-grade conditions stop cluttering the feed after a day
+    active_alerts = alerts_mod.active_display_alerts()
 
     def _toolbar_form(action: str, label: str, primary: bool = False) -> str:
         btn_class = "btn" if primary else "btn secondary"
@@ -1736,46 +2235,214 @@ def alerts_page() -> tuple[str, str]:
         _toolbar_form("watchlist_scan", "Scan Watchlist Now")
         + _toolbar_form("news_scan", "Scan News Now")
         + _toolbar_form("earnings_scan", "Check Earnings Now")
+        # runs the scheduler's day-session init (movers merge) on demand and
+        # drops a feed alert with the merged universe
+        + (f'<form style="display:inline" onsubmit="submitJob(event, this, null); return false;">'
+           f'<input type="hidden" name="action" value="run_cron">'
+           f'<input type="hidden" name="job_name" value="job_day_session_init">'
+           f'<button class="btn secondary" style="font-size:11px;padding:4px 10px">'
+           f'Init Day Universe Now</button></form> ')
         + _toolbar_form("premarket_brief", "Generate Brief Now", primary=True)
     )
 
-    active_html = (empty("No active alerts — conditions are being checked every 10 minutes "
-                         "during market hours (Scanner runs the same checks on demand above).")
-                  if not active_alerts else "".join(_alert_card(a) for a in active_alerts))
+    if not active_alerts:
+        active_html = empty("No active alerts — conditions are being checked every 10 minutes "
+                            "during market hours (Scanner runs the same checks on demand above).")
+    else:
+        prio_counts = {}
+        for a in active_alerts:
+            prio_counts[a["priority"]] = prio_counts.get(a["priority"], 0) + 1
+        prio_opts = f'<option value="">All ({len(active_alerts)})</option>' + "".join(
+            f'<option value="{p}">{p} ({prio_counts[p]})</option>'
+            for p in ("CRITICAL", "HIGH", "MEDIUM", "LOW") if p in prio_counts)
+        active_html = (
+            f'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'
+            f'<label style="font-size:11px;color:#898781">Priority</label>'
+            f'<select id="alert-prio-filter" onchange="onAlertPrioChange()" '
+            f'style="font-size:12px">{prio_opts}</select>'
+            f'<label style="font-size:11px;color:#898781">Category</label>'
+            f'<select id="alert-cat-filter" onchange="filterActiveAlerts()" '
+            f'style="font-size:12px"></select>'
+            f'<span id="alert-filter-count" style="font-size:11px;color:#898781"></span></div>'
+            f'<div id="active-alerts-box" style="max-height:420px;overflow-y:auto;'
+            f'padding-right:6px;border:0.5px solid #f1efea;border-radius:8px;padding:8px">'
+            + "".join(_alert_card(a) for a in active_alerts) + '</div>')
 
-    log_rows = alerts_mod.load_log(30)
-    log_html = empty("No alerts have fired yet.") if not log_rows else (
-        '<table><thead><tr><th>When</th><th>Priority</th><th>Category</th><th>Ticker</th><th>Headline</th>'
-        '<th style="text-align:right">Confidence</th></tr></thead><tbody>'
-        + "".join(
-            f'<tr><td>{esc(a["created_at"])}</td><td>{badge(a["priority"], _PRIORITY_STATUS.get(a["priority"], "muted"), "small")}</td>'
-            f'<td>{esc(a.get("category") or "—")}</td>'
-            f'<td>{esc(a.get("ticker") or "—")}</td><td>{esc(a["headline"])}</td>'
-            f'<td style="text-align:right">{a["confidence"]}%</td></tr>'
-            for a in log_rows)
-        + '</tbody></table>')
+    log_rows = alerts_mod.load_log(100)
+    log_json = json.dumps([{
+        "created_at": a.get("created_at"), "priority": a.get("priority"),
+        "category": a.get("category"), "ticker": a.get("ticker"),
+        "headline": a.get("headline"), "confidence": a.get("confidence"),
+    } for a in log_rows])
+    log_html = (empty("No alerts have fired yet.") if not log_rows else (
+        '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">'
+        '<label style="font-size:11px;color:#898781">Show</label>'
+        '<select id="log-filter" onchange="renderAlertLog()" '
+        'style="font-size:12px;max-width:420px"></select>'
+        '<span id="log-filter-count" style="font-size:11px;color:#898781"></span></div>'
+        '<div id="alert-log-root" style="overflow-x:auto;max-height:380px;overflow-y:auto;'
+        'border:0.5px solid #f1efea;border-radius:8px;padding:4px 8px"></div>'))
 
     brief = load_latest_brief()
-    brief_html = _premarket_brief_html(brief)
+    brief_html = (
+        f'<div style="max-height:420px;overflow-y:auto;border:0.5px solid #f1efea;'
+        f'border-radius:8px;padding:10px 14px">{_premarket_brief_html(brief)}</div>')
 
     body = (
         card("Active Alerts", active_html, "🔔", right=toolbar)
         + card("Latest Pre-Market Brief", brief_html, "📰")
         + card("Recent Alert Log", log_html, "🗒️")
     )
-    extra_js = ("function onJobFinished(j) { if (['watchlist_scan', 'news_scan', 'earnings_scan', "
-               "'premarket_brief'].includes(j.kind)) setTimeout(() => location.reload(), 1200); }")
+    extra_js = (
+        "function onJobFinished(j) { if (['watchlist_scan', 'news_scan', 'earnings_scan', "
+        "'premarket_brief'].includes(j.kind) || j.kind.startsWith('cron:')) "
+        "setTimeout(() => location.reload(), 1200); }\n"
+        "const ALERT_LOG_ROWS = " + log_json + ";\n"
+        + """
+    const ALERT_CAT_LABELS = {earnings: 'Earnings', news: 'News Catalyst',
+      watchlist: 'Technical', put_setup: 'Put Setup', call_setup: 'Call Setup',
+      a_plus_setup: 'A+ Setup', other: 'Other'};
+    function alertCards() {
+      return Array.from(document.querySelectorAll('#active-alerts-box .alert-card'));
+    }
+    // Category options are recomputed for the chosen priority, so e.g. with
+    // HIGH selected the dropdown reads "Earnings (3) · News Catalyst (12) ·
+    // Put Setup (2)" — only sub-categories that actually exist at that tier.
+    function renderAlertCatOptions() {
+      const catSel = document.getElementById('alert-cat-filter');
+      if (!catSel) return;
+      const prio = document.getElementById('alert-prio-filter').value;
+      const pool = alertCards().filter(el => !prio || el.dataset.priority === prio);
+      const counts = {};
+      pool.forEach(el => { counts[el.dataset.category] = (counts[el.dataset.category] || 0) + 1; });
+      const prev = catSel.value;
+      catSel.innerHTML = `<option value="">All (${pool.length})</option>` +
+        Object.keys(counts).sort().map(c =>
+          `<option value="${c}">${ALERT_CAT_LABELS[c] || c} (${counts[c]})</option>`).join('');
+      if (counts[prev] != null) catSel.value = prev;   // keep selection if still present
+    }
+    function onAlertPrioChange() {
+      renderAlertCatOptions();
+      filterActiveAlerts();
+    }
+    function filterActiveAlerts() {
+      const prioSel = document.getElementById('alert-prio-filter');
+      if (!prioSel) return;
+      const prio = prioSel.value;
+      const cat = document.getElementById('alert-cat-filter').value;
+      let shown = 0;
+      alertCards().forEach(el => {
+        const show = (!prio || el.dataset.priority === prio)
+                  && (!cat || el.dataset.category === cat);
+        el.style.display = show ? '' : 'none';
+        if (show) shown++;
+      });
+      document.getElementById('alert-filter-count').textContent =
+        (prio || cat) ? shown + ' shown' : '';
+      document.getElementById('active-alerts-box').scrollTop = 0;
+    }
+    document.addEventListener('DOMContentLoaded', renderAlertCatOptions);
+    """
+        + """
+    // Sortable alert log. Priority sorts by rank (CRITICAL first), not
+    // alphabetically; default order = newest first (same as the stored log).
+    const LOG_PRIORITY_ORDER = {CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3};
+    const LOG_PRIORITY_BADGE = {CRITICAL: ['#FCEBEB', '#791F1F'], HIGH: ['#FAEEDA', '#633806'],
+                                MEDIUM: ['#E6F1FB', '#0C447C'], LOW: ['#F1EFE8', '#444441']};
+    let logSortKey = 'created_at', logSortDir = -1;
+    const escLog = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    // Hierarchical log filter: priority groups, each holding "All <PRIORITY>"
+    // plus every distinct ticker+headline at that tier as a sub-entry.
+    let LOG_FILTERS = [null];
+    const logRowLabel = r => (r.ticker ? r.ticker + ' ' : '') + (r.headline || '');
+    function buildLogFilterOptions() {
+      const sel = document.getElementById('log-filter');
+      if (!sel) return;
+      const byPrio = {};
+      ALERT_LOG_ROWS.forEach(r => {
+        const p = r.priority || '—';
+        (byPrio[p] = byPrio[p] || {});
+        const h = logRowLabel(r);
+        byPrio[p][h] = (byPrio[p][h] || 0) + 1;
+      });
+      LOG_FILTERS = [null];
+      let html = `<option value="0">All (${ALERT_LOG_ROWS.length})</option>`;
+      ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].filter(p => byPrio[p]).forEach(p => {
+        const total = Object.values(byPrio[p]).reduce((a, b) => a + b, 0);
+        html += `<optgroup label="${p} (${total})">`;
+        LOG_FILTERS.push({priority: p});
+        html += `<option value="${LOG_FILTERS.length - 1}">All ${p} (${total})</option>`;
+        Object.keys(byPrio[p]).sort().forEach(h => {
+          LOG_FILTERS.push({priority: p, headline: h});
+          const n = byPrio[p][h];
+          html += `<option value="${LOG_FILTERS.length - 1}">· ${escLog(h).slice(0, 70)}${n > 1 ? ' ×' + n : ''}</option>`;
+        });
+        html += '</optgroup>';
+      });
+      sel.innerHTML = html;
+    }
+    function logSetSort(key) {
+      logSortDir = (logSortKey === key) ? -logSortDir : (key === 'created_at' ? -1 : 1);
+      logSortKey = key;
+      renderAlertLog();
+    }
+    function renderAlertLog() {
+      const root = document.getElementById('alert-log-root');
+      if (!root) return;
+      const fSel = document.getElementById('log-filter');
+      const f = LOG_FILTERS[+(fSel ? fSel.value : 0)] || null;
+      const filtered = ALERT_LOG_ROWS.filter(r => !f ||
+        (r.priority === f.priority && (!f.headline || logRowLabel(r) === f.headline)));
+      const cnt = document.getElementById('log-filter-count');
+      if (cnt) cnt.textContent = f ? filtered.length + ' shown' : '';
+      const rows = [...filtered].sort((a, b) => {
+        let av = a[logSortKey], bv = b[logSortKey];
+        if (logSortKey === 'priority') {
+          av = LOG_PRIORITY_ORDER[av] ?? 9; bv = LOG_PRIORITY_ORDER[bv] ?? 9;
+        }
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return (av > bv ? 1 : av < bv ? -1 : 0) * logSortDir;
+      });
+      const arrow = k => logSortKey === k ? (logSortDir === 1 ? ' ▲' : ' ▼') : '';
+      const th = (k, label, right) =>
+        `<th style="cursor:pointer;white-space:nowrap${right ? ';text-align:right' : ''}"
+             onclick="logSetSort('${k}')">${label}${arrow(k)}</th>`;
+      root.innerHTML = `<table><thead><tr>
+        ${th('created_at', 'When')}${th('priority', 'Priority')}${th('category', 'Category')}
+        ${th('ticker', 'Ticker')}${th('headline', 'Headline')}${th('confidence', 'Confidence', true)}
+        </tr></thead><tbody>${rows.map(a => {
+          const [bg, fg] = LOG_PRIORITY_BADGE[a.priority] || ['#F1EFE8', '#444441'];
+          return `<tr><td style="white-space:nowrap">${escLog(a.created_at) || '—'}</td>
+            <td><span style="background:${bg};color:${fg};font-size:10px;font-weight:700;
+                 padding:2px 8px;border-radius:9px">${escLog(a.priority)}</span></td>
+            <td>${escLog(a.category) || '—'}</td>
+            <td><b>${escLog(a.ticker) || '—'}</b></td>
+            <td>${escLog(a.headline)}</td>
+            <td style="text-align:right">${a.confidence != null ? a.confidence + '%' : '—'}</td></tr>`;
+        }).join('')}</tbody></table>`;
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      buildLogFilterOptions();
+      renderAlertLog();
+    });
+    """)
     return body, extra_js
 
 
 def _alert_card(a: dict) -> str:
     color = {"CRITICAL": "#791F1F", "HIGH": "#8a6d1a", "MEDIUM": "#185FA5", "LOW": "#898781"}.get(a["priority"], "#898781")
     return f"""
-    <div style="border-left:3px solid {color};padding:8px 14px;margin-bottom:10px">
+    <div class="alert-card" data-priority="{esc(a["priority"])}" data-category="{esc(a.get("category") or "other")}"
+         style="border-left:3px solid {color};padding:8px 14px;margin-bottom:10px">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:3px">
         {badge(a["priority"], _PRIORITY_STATUS.get(a["priority"], "muted"))}
         <span style="font-size:9px;color:#898781;text-transform:uppercase;letter-spacing:.3px">{esc(a.get("category") or "")}</span>
-        <b style="font-size:13px">{esc(a.get("ticker") or "")} {esc(a["headline"])}</b>
+        <b style="font-size:13px">{(f'<a href="/research?ticker={esc(a["ticker"])}&cols=all" '
+                                    f'title="Open in Research Library with all columns" '
+                                    f'style="color:inherit">{esc(a["ticker"])}</a> ')
+                                  if a.get("ticker") else ''}{esc(a["headline"])}</b>
       </div>
       <div style="font-size:12px;color:#444441">Why it matters: {esc(a["why_it_matters"])}</div>
       <div style="font-size:12px;color:#444441">Expected impact: {esc(a["expected_impact"])}</div>
@@ -1838,43 +2505,139 @@ def _premarket_brief_html(brief: dict | None) -> str:
 
 def automation_page() -> tuple[str, str]:
     from stockanalysis.reporting.portfolio import PORTFOLIO_VALUE, SMALLCAP_MAX_PCT
+    from stockanalysis.scheduling.schedule_config import (
+        JOB_DEFS, load_config, describe_spec)
+    from urllib.parse import urlencode
+    from stockanalysis.scheduling.scheduler import SCHEDULED_JOBS
 
     alive = jobstore.scheduler_alive()
-    if alive:
-        sched_jobs = jobstore.scheduler_jobs()
+    cfg = load_config()
 
-        def _run_now_form(job_name: str) -> str:
-            return (
-                f'<form style="margin:0" onsubmit="submitJob(event, this, null); return false;">'
-                f'<input type="hidden" name="action" value="run_cron">'
-                f'<input type="hidden" name="job_name" value="{esc(job_name)}">'
-                f'<button class="btn" style="font-size:10px;padding:2px 8px">Run now</button></form>'
-            )
+    # function name -> earliest next-run string (scheduler_jobs is sorted by
+    # next_run, so the first occurrence per name wins); also collect jobs the
+    # config doesn't manage (VIX-adaptive extras, self-test one-offs)
+    next_run: dict[str, str] = {}
+    managed_names = {fn.__name__ for fn in SCHEDULED_JOBS.values()}
+    unmanaged = []
+    for j in jobstore.scheduler_jobs():
+        if j["job"] in managed_names:
+            next_run.setdefault(j["job"], j["next_run"] or "—")
+        else:
+            unmanaged.append(j)
 
-        sched_rows = "".join(
-            f'<tr><td>{esc(j["job"])}</td><td>{esc(j["next_run"] or "—")}</td>'
-            f'<td>{_run_now_form(j["job"])}</td></tr>'
-            for j in sched_jobs
-        ) or f'<tr><td colspan="3">{empty("No jobs registered yet.")}</td></tr>'
-        scheduler_html = (
-            badge("● RUNNING", "good", "small")
-            + '<div style="font-size:11px;color:#898781;margin-top:8px">'
-              'Cron-style loop firing the scans/emails/cleanup below on schedule, '
-              'in the background of this web app process. "Run now" fires that job\'s '
-              'function immediately without touching its normal schedule — use it to '
-              'verify a job actually works instead of waiting for its trigger time.</div>'
-              f'<table style="margin-top:10px"><thead><tr><th>Job</th>'
-              f'<th>Next run (ET)</th><th></th></tr></thead><tbody>{sched_rows}</tbody></table>'
-              '<form style="margin-top:12px" onsubmit="submitJob(event, this, null); return false;">'
-              '<input type="hidden" name="action" value="test_scheduler">'
-              '<button class="btn">Run scheduler self-test (fires a job in ~1 min)</button></form>'
+    def _run_now_form(job_name: str) -> str:
+        return (
+            f'<form style="margin:0" onsubmit="submitJob(event, this, null); return false;">'
+            f'<input type="hidden" name="action" value="run_cron">'
+            f'<input type="hidden" name="job_name" value="{esc(job_name)}">'
+            f'<button class="btn secondary" style="font-size:10px;padding:2px 8px">Run now</button></form>'
         )
-    else:
-        scheduler_html = (
-            badge("○ NOT RUNNING", "bad", "small")
-            + '<div style="font-size:12px;color:#898781;margin-top:8px">'
-              'Start the app without <code>--no-scheduler</code> to enable automatic scans.</div>'
-        )
+
+    def _schedule_row(key: str) -> str:
+        meta, spec = JOB_DEFS[key], cfg[key]
+        fn_name = SCHEDULED_JOBS[key].__name__
+        is_daily = spec["type"] == "daily"
+        times_val = ", ".join(spec.get("times") or [])
+        minutes_val = spec.get("minutes", 10)
+        nr = next_run.get(fn_name, "—") if spec["enabled"] else "disabled"
+        return f"""
+        <tr>
+          <td style="min-width:180px"><b style="font-size:12px">{esc(meta["label"])}</b>
+            <div style="font-size:10px;color:#898781;max-width:280px">{esc(meta["description"])}</div></td>
+          <td>
+            <form onsubmit="return saveSchedule(event, this)"
+                  style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0">
+              <input type="hidden" name="job_key" value="{esc(key)}">
+              <label style="display:flex;gap:4px;align-items:center;font-size:11px">
+                <input type="checkbox" name="enabled" {"checked" if spec["enabled"] else ""}> on</label>
+              <select name="type" onchange="onSchedTypeChange(this)" style="font-size:11px">
+                <option value="daily" {"selected" if is_daily else ""}>daily at</option>
+                <option value="interval" {"selected" if not is_daily else ""}>every</option>
+              </select>
+              <input name="times" value="{esc(times_val)}" placeholder="06:30, 10:00"
+                     style="width:130px;font-size:11px;{'' if is_daily else 'display:none'}">
+              <span style="display:{'inline-flex' if not is_daily else 'none'};gap:4px;align-items:center;font-size:11px"
+                    class="sched-minutes-wrap">
+                <input name="minutes" type="number" value="{minutes_val}" min="1" max="1440"
+                       style="width:60px;font-size:11px"> min</span>
+              <button class="btn" style="font-size:10px;padding:2px 8px">Save</button>
+              <button type="button" class="btn secondary" onclick="deleteSchedule(this.form, '{esc(meta["label"])}')"
+                      style="font-size:10px;padding:2px 8px;color:#A32D2D;border-color:#A32D2D"
+                      {"disabled" if not spec["enabled"] else ""}>Delete</button>
+            </form>
+          </td>
+          <td style="font-size:11px;color:#52514e;white-space:nowrap">{esc(nr)}</td>
+          <td>{_run_now_form(fn_name)}</td>
+        </tr>"""
+
+    # Only scheduled (enabled) jobs get a table row; everything else lives in
+    # the "+ Add job" panel below, so Delete/Add behave like removing and
+    # re-adding list entries rather than a wall of disabled rows.
+    sched_rows = "".join(_schedule_row(key) for key in JOB_DEFS
+                        if cfg[key]["enabled"])
+
+    def _add_item(key: str) -> str:
+        meta, spec = JOB_DEFS[key], cfg[key]
+        params = {"job_key": key, "enabled": "on", "type": spec["type"]}
+        if spec["type"] == "daily":
+            params["times"] = ", ".join(spec["times"])
+        else:
+            params["minutes"] = spec["minutes"]
+        return f'''
+        <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;
+                    padding:6px 0;border-bottom:0.5px solid #f1efea">
+          <div><b style="font-size:12px">{esc(meta["label"])}</b>
+            <div style="font-size:10px;color:#898781;max-width:300px">{esc(meta["description"])}</div>
+            <div style="font-size:10px;color:#52514e">{esc(describe_spec(spec))}</div></div>
+          <button type="button" class="btn" style="font-size:10px;padding:2px 10px"
+                  onclick="addSchedule('{esc(urlencode(params))}', '{esc(meta["label"])}')">Add</button>
+        </div>'''
+
+    available = [k for k in JOB_DEFS if not cfg[k]["enabled"]]
+    add_panel = f'''
+      <div id="addjob-wrap" style="position:relative;display:inline-block;margin-top:10px">
+        <button type="button" class="btn" style="font-size:11px"
+                onclick="toggleAddJob()">+ Add job ({len(available)})</button>
+        <div id="addjob-panel" style="display:none;position:absolute;top:34px;left:0;z-index:50;
+             background:#fff;border:1px solid #d9d7ce;border-radius:8px;
+             box-shadow:0 4px 16px rgba(0,0,0,.12);padding:4px 12px 8px;width:400px;
+             max-height:400px;overflow-y:auto">
+          {"".join(_add_item(k) for k in available)
+           or '<div style="font-size:12px;color:#898781;padding:8px 0">All jobs are already scheduled.</div>'}
+        </div>
+      </div>'''
+    unmanaged_html = ""
+    if unmanaged:
+        items = ", ".join(f'{esc(j["job"])} ({esc(j["next_run"] or "—")})' for j in unmanaged)
+        unmanaged_html = (f'<div style="font-size:10px;color:#898781;margin-top:8px">'
+                          f'Dynamically added (not editable): {items}</div>')
+
+    status_html = (
+        badge("● RUNNING", "good", "small") if alive else
+        badge("○ NOT RUNNING", "bad", "small")
+        + '<span style="font-size:11px;color:#898781;margin-left:8px">'
+          'Start the app without <code>--no-scheduler</code> to enable automatic scans — '
+          'schedule edits below still save and apply on next start.</span>'
+    )
+    scheduler_html = (
+        status_html
+        + '<div style="font-size:11px;color:#898781;margin-top:8px">'
+          'All automated jobs, from data/schedule_config.json. Edit a row and Save to '
+          'change its frequency (daily = comma-separated ET times, e.g. "09:30, 15:30"; '
+          'every = minutes between runs) or untick "on" to disable it — changes apply '
+          'to the running scheduler immediately, no restart. Weekday/market-hours/'
+          'Friday/VIX guards live inside the jobs themselves, so they hold whatever '
+          'cadence you pick. "Run now" fires a job\'s function immediately without '
+          'touching its schedule.</div>'
+          f'<table style="margin-top:10px"><thead><tr><th>Job</th><th>Schedule</th>'
+          f'<th>Next run (ET)</th><th></th></tr></thead><tbody>'
+          f'{sched_rows or f"""<tr><td colspan="4">{empty("No jobs scheduled — use + Add job below.")}</td></tr>"""}'
+          f'</tbody></table>'
+          + add_panel + unmanaged_html +
+          '<form style="margin-top:12px" onsubmit="submitJob(event, this, null); return false;">'
+          '<input type="hidden" name="action" value="test_scheduler">'
+          '<button class="btn secondary">Run scheduler self-test (fires a job in ~1 min)</button></form>'
+    )
 
     hist = jobstore.history()
     hist_rows = "".join(
@@ -1942,5 +2705,57 @@ def automation_page() -> tuple[str, str]:
     )
     # Any job finishing while this page is open means the history table /
     # day-session panel are stale — reload once rather than leave them frozen
-    extra_js = "function onJobFinished(j) { setTimeout(() => location.reload(), 1200); }"
+    extra_js = """
+    function onJobFinished(j) { setTimeout(() => location.reload(), 1200); }
+    function onSchedTypeChange(sel) {
+      const form = sel.closest('form');
+      const daily = sel.value === 'daily';
+      form.querySelector('[name="times"]').style.display = daily ? '' : 'none';
+      form.querySelector('.sched-minutes-wrap').style.display = daily ? 'none' : 'inline-flex';
+    }
+    async function saveSchedule(event, form) {
+      event.preventDefault();
+      try {
+        const res = await fetch('/api/schedule/save', {
+          method: 'POST', body: new URLSearchParams(new FormData(form)),
+        });
+        const data = await res.json();
+        toast(data.message || (data.ok ? 'Saved' : 'Save failed'), data.ok ? 'ok' : 'err');
+        if (data.ok) setTimeout(() => location.reload(), 900);
+      } catch (e) { toast('Request failed: ' + e, 'err'); }
+      return false;
+    }
+    // Delete = remove the job from the live schedule (enabled: off). The row
+    // stays listed with its saved times so it can be re-enabled any time —
+    // jobs are built-ins, so "gone forever" would just be confusing.
+    function toggleAddJob() {
+      const p = document.getElementById('addjob-panel');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    }
+    // qs is a prebuilt job_key/enabled/type/times query string — the job's
+    // saved spec, so re-adding restores whatever cadence it had before Delete.
+    async function addSchedule(qs, label) {
+      try {
+        const res = await fetch('/api/schedule/save', {
+          method: 'POST', body: new URLSearchParams(qs),
+        });
+        const data = await res.json();
+        toast(data.ok ? label + ' added to schedule' : (data.message || 'Add failed'),
+              data.ok ? 'ok' : 'err');
+        if (data.ok) setTimeout(() => location.reload(), 900);
+      } catch (e) { toast('Request failed: ' + e, 'err'); }
+    }
+    async function deleteSchedule(form, label) {
+      if (!confirm('Remove "' + label + '" from the schedule?\\n\\nIt stops running ' +
+                   'immediately but stays listed here — tick "on" and Save to restore it.')) return;
+      const params = new URLSearchParams(new FormData(form));
+      params.delete('enabled');
+      try {
+        const res = await fetch('/api/schedule/save', { method: 'POST', body: params });
+        const data = await res.json();
+        toast(data.ok ? label + ' removed from schedule' : (data.message || 'Delete failed'),
+              data.ok ? 'ok' : 'err');
+        if (data.ok) setTimeout(() => location.reload(), 900);
+      } catch (e) { toast('Request failed: ' + e, 'err'); }
+    }"""
     return body, extra_js

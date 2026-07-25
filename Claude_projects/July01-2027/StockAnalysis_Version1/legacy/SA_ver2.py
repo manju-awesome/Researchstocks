@@ -111,7 +111,7 @@ LONGTERM_TICKERS = [
 # ---- Email config (Resend) --------------------------------------------------
 EMAIL_TO         = "mthimmareddy99@gmail.com"
 RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
-RESEND_API_KEY = "re_NCx4v9sR_GDGcvZ44ndwGPb6JaCKBBnnT"
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
 RESEND_API_URL = "https://api.resend.com/emails"
 

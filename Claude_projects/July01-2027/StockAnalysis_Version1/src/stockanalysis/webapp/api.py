@@ -52,7 +52,8 @@ def job_research(tickers: list[str], progress: jobstore.Progress) -> str:
 
 
 def job_scan(universes: list[str], include_portfolio: bool,
-            progress: jobstore.Progress) -> str:
+            progress: jobstore.Progress,
+            extra_tickers: list[str] | None = None) -> str:
     from stockanalysis.scanners import scan_universe as su
     from stockanalysis.reporting.dashboard import generate_dashboard
     from stockanalysis.reporting.research import load_watchlists
@@ -63,23 +64,43 @@ def job_scan(universes: list[str], include_portfolio: bool,
     }
     user_watchlists = load_watchlists()
     # Union across every selected universe (order-preserving, deduped) so
-    # picking several overlapping categories scans each ticker once.
+    # picking several overlapping categories scans each ticker once; ad-hoc
+    # comma-separated tickers from the Scanner form append the same way.
     tickers, seen = [], set()
     for universe in universes:
         for t in builtin.get(universe) or user_watchlists.get(universe) or []:
             if t not in seen:
                 seen.add(t)
                 tickers.append(t)
+    for t in extra_tickers or []:
+        if t not in seen:
+            seen.add(t)
+            tickers.append(t)
+    if not tickers:
+        raise ValueError("nothing to scan — no universe selected and no tickers given")
     rows = su.main(
         tickers,
         progress_cb=lambda stage, done, total: progress.stage(stage, done, total))
     progress.stage("research", len(rows), len(rows))
-    name_tag = "-".join(universes[:3]) + (f"+{len(universes) - 3}" if len(universes) > 3 else "")
+    tags = universes[:3] + (["custom"] if extra_tickers else [])
+    name_tag = ("-".join(tags) + (f"+{len(universes) - 3}" if len(universes) > 3 else "")
+                ) or "custom"
     generate_dashboard(rows, output_dir=OUTPUT_DIR, open_browser=False,
                        include_portfolio=include_portfolio,
                        report_name=f"{name_tag}Report")
+    # Keep the Research Library in lockstep with the scan the dashboard was
+    # built from — otherwise its scores (Swing/Day/Call/Put) go stale until
+    # the watchlist monitor happens to re-touch a ticker. charts/news are
+    # skipped for the same reason as the watchlist job: already fetched
+    # elsewhere, pure redundant network cost on a 500-ticker scan.
+    from stockanalysis.reporting.research import generate_research_pages
+    written = generate_research_pages(rows, OUTPUT_DIR, charts=False, fetch_news=False)
     progress.stage("done", len(rows), len(rows))
-    return (f"scanned {len(rows)} tickers ({', '.join(universes)}); dashboard regenerated"
+    scope = ", ".join(universes) if universes else "custom tickers"
+    if universes and extra_tickers:
+        scope += f" + {len(extra_tickers)} custom"
+    return (f"scanned {len(rows)} tickers ({scope}); dashboard regenerated; "
+            f"research library refreshed for {len(written)}"
             + ("" if include_portfolio else " (portfolio panel excluded)"))
 
 
@@ -127,6 +148,26 @@ def job_earnings_analysis(ticker: str, progress: jobstore.Progress) -> str:
     move = result.get("expected_move_pct")
     return (f"{ticker}: {result['trading_bias']} · bullish {result['bullish_probability']}%"
             + (f" · expected move ±{move:.1f}%" if move is not None else ""))
+
+
+def job_ta_analysis(ticker: str, progress: jobstore.Progress) -> str:
+    """AI multi-timeframe technical analysis (core.technical_analysis) for
+    one ticker; writes data/output/ta/<TICKER>.json — fetched by the
+    Research Library's "AI Technicals" modal once the job flips to done
+    (same static-file pattern as the earnings analysis)."""
+    import json
+    from stockanalysis.core.technical_analysis import analyze_ticker
+    ticker = ticker.upper().strip()
+    progress.stage(f"{ticker}: fetching M/W/D/4H frames + computing indicators")
+    result = analyze_ticker(ticker)
+    ta_dir = OUTPUT_DIR / "ta"
+    ta_dir.mkdir(parents=True, exist_ok=True)
+    (ta_dir / f"{ticker}.json").write_text(json.dumps(result))
+    progress.stage("done")
+    if result.get("error"):
+        raise ValueError(result["error"])
+    return (f"{ticker}: {result['verdict']} · trend {result['current_trend']['overall']}"
+            f" · probability {result['probability_score']}%")
 
 
 def job_journal_review(trade_id: str, progress: jobstore.Progress) -> str:
@@ -259,20 +300,27 @@ def job_run_tests(progress: jobstore.Progress) -> str:
 
 
 def job_trigger_cron(job_name: str, progress: jobstore.Progress) -> str:
-    """Run one already-registered `schedule` job's function immediately,
-    out of band — for verifying a cron job actually does what it's supposed
-    to without waiting for its real trigger time. Calls the job's function
-    directly rather than schedule.Job.run(), so it does NOT advance that
-    job's next_run — the real schedule is untouched."""
+    """Run one scheduled job's function immediately, out of band — for
+    verifying a cron job actually does what it's supposed to without waiting
+    for its real trigger time. Resolves through the SCHEDULED_JOBS registry
+    first (works even for jobs currently disabled in the schedule config),
+    falling back to whatever is registered with `schedule` (covers
+    dynamically-added jobs like the VIX put loop). Calls the function
+    directly rather than schedule.Job.run(), so it does NOT advance any
+    next_run — the real schedule is untouched."""
     import schedule
+    from stockanalysis.scheduling.scheduler import SCHEDULED_JOBS
 
-    match = next((j for j in schedule.jobs if jobstore.job_name(j) == job_name), None)
-    if match is None:
-        raise ValueError(f"no scheduled job named {job_name!r} "
-                          f"(is the scheduler running? see the Scheduler card)")
+    fn = next((f for f in SCHEDULED_JOBS.values() if f.__name__ == job_name), None)
+    if fn is None:
+        match = next((j for j in schedule.jobs if jobstore.job_name(j) == job_name), None)
+        if match is None:
+            raise ValueError(f"no scheduled job named {job_name!r} "
+                              f"(is the scheduler running? see the Scheduler card)")
+        fn = match.job_func
 
     progress.stage(f"running {job_name}")
-    match.job_func()
+    fn()
     progress.stage("done")
     return f"{job_name} executed on demand (its normal schedule is unaffected)"
 
@@ -333,14 +381,22 @@ def dispatch_run(action: str, form: dict) -> str:
                               lambda p: job_research(tickers, p))
 
     if action == "scan":
-        universes = form.get("universe") or ["daytrade"]
+        universes = form.get("universe") or []
+        raw = first("tickers")
+        extra = [t.strip().upper() for t in raw.replace(",", " ").split() if t.strip()]
+        if not universes and not extra:
+            universes = ["daytrade"]        # bare "Run Scan" keeps its old default
         unknown = [u for u in universes if u not in available_universes()]
         if unknown:
             return f"unknown universe(s): {', '.join(unknown)}"
         include_pf = "portfolio" in form
-        label = f"scan: {'+'.join(universes)}" + ("" if include_pf else " (no portfolio panel)")
+        parts = list(universes)
+        if extra:
+            parts.append(", ".join(extra[:8]) + ("…" if len(extra) > 8 else ""))
+        label = f"scan: {' + '.join(parts)}" + ("" if include_pf else " (no portfolio panel)")
         return jobstore.start("scan", label,
-                              lambda p: job_scan(universes, include_pf, p))
+                              lambda p: job_scan(universes, include_pf, p,
+                                                 extra_tickers=extra))
 
     if action == "news":
         watchlists = form.get("watchlist") or []
@@ -367,6 +423,13 @@ def dispatch_run(action: str, form: dict) -> str:
             return "no ticker given"
         return jobstore.start("earnings", f"earnings analysis: {ticker}",
                               lambda p: job_earnings_analysis(ticker, p))
+
+    if action == "ta_analysis":
+        ticker = first("ticker").upper().strip()
+        if not ticker:
+            return "no ticker given"
+        return jobstore.start("ta", f"AI technicals: {ticker}",
+                              lambda p: job_ta_analysis(ticker, p))
 
     if action == "journal_review":
         trade_id = first("trade_id")
@@ -415,6 +478,47 @@ def dispatch_run(action: str, form: dict) -> str:
                               lambda p: job_test_scheduler(p))
 
     return "unknown action"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCHEDULE — edit one job's cadence/enabled flag from the Automation page
+# ─────────────────────────────────────────────────────────────────────────────
+
+def schedule_save(form: dict) -> dict:
+    """form: dict of lists (as parse_qs returns), from one Automation-page
+    schedule row. Persists to data/schedule_config.json and, if the
+    scheduler loop is alive, re-registers the live schedule so the edit
+    takes effect immediately. Returns {"ok": ..., "message": ...} — never
+    raises (bad input becomes an error message shown as a toast)."""
+    from stockanalysis.scheduling import schedule_config
+
+    def first(key, default=""):
+        return (form.get(key) or [default])[0]
+
+    key = first("job_key")
+    raw = {
+        # checkbox: present ("on") when checked, absent entirely when not
+        "enabled": "enabled" in form,
+        "type": first("type", "daily"),
+        "times": first("times"),
+        "minutes": first("minutes", "10"),
+    }
+    try:
+        spec = schedule_config.save_job(key, raw)
+    except ValueError as e:
+        return {"ok": False, "message": str(e)}
+
+    applied = ""
+    if jobstore.scheduler_alive():
+        from stockanalysis.scheduling.scheduler import reschedule
+        reschedule()
+        applied = " — applied to the running scheduler"
+    else:
+        applied = " — takes effect when the scheduler starts"
+
+    label = schedule_config.JOB_DEFS[key]["label"]
+    state = schedule_config.describe_spec(spec) if spec["enabled"] else "disabled"
+    return {"ok": True, "message": f"{label}: {state}{applied}"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

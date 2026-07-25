@@ -221,36 +221,67 @@ def _section(title: str, body: str) -> str:
             f'margin:0 0 10px">{title}</h3>{body}</div>')
 
 
-_MOAT_COLORS = {"Strong": ("#E1F5EE", "#0F6E56"),
-                "Moderate": ("#FAEEDA", "#8a6d1a"),
-                "Weak": ("#FCEBEB", "#A32D2D")}
+_SCORE_COLORS = {"Strong": ("#E1F5EE", "#0F6E56"),
+                 "Moderate": ("#FAEEDA", "#8a6d1a"),
+                 "Weak": ("#FCEBEB", "#A32D2D")}
+
+_MOAT_COLORS = {"Strong signals": ("#E1F5EE", "#0F6E56"),
+                "Moderate signals": ("#FAEEDA", "#8a6d1a"),
+                "Weak signals": ("#FCEBEB", "#A32D2D")}
+
+_BUY_ZONE_COLORS = {"Strong Buy Zone": ("#E1F5EE", "#0F6E56"),
+                    "Buy Zone": ("#E1F5EE", "#0F6E56"),
+                    "Watch List": ("#FAEEDA", "#8a6d1a"),
+                    "Hold / Monitor": ("#FDEEDC", "#B15A0F"),
+                    "Avoid": ("#FCEBEB", "#A32D2D")}
 
 
-def _moat_html(row: dict) -> str:
-    """Badge + score + drivers from core.moat's quantitative proxy."""
-    from stockanalysis.core.moat import compute_moat
-    moat = compute_moat(row)
-    if moat["score"] is None:
+def _score_badge_html(result: dict, colors: dict = _SCORE_COLORS) -> str:
+    """Badge + score + drivers, shared by the 0-100 scores (Business
+    Quality, Financial Health, Buy Zone)."""
+    if result["score"] is None:
         return ('<span style="font-size:12px;color:#898781">— '
-                f'({moat["drivers"][0]})</span>')
-    bg, fg = _MOAT_COLORS.get(moat["label"], ("#F1EFE8", "#444441"))
-    drivers = " · ".join(_html.escape(d) for d in moat["drivers"])
+                f'({result["drivers"][0]})</span>')
+    bg, fg = colors.get(result["label"], ("#F1EFE8", "#444441"))
+    drivers = " · ".join(_html.escape(d) for d in result["drivers"])
     return (f'<span style="background:{bg};color:{fg};font-weight:700;'
             f'padding:2px 10px;border-radius:10px;font-size:12px">'
-            f'{moat["label"]} · {moat["score"]}/100</span>'
+            f'{result["label"]} · {result["score"]}/100</span>'
             f'<div style="font-size:10px;color:#898781;margin-top:4px">{drivers}</div>')
+
+
+def _moat_checklist_html(moat: dict) -> str:
+    """Checklist badge for the moat proxy — pass count, not a blended
+    score, so it can't be mistaken for a durability rating."""
+    if moat["label"] is None:
+        return '<span style="font-size:12px;color:#898781">— (not enough inputs)</span>'
+    bg, fg = _MOAT_COLORS.get(moat["label"], ("#F1EFE8", "#444441"))
+    checks = " · ".join(
+        f'{"✓" if c["passed"] else "✗"} {_html.escape(c["name"])} ({_html.escape(c["detail"])})'
+        for c in moat["checks"])
+    return (f'<span style="background:{bg};color:{fg};font-weight:700;'
+            f'padding:2px 10px;border-radius:10px;font-size:12px">'
+            f'{moat["label"]} · {moat["passed"]}/{moat["total"]}</span>'
+            f'<div style="font-size:10px;color:#898781;margin-top:4px">{checks}</div>')
 
 
 def _company_overview_html(row: dict) -> str:
     """What the company does (yfinance's own business-summary text,
     trimmed to ~2 sentences for a "brief" description) plus margin/ROE
-    figures and core.moat's quantitative moat proxy. The proxy is a
-    financial-fingerprint score, deliberately NOT a Wide/Narrow/None
-    verdict — brand, network effects, and switching costs are qualitative
-    calls the footnote leaves to the reader."""
+    figures, core.company_scores's three proxies — Business Quality
+    (current profitability), Economic Moat (elite-threshold checklist,
+    NOT a Wide/Narrow/None verdict — brand, network effects, and
+    switching costs are qualitative calls the footnote leaves to the
+    reader), and Financial Health (balance-sheet strength) — plus
+    core.buy_zone's Buy Zone score (is the current price a good entry,
+    as opposed to whether the company is worth owning at all)."""
     summary = _v(row, "BusinessSummary")
     if not summary:
         return '<span style="font-size:12px;color:#898781">No company description available.</span>'
+
+    from stockanalysis.core.company_scores import (
+        compute_business_quality, compute_economic_moat, compute_financial_health)
+    from stockanalysis.core.buy_zone import compute_buy_zone
 
     sentences = re.split(r"(?<=[.!?])\s+", summary.strip())
     brief = " ".join(sentences[:2])
@@ -262,16 +293,20 @@ def _company_overview_html(row: dict) -> str:
         ("Gross margin", _pct(row.get("GrossMargin%"))),
         ("Operating margin", _pct(row.get("OperatingMargin%"))),
         ("Return on equity", _pct(row.get("ReturnOnEquity%"))),
-        ("Moat signals", _moat_html(row)),
+        ("Business quality", _score_badge_html(compute_business_quality(row))),
+        ("Economic moat", _moat_checklist_html(compute_economic_moat(row))),
+        ("Financial health", _score_badge_html(compute_financial_health(row))),
+        ("Buy zone", _score_badge_html(compute_buy_zone(row), _BUY_ZONE_COLORS)),
     ])
 
     return (
         f'<p style="font-size:13px;line-height:1.6;color:#52514e;margin:0 0 10px">'
         f'{_html.escape(brief)}</p>{facts}'
-        f'<p style="font-size:10px;color:#898781;margin-top:8px">Moat signals score '
-        f'the financial fingerprint of a durable advantage (margins, returns on '
-        f'capital, scale) — it can\'t see brand, network effects, or switching '
-        f'costs, so treat it as one input, not a verdict.</p>')
+        f'<p style="font-size:10px;color:#898781;margin-top:8px">Business quality and '
+        f'financial health score current financials; economic moat is a checklist of '
+        f'ELITE-threshold signals, not a durability verdict — it can\'t see brand, '
+        f'network effects, switching costs, or patents, so treat it as one input, '
+        f'not a rating.</p>')
 
 
 def _institutional_html(row: dict) -> str:
@@ -752,6 +787,7 @@ def _update_research_index(output_dir: Path, rows: list[dict],
             "eps_growth": row.get("EPS_Growth%"),
             "week52_low": row.get("52W Low"),
             "week52_high": row.get("52W High"),
+            "dist_from_52w_low_pct": row.get("Pct_From_52W_Low%"),
             "days_to_earnings": row.get("Days_To_Earnings"),
             "conv_overall": row.get("Conv_Overall"),
             "conv_stars": row.get("Conv_Stars"),
@@ -759,6 +795,8 @@ def _update_research_index(output_dir: Path, rows: list[dict],
             "investment_score": row.get("Investment_Score"),
             "swing_score": row.get("Swing_Score"),
             "daytrade_score": row.get("DayTrade_Score"),
+            "call_score": row.get("Call_Score"),
+            "put_score": row.get("Put_Score"),
             "earnings_date": row.get("EarningsDate"),
             "forward_pe": row.get("Forward_PE"),
             "peg_ratio": row.get("PEG_Ratio"),

@@ -93,6 +93,100 @@ def _snapshot_group(tickers: list[str]) -> list[dict]:
     return [s for s in (_ticker_snapshot(t) for t in tickers) if s]
 
 
+# ── Supply-chain basket: one batch download ──────────────────────────────────
+
+def _bar_snapshot(closes, volumes, ticker: str) -> dict | None:
+    """Rich per-ticker snapshot from daily bars: returns over 1/5/20d, EMA
+    posture (20/50/200), RSI, 20-day-high flag, volume vs 20d average —
+    everything compute_breadth/compute_momentum need, no extra fetches."""
+    closes = closes.ffill().dropna()
+    if len(closes) < 21:
+        return None
+    price = float(closes.iloc[-1])
+
+    def _chg(n: int) -> float | None:
+        if len(closes) <= n:
+            return None
+        base = float(closes.iloc[-1 - n])
+        return round((price / base - 1) * 100, 2) if base else None
+
+    def _above_ema(span: int) -> bool | None:
+        if len(closes) < span:
+            return None
+        return price > float(closes.ewm(span=span, adjust=False).mean().iloc[-1])
+
+    rsi_series = calculate_rsi(closes).dropna()
+    vol_ratio = None
+    if volumes is not None:
+        v = volumes.dropna()
+        if len(v) >= 21 and float(v.iloc[-21:-1].mean()) > 0:
+            vol_ratio = round(float(v.iloc[-1]) / float(v.iloc[-21:-1].mean()), 2)
+
+    return {
+        "ticker": ticker,
+        "price": round(price, 2),
+        "day_chg_pct": _chg(1),
+        "chg_5d_pct": _chg(5),
+        "chg_20d_pct": _chg(20),
+        "above_20ema": _above_ema(20),
+        "above_50ema": _above_ema(50),
+        "above_200ema": _above_ema(200),
+        "rsi_14": round(float(rsi_series.iloc[-1]), 1) if not rsi_series.empty else None,
+        "high_20d": price >= float(closes.iloc[-20:].max()),
+        "vol_ratio": vol_ratio,
+    }
+
+
+def fetch_basket_history() -> dict:
+    """Basket + leading indicators + benchmarks in ONE yf.download call —
+    ~30 symbols of daily bars costs one request instead of thirty, which is
+    what keeps the Yahoo throttling that plagued per-ticker fetches away.
+    Returns {"basket_v2": [...], "leading": [...], "benchmarks": {sym: snap}}
+    — empty shapes on total failure, never raises."""
+    from stockanalysis.core.ai_sentiment import AI_BASKET_TICKERS, AI_LEADING_TICKERS
+    benchmarks = ["QQQ", "SPY"]
+    symbols = sorted(set(AI_BASKET_TICKERS + AI_LEADING_TICKERS + benchmarks))
+    try:
+        df = yf.download(symbols, period="1y", interval="1d",
+                         progress=False, auto_adjust=True, group_by="column")
+        closes, vols = df["Close"], df.get("Volume")
+    except Exception as e:
+        log.warning("basket batch download failed: %s", e)
+        return {"basket_v2": [], "leading": [], "benchmarks": {}}
+
+    def _snap(sym: str) -> dict | None:
+        try:
+            return _bar_snapshot(closes[sym], vols[sym] if vols is not None else None, sym)
+        except Exception as e:
+            log.debug("basket snapshot failed for %s: %s", sym, e)
+            return None
+
+    return {
+        "basket_v2": [s for s in (_snap(t) for t in AI_BASKET_TICKERS) if s],
+        "leading":   [s for s in (_snap(t) for t in AI_LEADING_TICKERS) if s],
+        "benchmarks": {b: s for b in benchmarks if (s := _snap(b))},
+    }
+
+
+def fetch_basket_earnings_days() -> dict:
+    """days-to-earnings per basket name via the light t.calendar endpoint —
+    feeds the news/earnings uncertainty component. Individually best-effort:
+    a failed name is simply absent."""
+    from stockanalysis.core.ai_sentiment import AI_BASKET_TICKERS
+    out = {}
+    today = datetime.now(ET).date()
+    for t in AI_BASKET_TICKERS:
+        try:
+            cal = yf.Ticker(t).calendar or {}
+            dates = cal.get("Earnings Date") or []
+            future = sorted(d for d in dates if d >= today)
+            if future:
+                out[t] = (future[0] - today).days
+        except Exception as e:
+            log.debug("earnings calendar failed for %s: %s", t, e)
+    return out
+
+
 # ── NVDA vs VWAP ──────────────────────────────────────────────────────────────
 
 def _nvda_vwap_flag(ticker: str = "NVDA") -> bool | None:
@@ -227,6 +321,8 @@ def fetch_ai_pulse() -> dict:
     soxx = _ticker_snapshot(SOXX_TICKER)
     all_ai = _snapshot_group(_load_all_ai_tickers())
 
+    basket_history = fetch_basket_history()
+
     return {
         "asof": datetime.now(ET).strftime("%Y-%m-%d %H:%M:%S ET"),
         "tier1": tier1, "tier2": tier2, "tier3": tier3,
@@ -237,4 +333,6 @@ def fetch_ai_pulse() -> dict:
         "dxy": _dxy_change_pct(),
         "nvda_above_vwap": _nvda_vwap_flag(),
         "relative_strength": relative_strength(TIER2 + TIER3),
+        **basket_history,                      # basket_v2 / leading / benchmarks
+        "earnings_days": fetch_basket_earnings_days(),
     }

@@ -45,28 +45,33 @@ class TestCompanyOverviewHtml(unittest.TestCase):
         html = _company_overview_html({"BusinessSummary": LONG_SUMMARY})
         self.assertIn("—", html)
 
-    def test_moat_signals_shown_as_proxy_not_verdict(self):
-        """Regression guard, updated for core.moat: a quantitative
-        "moat signals" score with visible drivers is shown, but never a
-        fabricated Morningstar-style Wide/Narrow verdict, and the caveat
-        that it's one input rather than a verdict must stay."""
+    def test_three_scores_shown_with_moat_as_proxy_not_verdict(self):
+        """Regression guard, updated for core.company_scores: Business
+        Quality and Financial Health are shown as 0-100 scores with
+        visible drivers; Economic Moat is a checklist, never a fabricated
+        Morningstar-style Wide/Narrow verdict, and the caveat that it's
+        one input rather than a rating must stay."""
         html = _company_overview_html({
             "BusinessSummary": LONG_SUMMARY, "GrossMargin%": 62.0,
             "OperatingMargin%": 30.0, "ReturnOnEquity%": 28.0,
-            "FCF_Positive": True, "MarketCap": 500e9, "Inst_Own%": 70.0,
+            "FCF_Margin%": 20.0, "Revenue": 22.0, "EPS_Growth%": 15.0,
+            "DebtToEquity": 30.0, "Inst_Own%": 70.0,
+            "CurrentRatio": 2.0, "QuickRatio": 1.5,
+            "TotalCash": 20e9, "TotalDebt": 5e9,
         })
-        self.assertIn("Moat signals", html)
-        self.assertIn("100/100", html)             # score with drivers…
-        self.assertIn("Gross margin 62% (+25)", html)
-        self.assertNotIn("Wide Moat", html)        # …but no qualitative verdict
+        self.assertIn("Business quality", html)
+        self.assertIn("Economic moat", html)
+        self.assertIn("Financial health", html)
+        self.assertIn("Gross margin 62% (+18)", html)
+        self.assertNotIn("Wide Moat", html)        # no qualitative verdict
         self.assertNotIn("Narrow Moat", html)
-        self.assertIn("not a verdict", html)
+        self.assertIn("not a rating", html)
 
-    def test_moat_signals_degrade_gracefully_on_missing_inputs(self):
+    def test_scores_degrade_gracefully_on_missing_inputs(self):
         html = _company_overview_html({
             "BusinessSummary": LONG_SUMMARY, "GrossMargin%": 90.0,
         })
-        self.assertIn("only 1 of 6 inputs available", html)
+        self.assertIn("only 1 of 8 inputs available", html)
 
     def test_employee_count_is_comma_formatted(self):
         html = _company_overview_html({

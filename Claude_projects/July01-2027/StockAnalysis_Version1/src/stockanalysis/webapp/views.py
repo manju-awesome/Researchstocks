@@ -24,6 +24,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_DIR   = PROJECT_ROOT / "data" / "output"
 DATA_DIR     = PROJECT_ROOT / "data"
 
+
+def tv_url(ticker: str) -> str:
+    """TradingView chart URL for a ticker. No exchange prefix — TradingView
+    resolves it (hardcoding NASDAQ: would break NYSE names); '-' share
+    classes become '.' (yfinance's BRK-B is TradingView's BRK.B)."""
+    return f"https://www.tradingview.com/chart/?symbol={str(ticker).replace('-', '.')}"
+
 NAV = (("dashboard", "/", "🏠", "Dashboard"),
        ("ai-sentiment", "/ai-sentiment", "🤖", "AI Sentiment"),
        ("scanner",   "/scanner", "📡", "Scanner"),
@@ -173,6 +180,9 @@ dialog::backdrop { background:rgba(11,11,11,.35) }
 #jobtray { position:fixed; bottom:18px; left:212px; z-index:90; display:none;
            background:white; border:0.5px solid #e1e0d9; border-radius:10px;
            padding:10px 14px; box-shadow:0 8px 24px rgba(0,0,0,.1); min-width:260px }
+.col-resizer { position:absolute; top:0; right:0; bottom:0; width:6px; cursor:col-resize;
+               user-select:none; touch-action:none }
+.col-resizer:hover, .col-resizer.active { background:#0F6E56 }
 @keyframes slidein { from{transform:translateY(8px);opacity:0} to{transform:translateY(0);opacity:1} }
 @keyframes indet { 0%{margin-left:0%} 50%{margin-left:65%} 100%{margin-left:0%} }
 @media (max-width:820px) { .sidebar{display:none} .main{padding:14px} }

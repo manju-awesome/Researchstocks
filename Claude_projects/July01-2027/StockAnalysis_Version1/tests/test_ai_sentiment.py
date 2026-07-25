@@ -192,13 +192,158 @@ class TestBuildSnapshot(unittest.TestCase):
     def test_builds_full_snapshot_without_raising(self):
         snap = build_snapshot(pulse_extra(), pulse())
         for key in ("sentiment", "risk", "rotation", "ai_health", "macro",
-                   "tiers", "all_ai", "soxx", "yield", "dxy", "relative_strength"):
+                   "tiers", "all_ai", "soxx", "yield", "dxy", "relative_strength",
+                   "breadth", "momentum", "leadership", "leading_groups", "basket_v2"):
             self.assertIn(key, snap)
         self.assertIsInstance(snap["sentiment"]["score"], int)
 
     def test_handles_empty_inputs(self):
         snap = build_snapshot({}, {})
         self.assertIn("sentiment", snap)
+        # every v2 component missing -> exact neutral 50
+        self.assertEqual(snap["sentiment"]["score"], 50)
+        self.assertEqual(len(snap["sentiment"]["missing"]), 6)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sentiment Score v2 — supply-chain basket components
+# ─────────────────────────────────────────────────────────────────────────────
+
+from stockanalysis.core.ai_sentiment import (
+    AI_BASKET, BASKET_WEIGHT, compute_breadth, compute_momentum,
+    compute_rs_vs_qqq, compute_volume_participation, compute_macro_component,
+    compute_news_earnings, compute_leadership, compute_leading_groups,
+    compute_ai_sentiment_v2)
+
+
+def _v2_snap(ticker, chg=1.0, chg5=3.0, chg20=8.0, rsi=65.0, vr=1.8,
+             e20=True, e50=True, e200=True, hi=True):
+    return {"ticker": ticker, "price": 100.0, "day_chg_pct": chg,
+            "chg_5d_pct": chg5, "chg_20d_pct": chg20, "above_20ema": e20,
+            "above_50ema": e50, "above_200ema": e200, "rsi_14": rsi,
+            "high_20d": hi, "vol_ratio": vr}
+
+
+def _v2_basket(**kw):
+    return [_v2_snap(r["ticker"], **kw) for r in AI_BASKET]
+
+
+class TestBasketDefinition(unittest.TestCase):
+    def test_fifteen_names_with_spec_weights(self):
+        self.assertEqual(len(AI_BASKET), 15)
+        self.assertEqual(sum(BASKET_WEIGHT.values()), 108)   # spec's sum, normalized in use
+        self.assertEqual(BASKET_WEIGHT["NVDA"], 15)
+
+    def test_sector_group_pre_normalization_sums_match_spec(self):
+        by_sector = {}
+        for r in AI_BASKET:
+            by_sector[r["sector"]] = by_sector.get(r["sector"], 0) + r["weight"]
+        self.assertEqual(by_sector, {"Semiconductors": 53, "Networking/Optics": 15,
+                                     "Power": 19, "Software/Cloud": 21})
+
+
+class TestBreadth(unittest.TestCase):
+    def test_all_conditions_true_scores_100(self):
+        b = compute_breadth(_v2_basket())
+        self.assertEqual(b["score"], 100.0)
+        self.assertEqual(b["conditions"]["Above 200 EMA"], 100)
+
+    def test_mixed_conditions_average(self):
+        snaps = [_v2_snap("NVDA"), _v2_snap("AMD", e20=False, rsi=40, hi=False, vr=0.9)]
+        b = compute_breadth(snaps)
+        self.assertEqual(b["conditions"]["Above 20 EMA"], 50)
+        self.assertEqual(b["conditions"]["RSI > 60"], 50)
+
+    def test_empty_returns_none(self):
+        self.assertIsNone(compute_breadth([])["score"])
+
+
+class TestMomentumAndRS(unittest.TestCase):
+    def test_positive_weighted_returns_score_above_50(self):
+        m = compute_momentum(_v2_basket())
+        self.assertGreater(m["score"], 50)
+        self.assertEqual(m["wret_1d"], 1.0)   # uniform returns -> weighted avg equals it
+
+    def test_nvda_weight_dominates(self):
+        # NVDA (15/108) up big, everything else flat -> weighted 1d > 1%
+        snaps = [_v2_snap(r["ticker"], chg=(10.0 if r["ticker"] == "NVDA" else 0.0))
+                 for r in AI_BASKET]
+        m = compute_momentum(snaps)
+        self.assertAlmostEqual(m["wret_1d"], 10.0 * 15 / 108, places=2)
+
+    def test_rs_spread_maps_5pts_per_pct(self):
+        rs = compute_rs_vs_qqq(_v2_basket(chg20=10.0), qqq_chg_20d=6.0)
+        self.assertEqual(rs["spread_pct"], 4.0)
+        self.assertEqual(rs["score"], 70.0)
+        self.assertIsNone(compute_rs_vs_qqq(_v2_basket(), None)["score"])
+
+
+class TestVolumeMacroNews(unittest.TestCase):
+    def test_up_on_volume_scores_high_down_scores_low(self):
+        up = compute_volume_participation(_v2_basket(chg=2.0, vr=2.0))
+        down = compute_volume_participation(_v2_basket(chg=-2.0, vr=2.0))
+        self.assertEqual(up["score"], 100)
+        self.assertEqual(down["score"], 0)
+
+    def test_macro_calm_tape_scores_high_stress_low(self):
+        calm = compute_macro_component(
+            {"yield": {"change_bps": -6}, "dxy": {"change_pct": -0.4},
+             "soxx": {"above_20ema": True}},
+            {"vix": {"level": 13.0}, "qqq": {"day_chg_pct": 1.0}, "spy": {"day_chg_pct": 0.6}})
+        stress = compute_macro_component(
+            {"yield": {"change_bps": 12}, "dxy": {"change_pct": 0.9},
+             "soxx": {"above_20ema": False}},
+            {"vix": {"level": 30.0}, "qqq": {"day_chg_pct": -2.0}, "spy": {"day_chg_pct": -1.5}})
+        self.assertGreater(calm["score"], 65)
+        self.assertLess(stress["score"], 30)
+
+    def test_news_earnings_uncertainty_drag(self):
+        clear = compute_news_earnings({"NVDA": 30, "AMD": 45})
+        soon = compute_news_earnings({"NVDA": 2, "AMD": 4, "MSFT": 1})
+        self.assertEqual(clear["score"], 75)
+        self.assertEqual(soon["score"], 30)      # 75 - 3*15
+        self.assertIsNone(compute_news_earnings(None)["score"])
+
+
+class TestLeadership(unittest.TestCase):
+    def test_groups_sorted_strongest_first(self):
+        snaps = [_v2_snap(r["ticker"],
+                          chg=(2.0 if r["sector"] == "Power" else 0.5))
+                 for r in AI_BASKET]
+        lead = compute_leadership(snaps)
+        self.assertEqual(lead[0]["sector"], "Power")
+        self.assertEqual(len(lead), 4)
+
+    def test_leading_group_warning_on_5d_rollover(self):
+        snaps = [{"ticker": "SMCI", "day_chg_pct": -1.0, "chg_5d_pct": -4.0},
+                 {"ticker": "DELL", "day_chg_pct": -0.5, "chg_5d_pct": -3.0}]
+        groups = compute_leading_groups(snaps)
+        hw = next(g for g in groups if g["group"] == "AI Hardware")
+        self.assertTrue(hw["warning"])
+
+
+class TestSentimentV2(unittest.TestCase):
+    def _comp(self, score):
+        return {"score": score, "drivers": []}
+
+    def test_weights_apply(self):
+        s = compute_ai_sentiment_v2(self._comp(100), self._comp(0), self._comp(0),
+                                    self._comp(0), self._comp(0), self._comp(0))
+        self.assertEqual(s["score"], 40)         # momentum alone = 40% weight
+
+    def test_missing_component_contributes_neutral_50(self):
+        s = compute_ai_sentiment_v2(self._comp(None), self._comp(80), self._comp(80),
+                                    self._comp(80), self._comp(80), self._comp(80))
+        self.assertIn("momentum", s["missing"])
+        self.assertEqual(s["components"]["momentum"], 50)
+
+    def test_ai_specific_rotation_penalty(self):
+        args = [self._comp(60)] * 6
+        base = compute_ai_sentiment_v2(*args)
+        hit = compute_ai_sentiment_v2(*args, tier_statuses=[{"all_red": True}],
+                                      market_flat=True)
+        self.assertEqual(base["score"] - hit["score"], 15)
+        self.assertTrue(hit["ai_specific_rotation"])
 
 
 if __name__ == "__main__":

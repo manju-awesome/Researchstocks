@@ -64,6 +64,9 @@ RESEND_API_KEY    = os.environ.get("RESEND_API_KEY", "")
 EMAIL_TO          = os.environ.get("ALERT_EMAIL_TO",   "you@example.com")
 RESEND_FROM_EMAIL = os.environ.get("ALERT_EMAIL_FROM", "alerts@yourdomain.com")
 
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
+
 try:
     import resend as resend_sdk
     HAVE_RESEND_SDK = True
@@ -1219,6 +1222,56 @@ def send_resend_email(subject: str, text_body: str, html_body: str,
     except Exception as e:
         log.error("Email send failed: %s", e)
     return False
+
+
+TELEGRAM_MSG_LIMIT = 4096  # hard cap enforced by the Bot API
+
+
+def _chunk_for_telegram(text: str, limit: int = TELEGRAM_MSG_LIMIT) -> list[str]:
+    """Splits on line boundaries so a long digest doesn't get truncated
+    mid-alert by Telegram's per-message character cap."""
+    if len(text) <= limit:
+        return [text]
+    chunks, current, length = [], [], 0
+    for line in text.split("\n"):
+        if current and length + len(line) + 1 > limit:
+            chunks.append("\n".join(current))
+            current, length = [], 0
+        current.append(line)
+        length += len(line) + 1
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
+
+
+def send_telegram_message(text: str) -> bool:
+    """Low-level Telegram send via the Bot API — the one Telegram
+    integration in the app. core/alerts.py's CRITICAL/HIGH digest calls
+    this alongside send_resend_email. Returns True only if every chunk
+    sends without error (a message over TELEGRAM_MSG_LIMIT is split first)."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        log.error("Missing TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID — skipping Telegram push")
+        return False
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    ok = True
+    for chunk in _chunk_for_telegram(text):
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": chunk,
+                  "parse_mode": "HTML", "disable_web_page_preview": True}
+        req = urllib.request.Request(
+            url, data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                log.info("Telegram message sent (status %s)", resp.status)
+        except urllib.error.HTTPError as e:
+            log.error("Telegram error %s: %s", e.code, e.read().decode("utf-8", errors="replace"))
+            ok = False
+        except Exception as e:
+            log.error("Telegram send failed: %s", e)
+            ok = False
+    return ok
 
 
 def email_movers(rows: list[dict], context: dict | None = None) -> None:

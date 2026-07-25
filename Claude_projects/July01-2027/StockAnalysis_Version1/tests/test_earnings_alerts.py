@@ -45,11 +45,13 @@ class ScanEarningsTestCase(unittest.TestCase):
     def setUp(self):
         self._orig_state = alerts.ALERTS_STATE_PATH
         self._orig_log = alerts.ALERTS_LOG_PATH
+        self._orig_watchlists = alerts.WATCHLISTS_PATH
         self._orig_send = alerts.send_alert_emails
         self._orig_market_cap = ea._market_cap
         tmp_dir = Path(tempfile.mkdtemp())
         alerts.ALERTS_STATE_PATH = tmp_dir / "alerts_state.json"
         alerts.ALERTS_LOG_PATH = tmp_dir / "alerts_log.json"
+        alerts.WATCHLISTS_PATH = tmp_dir / "watchlists.json"
         alerts.send_alert_emails = lambda alerts_list: False
 
         import stockanalysis.core.earnings_sentiment as es
@@ -61,6 +63,7 @@ class ScanEarningsTestCase(unittest.TestCase):
     def tearDown(self):
         alerts.ALERTS_STATE_PATH = self._orig_state
         alerts.ALERTS_LOG_PATH = self._orig_log
+        alerts.WATCHLISTS_PATH = self._orig_watchlists
         alerts.send_alert_emails = self._orig_send
         ea._market_cap = self._orig_market_cap
         self._es.fetch_earnings_history = self._orig_hist

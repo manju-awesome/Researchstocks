@@ -6,3 +6,4 @@ schedule
 resend
 python-dotenv
 pytest
+anthropic

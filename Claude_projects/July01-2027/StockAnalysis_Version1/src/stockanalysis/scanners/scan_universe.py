@@ -604,6 +604,18 @@ def main(tickers: list, progress_cb=None, sector_focus: str = "auto") -> list:
     #    enrich_rows and the full universe for the RS_Rank percentile) ─────────
     attach_strategy_scores(rows)
 
+    # ── High-conviction setup alerts (Put/Call_Score > 8, and A+ setups for
+    #    day/swing/long-term → HIGH, emailed, mirrored into ALERT_TICKERS) —
+    #    every scan checks, so whichever scan finds the setup raises it ──────
+    try:
+        from stockanalysis.core.watchlist_alerts import scan_rows_for_option_alerts
+        option_alerts = scan_rows_for_option_alerts(rows)
+        if option_alerts:
+            log.info("Option-score alerts fired: %s",
+                     ", ".join(f"{a['ticker']} ({a['category']})" for a in option_alerts))
+    except Exception as e:
+        log.warning("option-score alert scan failed: %s", e)
+
     # ── Feedback loop: log A/B signals + day-trade candidates ────────────────
     n_logged = log_signals_from_rows(rows)
     if n_logged:

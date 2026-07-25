@@ -13,6 +13,19 @@
       "port": 8899
     },
     {
+      "name": "workstation-webapp-dev",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "TZ=America/New_York",
+        "PYTHONUNBUFFERED=1",
+        "python3",
+        "July01-2027/StockAnalysis_Version1/src/stockanalysis/webapp/app.py",
+        "--port", "8897",
+        "--no-scheduler"
+      ],
+      "port": 8897
+    },
+    {
       "name": "workstation-dashboard",
       "runtimeExecutable": "python3",
       "runtimeArgs": [

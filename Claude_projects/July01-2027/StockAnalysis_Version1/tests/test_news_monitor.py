@@ -23,10 +23,12 @@ class NewsMonitorTestCase(unittest.TestCase):
     def setUp(self):
         self._orig_state = alerts.ALERTS_STATE_PATH
         self._orig_log = alerts.ALERTS_LOG_PATH
+        self._orig_watchlists = alerts.WATCHLISTS_PATH
         self._orig_send = alerts.send_alert_emails
         tmp_dir = Path(tempfile.mkdtemp())
         alerts.ALERTS_STATE_PATH = tmp_dir / "alerts_state.json"
         alerts.ALERTS_LOG_PATH = tmp_dir / "alerts_log.json"
+        alerts.WATCHLISTS_PATH = tmp_dir / "watchlists.json"
         alerts.send_alert_emails = lambda alerts_list: False
 
         self._orig_fetch = None
@@ -37,6 +39,7 @@ class NewsMonitorTestCase(unittest.TestCase):
     def tearDown(self):
         alerts.ALERTS_STATE_PATH = self._orig_state
         alerts.ALERTS_LOG_PATH = self._orig_log
+        alerts.WATCHLISTS_PATH = self._orig_watchlists
         alerts.send_alert_emails = self._orig_send
         self._research._fetch_ticker_news = self._orig_fetch
 
