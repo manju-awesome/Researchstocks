@@ -42,7 +42,7 @@ this themselves when run directly).
 
 ## Web app pages
 
-`webapp/app.py` serves eight pages (stdlib `http.server`, background jobs as
+`webapp/app.py` serves nine pages (stdlib `http.server`, background jobs as
 daemon threads via `jobstore.py`, page HTML in `pages.py`/`views.py`, job and
 JSON-endpoint logic in `api.py`). Binds `127.0.0.1` only — no auth, don't
 expose it beyond localhost.
@@ -81,7 +81,10 @@ Positions and watchlist from `data/portfolio.csv` (copy
 `data/portfolio_template.csv` to start), joined with the latest scan rows:
 live P&L per position plus rule-based alerts — stop breach, strategy filters
 degrading, earnings inside the blackout window, category flipped to Avoid.
-Add/edit positions from the page via a modal form.
+Add/edit positions from the page via a modal form. Below the holdings table,
+an **Options** card lists open contracts from `data/options_positions.csv`
+(strike/expiry, contracts, premium, P&L, days-to-expiry warnings) — see
+**Broker sync** below.
 
 ### 📓 Journal (`/journal`)
 AI-coached trade journal (`core/trading_journal.py`). Log each trade's plan,
@@ -97,9 +100,67 @@ The alert feed: every active alert from the priority engine (see below), plus
 the latest **Pre-Market Brief** rendered inline. MEDIUM/LOW alerts live here
 only; CRITICAL/HIGH also went out by email when they fired.
 
+### ⚡ Day Trade (`/daytrade`)
+The SPY 0DTE options day-trader — the one section not backed by
+`stockanalysis.*`. See **Day Trade** below.
+
 ### ⚙️ Automation (`/automation`)
 Scheduler status and job history: what ran, when, how long it took, what
 failed — the web view onto `jobstore`'s bounded job history.
+
+---
+
+## Day Trade — `src/spydaytrader/`
+
+An independent second engine sharing this app: a Python translation of the
+`SVMKR_UT_HMA_ORB` TradingView Pine Script (kept at `docs/pine/`) driving a
+human-approved SPY 0DTE options pipeline on Robinhood. It was previously its
+own project on port 8900; it now runs inside the workstation.
+
+**"Independent" is literal.** `spydaytrader.core` imports nothing from
+`stockanalysis.core` and vice versa — the swing scanner and the day-trader
+share this server, the page layout (`spydaytrader/webapp/pages.py` renders
+through `stockanalysis.webapp.views`) and the market-regime scorer, and
+nothing else. In particular they do **not** share state: SPY's proposals and
+journal live under `data/spy/`, because `data/trade_proposals.json` and
+`data/journal_trades.json` already belong to the swing side with incompatible
+schemas (share-based vs. options).
+
+| Piece | What it does |
+|---|---|
+| `core/` | Pure logic: indicators, signal engine, signal dedup, proposal lifecycle, position sizing. No network, no broker. |
+| `daemon/scheduler.py` | Polls SPY every 30s during market hours, runs the signal engine, writes proposals. Runs on a background thread in the webapp (`--no-spy-daemon` to disable), or standalone. |
+| `webapp/pages.py` | The `/daytrade` and `/daytrade/proposals` page bodies. |
+| `scripts/spy_prepare_order.py` | All order arithmetic and disk writes for placement. |
+| `scripts/spy_check_premium_exits.py` | The premium stop/target half of the exit rule. |
+
+### Order placement is deliberately unreachable from here
+
+The daemon and the dashboard can move a proposal to `approved` and no further,
+so a misclick on a web page can never spend money. Reaching `placed` happens
+only in a Claude Code session via the Robinhood MCP tools, with an explicit
+per-order confirmation — see the `spy-place-approved-trade` skill. Don't add an
+auto-place path; the split *is* the safety model.
+
+### Exit rule: two halves, two runtimes
+
+"Whichever comes first" — underlying signal flip, or premium stop/target
+(−35%/+60%). Different data, so different processes:
+
+| Half | Checked by | Data source |
+|---|---|---|
+| UT Bot signal flip | the daemon | yfinance SPY bars |
+| Premium stop/target | `spy-premium-exit-check` scheduled task | Robinhood connector |
+
+The daemon has no broker session and cannot see option premiums, hence the
+split. Both halves only ever write a `pending_review` exit proposal; neither
+closes a position.
+
+> ⚠️ **This is not a hard stop-loss.** The scheduled task only runs while the
+> Claude app is open, so a five-minute polling loop is a monitoring aid, not a
+> guaranteed stop. On a fast 0DTE move the premium can travel far past −35%
+> between checks. For a stop you can rely on, place a broker-side stop order
+> with Robinhood at entry time and treat the task as a notifier on top of it.
 
 ---
 
@@ -191,6 +252,199 @@ watchlists; override with `--focus` / `--no-focus`.
 | `core/call_candidate.py` / `core/put_candidate.py` | Options-buying screens with hard disqualifiers: cheap-call turnaround setups and put-candidate scoring, attached to every scanned row. |
 | `core/market_regime.py` | Classifies the day Bullish / Neutral / Defensive from VIX + index strength + breadth, and scales position-size multipliers per horizon accordingly. |
 
+### How the dashboard's Top-5 scores are decided
+
+Every card in the scanner HTML carries a number badge and a letter grade. This
+section is the full derivation of the three most-asked-about sections —
+**Long-Term**, **Puts**, and **Swing** — because the number on a card does not
+come from the same place for all three.
+
+#### First: there are two different score families
+
+This is the single most common source of confusion when reading the report.
+
+| Family | Range | Computed in | Used by |
+|--------|-------|-------------|---------|
+| **Strategy scores** — `Investment_Score`, `Swing_Score`, `DayTrade_Score` | 0–100, bounded, each with a `*_Pass` flag and a `*_Reason` string | `core/strategy_scores.py` (`score_investment` / `score_swing` / `score_day_trade`) | The **CSV** columns, the Research Library, alerts |
+| **Card ranks** — `day_card_rank`, `swing_card_rank` | unbounded additive (~0–125 in practice), `-999` = not rankable | `core/strategy_scores.py`, bottom section | The **dashboard Top-5 cards** for Day Trade and Swing |
+
+So the badge on a Swing card — the "Score 113" — is **`swing_card_rank`, not
+`Swing_Score`**. They use overlapping inputs but different weights and different
+scales, and a name can rank high on one and middling on the other. The Long-Term
+and Puts cards, by contrast, badge the strategy/candidate score directly:
+
+| Card section | Badge number is | Source |
+|--------------|-----------------|--------|
+| Day Trade | `day_card_rank(row)` | unbounded card rank |
+| Swing Trade | `swing_card_rank(row)` | unbounded card rank |
+| Long-Term | `Investment_Score` | 0–100 strategy score |
+| Calls | `Call_Score` | `core/call_candidate.py` |
+| Puts | `Put_Score` | `core/put_candidate.py` |
+
+#### The entry gate is the kill switch for three of the five sections
+
+`core/metrics.py` step 6 sets `Entry_Gate_Pass` by testing four conditions.
+Any failure records the reason in `Entry_Gate_Reason`:
+
+| Check | Threshold |
+|-------|-----------|
+| Market cap | ≥ $1B |
+| Price | ≥ $5 |
+| ADX(14) | ≥ 15 — skipped entirely when ADX is `None` |
+| Price vs 200MA | not more than 30% below |
+
+An RVOL ≥ 0.6 gate exists in the source but is **currently commented out**
+(`metrics.py:794-797`), so low-volume names are not gated today.
+
+Failing the gate forces `Swing_Score`, `DayTrade_Score`, `day_card_rank`,
+`swing_card_rank`, `_call_score` and `_put_score` to zero or `-999` — those
+sections have no tradeable plan without it. `Investment_Score` deliberately
+**survives** a gate failure: a 6–24 month accumulation does not need a trend
+already in place, so a flat-ADX name can still be a long-term buy.
+
+#### Long-Term scoring (`score_investment`)
+
+Two independent things decide whether a name appears on a Long-Term card.
+
+**1. `Investment_Score`, 0–100 additive.** Eight buckets, best matching tier wins
+within each bucket; missing data simply forfeits that bucket's points:
+
+| Bucket | Points |
+|--------|--------|
+| Leadership — `RS_Rank` | 25 if > 80 · 15 if ≥ 60 · 8 if ≥ 40 |
+| Earnings growth — `EPS_Growth%` | 20 if > 25% · 12 if > 15% · 5 if > 0 |
+| Revenue growth — `Revenue` | 15 if > 20% · 9 if > 10% · 4 if > 0 |
+| Stage — `Above_200MA` | 10 |
+| Cash generation — `FCF_Positive` | 10 |
+| Execution — `EarningsBeat` | 10 |
+| Sponsorship level — `Inst_Own%` ≥ 40 | 5 |
+| Sponsorship trend — `Inst_Own_Chg` > 0 | 5 |
+
+**2. `Investment_Pass` — all six primary filters, hard AND.** `RS_Rank` > 80,
+EPS growth > 25%, revenue growth > 20%, above the 200MA, FCF positive, last
+earnings a beat. `_longterm_score()` returns `-999` for anything without the
+pass flag, so **a high-scoring name that fails one filter never reaches a
+card** — it stays in the CSV for review. That is why the section is titled
+"all filters pass".
+
+*Consequence worth knowing:* the six pass filters are worth exactly 90 of the
+100 points, so every Long-Term card scores **90–100** and only the two 5-point
+sponsorship bonuses move it. Against the grade bands below that means Long-Term
+cards can only ever render **A** (90–94) or **A+** (95+) — the B+/B/C bands are
+unreachable for this section by construction.
+
+**`RS_Rank` is derived, not raw.** The scan's `RS` column is raw 3-month excess
+return vs QQQ in percentage points, so "RS > 80" cannot be applied to it
+directly. `attach_rs_rank()` converts it to a 0–99 **percentile within the
+scanned universe**. This makes `RS_Rank` relative to what you scanned: the same
+ticker gets a different rank in an S&P 500 run than in a 30-name watchlist run.
+Below 20 tickers a percentile is noise, so a fixed absolute mapping of excess
+return is used instead (`_rs_rank_fallback`).
+
+**`LT_Entry_Timing`** is attached alongside and answers a different question —
+not "is this worth owning" but "is now a good time to start" (below 200MA / base
+forming / extended +50% vs 200MA → tranches only). It is advisory text, never a
+filter. **`Buy_Zone_Score`** (`core/buy_zone.py`) is a third, separate axis: an
+8-factor weighted blend (30% fundamental quality, 20% technical trend, 15%
+valuation, 10% pullback depth, 10% volume accumulation, 5% each institutional /
+RS / catalysts) that renormalizes over whatever factors have data and returns
+`None` below 50% weight coverage rather than guessing.
+
+#### Put options scoring (`compute_put_candidate`)
+
+Puts are scored as an **exhaustion/fade screen**, not a downtrend screen — it
+looks for strong names running out of buyers, not names already broken.
+
+**Hard disqualifiers run first.** Either one forces `Put_Score = 0`,
+`Put_Candidate = False` and a `DISQUALIFIED:` reason, regardless of any signal:
+
+- `ADX > 38` **and** `RS > 50` — trend too strong; overbought can persist for weeks
+- `RS > 80` — institutional accumulation, do not fade strength
+
+**Then five signals accumulate a small integer score:**
+
+| Signal | Points |
+|--------|--------|
+| Near 52W high set within 10 days (`Dist_52W_High%` ≥ −8) — parabolic | +2 |
+| Price > 5% above 8EMA — extended | +2 |
+| Price 3–5% above 8EMA | +1 |
+| `RSI_14` > 72 — overbought | +3 |
+| `RSI_14` 68–72 — stretched | +2 |
+| `RVOL` < 0.7 — buyers exhausted (the strongest single signal) | +3 |
+| `RVOL` 0.7–0.9 — volume fading | +2 |
+| `Vol_vs_20D` < 0.9 — below 20-day average (only if RVOL ≥ 0.9) | +1 |
+| `BB_PctB` > 1.0 — closed above the upper band | +2 |
+| `BB_PctB` 0.85–1.0 — approaching upper band | +1 |
+| `ADX_14` > 35 — strong trend, soft penalty | **−1** |
+
+`Put_Candidate` is `True` at **score ≥ 5**. `_put_score()` returns `-1.0` for
+non-candidates and the Top-5 filter keeps only scores > 0, so **only confirmed
+candidates ever render a Put card**. Practical range on a card is 5–12.
+
+*Quirk worth knowing:* put candidates must also pass the same long-biased
+`Entry_Gate_Pass`. A stock more than 30% below its 200MA, or with ADX < 15,
+is gate-failed and can never surface as a put — even though those are exactly
+the conditions a bearish screen might want. Combined with the ADX > 38
+disqualifier and the ADX > 35 penalty, the workable band is roughly ADX 15–35.
+This is intentional for a fade-the-exhaustion strategy but it means **this
+screen will not find you puts in a bear market**.
+
+#### Swing trade scoring
+
+The dashboard card ranks by **`swing_card_rank`** — unbounded, `-999` when the
+entry gate failed or the category is `Avoid`:
+
+| Component | Points |
+|-----------|--------|
+| Category | Momentum-Pullback 30 · VCP Setup 28 · Momentum 20 · Turnaround 10 |
+| `RS` (raw excess vs QQQ) | ≥50 → 20 · ≥20 → 14 · ≥0 → 8 · ≥−10 → 2 · else **−8** |
+| Bollinger coil `BB_PctB` | ≤0.1 → 18 · ≤0.2 → 14 · ≤0.3 → 10 · ≤0.4 → 6 |
+| `ATR Shrinking` | 12 |
+| Pullback volume `Pullback_Vol_Ratio` | ≤0.6 → 10 · ≤0.8 → 7 · ≤1.0 → 4 |
+| `Above_200MA` | 8 |
+| `VolumeDryingUp` | 6 |
+| `RSI_14` | 30–50 → 8 (oversold bouncing) · 50–65 → 5 (healthy) |
+| Near 50MA `Price_vs_50MA%` | −5..+5 → 8 · −15..−5 → 4 |
+| `EarningsBeat` | 5 |
+| ATR penalty | > 12% → **−8** · > 8% → **−3** |
+
+Note this rewards *contraction*, not strength: the best swing card is a quality
+name coiling on drying volume, not the one making the biggest move.
+
+The separate 0–100 **`Swing_Score`** in the CSV uses different weights — setup
+category 20, R:R to T2 20 (`RR_T2` ≥ 3), ATR shrinking 10, RSI 40–60 15,
+`BB_PctB` 15, pullback volume 10, plus 5 each for above-200MA and `RS_Rank` ≥ 60
+— and its `Swing_Pass` flag is a hard AND of five primary filters: setup is
+Momentum-Pullback or VCP, `RR_T2` ≥ 3, ATR shrinking, RSI in 40–60, `BB_%B` < 0.4.
+Unlike Long-Term, `Swing_Pass` is **not** required to render a Swing card.
+
+#### Grade bands
+
+`_score_to_grade()` in `reporting/dashboard.py` maps the badge number to a
+letter. Because the scales differ per section, so do the cutoffs:
+
+| Section | A+ | A | B+ | B | C |
+|---------|----|---|----|---|---|
+| Day Trade | 80 | 65 | 50 | 35 | 20 |
+| Swing Trade | 85 | 70 | 55 | 40 | 20 |
+| Long-Term | 95 | 85 | 75 | 65 | 40 |
+| Calls | 18 | 14 | 10 | 6 | 1 |
+| Puts | 8 | 6 | 4 | 2 | 1 |
+
+Anything below the C cutoff grades D. Top-5 selection additionally requires
+score > 20 for Day and Swing, and > 0 for Long-Term, Calls and Puts — so a
+section renders fewer than five cards, or none, when the tape does not offer
+them. That is the intended behaviour, not a bug.
+
+#### What the regime does — and does not — change
+
+`core/market_regime.py` classifies the day and sets per-horizon multipliers
+(Bullish 1.0/1.0/1.0, Neutral day 0.5 / swing 0.75 / longterm 1.0, Defensive
+0.25/0.5/0.5). These scale the **position size** on the R:R·SIZE line of each
+card, never the score or the grade. Options sections ride the swing horizon.
+When no regime data is available the source is `"none"` and multipliers stay at
+1.0 — an unknown tape must not silently shrink your sizing.
+
 ### Market context — `scanners/market_movers.py`
 Top-10 pre-market / live / after-hours movers with news-catalyst
 classification (regex over Yahoo Finance headlines); VIX with interpretation
@@ -261,13 +515,61 @@ filter (only A/A+ signals email), and CLI flags (`--run-now`, `--force`,
 | File | Contents |
 |------|----------|
 | `data/watchlists.json` | Named, user-curated ticker lists (usable as scan universes) |
-| `data/portfolio.csv` | Positions + watch rows (`portfolio_template.csv` = starter) |
+| `data/portfolio.csv` | Equity positions + watch rows (`portfolio_template.csv` = starter) |
+| `data/options_positions.csv` | Open option contracts (written by the broker sync) |
+| `data/backups/` | Timestamped CSV backups taken before every broker sync |
 | `data/alerts_state.json` / `alerts_log.json` | Active alert set / append-only history |
 | `data/journal_trades.json` | Trade journal records |
 | `data/premarket_brief.json` | Latest generated brief |
 | `data/econ_calendar_cache.json` | Cached economic calendar (survives restarts) |
 | `data/cache/` | Backtest daily-bar cache |
 | `data/output/` | Scan CSVs, dashboards, research pages, signal logs (gitignored) |
+
+---
+
+## Broker sync — `core/broker_sync.py`
+
+Pulls real holdings from Robinhood into `data/portfolio.csv` and
+`data/options_positions.csv`. Driven by the **`get-portfolio` skill**, which
+fetches through the Robinhood MCP tools and pipes the payloads into
+`scripts/sync_broker_positions.py`. Read-only against the broker — this path
+cannot place, modify or cancel an order.
+
+```bash
+python3 scripts/sync_broker_positions.py show        # current local state
+python3 scripts/sync_broker_positions.py sync --dry-run \
+    --equities @equities.json --options @options.json \
+    --premiums '{"SPY260725C00601000": 1.23}'
+```
+
+**The merge is deliberately conservative**, because `portfolio.csv` is
+hand-maintained state (strategies, stops, targets, notes, and the
+`Target_Weight`/`Theme` columns behind the allocation plan) and a broker knows
+none of it:
+
+- writes **only** `Shares` and `Avg_Cost`; never touches Strategy, Stop,
+  Target, Notes, Entry_Date or any hand-added column;
+- **never deletes a row.** A holding the broker stops reporting is zeroed and
+  marked `closed at broker`, keeping its notes as a watchlist row;
+- **never touches rows it doesn't own.** Ownership is tracked in a `Source`
+  column — without it the sync couldn't tell "sold it" from "it's on my
+  watchlist and I never held it", and would zero out watchlist rows every run.
+
+Bookkeeping columns (`Source`, `Last_Synced`, `Account`) ride in the `_extra`
+dict rather than `POSITION_FIELDS`, so the webapp's Edit Position form —
+which doesn't know about them — round-trips them instead of blanking them.
+
+Every write is preceded by a timestamped backup in `data/backups/`. New rows
+default to `Strategy=longterm` and are listed under `needs_strategy` in the
+report, as is any watchlist row that just became a real holding — Strategy
+selects which alerts fire on real money, so the choice gets reviewed rather
+than silently inherited.
+
+Options live in their own file because `portfolio.csv`'s contract is "one row
+= one equity ticker": `build_portfolio_view()` joins to the day's scan by
+ticker and values rows as `price × Shares`, which for an option means no scan
+match, no ×100 multiplier and no expiry — a silently wrong number in
+`portfolio_totals()`. See `reporting/options_positions.py`.
 
 ---
 

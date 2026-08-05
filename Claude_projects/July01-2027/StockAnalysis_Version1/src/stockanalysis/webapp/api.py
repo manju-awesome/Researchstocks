@@ -18,6 +18,24 @@ OUTPUT_DIR   = PROJECT_ROOT / "data" / "output"
 
 BUILTIN_UNIVERSES = ("daytrade", "watchlist", "longterm", "dividend", "sp500")
 
+# Option value meaning "every list in watchlists.json" — lets a single-select
+# universe picker still express the sweep-everything default.
+ALL_UNIVERSES_SENTINEL = "__all__"
+
+
+def expand_all(names: list[str]) -> list[str]:
+    """ALL_UNIVERSES_SENTINEL -> every non-empty list in watchlists.json, so
+    one picker entry can mean "everything I track" without the user
+    Ctrl-clicking 30 options. Order-preserving and deduped; anything already
+    picked alongside ALL is kept, not duplicated. A no-op when the sentinel
+    isn't present."""
+    if ALL_UNIVERSES_SENTINEL not in names:
+        return list(names)
+    from stockanalysis.reporting.research import load_watchlists
+    rest = [n for n in names if n != ALL_UNIVERSES_SENTINEL]
+    every = [n for n, t in load_watchlists().items() if t]
+    return list(dict.fromkeys(every + rest))
+
 
 def available_universes() -> list[str]:
     """Built-in universes plus every user-curated watchlist (data/watchlists.json)
@@ -170,6 +188,27 @@ def job_ta_analysis(ticker: str, progress: jobstore.Progress) -> str:
             f" · probability {result['probability_score']}%")
 
 
+def job_portfolio_risk(progress: jobstore.Progress) -> str:
+    """Institutional-style risk report over portfolio.csv + options_positions.csv.
+
+    A job rather than an inline request because it makes one batched history
+    download plus a .info call per holding — roughly a minute for a 25-name
+    book, which is well past what a page render should block on. The result
+    is cached to data/output/portfolio_risk.json by the analyzer itself, so
+    the Portfolio page renders the last run immediately and this job only has
+    to refresh it.
+    """
+    from stockanalysis.core.portfolio_risk_scores import analyze_portfolio
+    report = analyze_portfolio(
+        progress_cb=lambda stage, done=None, total=None: progress.stage(stage, done, total))
+    health, risk = report["health"], report["risk"]
+    violations = report["violations"]
+    critical = sum(1 for v in violations if v["severity"] == "critical")
+    return (f'health {health["light"]} {health["score"]:.0f}/100 ({health["band"]}) · '
+            f'risk {risk["score"]:.0f}/100 {risk["band"]} · '
+            f"{len(violations)} limit breaches ({critical} critical)")
+
+
 def job_journal_review(trade_id: str, progress: jobstore.Progress) -> str:
     """Send one journal trade to the AI coach (core.trading_journal) and
     write its feedback back into data/journal_trades.json. Runs as a job
@@ -226,6 +265,88 @@ def job_watchlist_scan(progress: jobstore.Progress) -> str:
     progress.stage("done")
     return (f"{len(new_alerts)} new alert(s) from {len(rows)} ticker(s); "
            f"research library refreshed for {len(written)}")
+
+
+def job_52_week(universes: list[str], near_high: float, near_low: float,
+                progress: jobstore.Progress) -> str:
+    """Refresh the 52_week_high / 52_week_low watchlists from a source
+    universe. Deliberately does NOT run the scan pipeline itself: it only
+    rebuilds the two lists, which then appear in the Scanner's universe
+    panel like any other watchlist. Ticking 52_week_high and running a scan
+    puts those names through get_metrics(), which already calls
+    compute_put_candidate() — so Put_Score/Put_Candidate/Put_Reason land in
+    the scan CSV for exactly the fresh-high names this screen found."""
+    from stockanalysis.core.fifty_two_week import scan_52_week
+
+    res = scan_52_week(
+        universes=universes, near_high_pct=near_high, near_low_pct=near_low,
+        progress_cb=lambda stage, done, total: progress.stage(stage, done, total))
+    progress.stage("done")
+    new_hi = sum(1 for r in res["high_rows"] if r["New_High"])
+    new_lo = sum(1 for r in res["low_rows"] if r["New_Low"])
+    skipped = len(res["skipped"])
+    return (f"{len(res['high'])} at/near 52W high ({new_hi} new today), "
+            f"{len(res['low'])} at/near 52W low ({new_lo} new today) "
+            f"from {res['scanned']} scanned"
+            + (f", {skipped} skipped (no data / <200 bars)" if skipped else "")
+            + f" — as-of {res['asof']}. Lists 52_week_high / 52_week_low "
+              f"updated; tick one in Run a Scan to grade it.")
+
+
+def job_earnings_today(universes: list[str] | None, days_ahead: int,
+                       progress: jobstore.Progress) -> str:
+    """Rebuild the earnings_today watchlist from every list in
+    watchlists.json. Like job_52_week this only builds the list — ticking it
+    in Run a Scan is what puts those names through the normal pipeline."""
+    from stockanalysis.core.earnings_today import scan_earnings_today
+
+    res = scan_earnings_today(
+        universes=universes, days_ahead=days_ahead,
+        progress_cb=lambda stage, done, total: progress.stage(stage, done, total))
+    progress.stage("done")
+    n_today = sum(1 for r in res["rows"] if r["Is_Today"])
+    window = ("today" if not res["days_ahead"]
+              else f"today +{res['days_ahead']}d ({n_today} today)")
+    no_date = len(res["no_date"])
+    scope = ("all watchlists" if universes is None else " + ".join(universes))
+    return (f"{len(res['tickers'])} ticker(s) reporting {window} "
+            f"from {res['scanned']} scanned in {scope}"
+            + (f", {no_date} with no earnings date on file (ETFs, etc.)"
+               if no_date else "")
+            + f" — as-of {res['today']}. List earnings_today updated; "
+              f"tick it in Run a Scan to grade them.")
+
+
+def library_tickers() -> list[str]:
+    """Every ticker with a research page — the index is the library, so this
+    is what "all tickers in the research library" means."""
+    from stockanalysis.reporting.research import load_research_index
+    return sorted(load_research_index(OUTPUT_DIR))
+
+
+def job_research_session(session: str, progress: jobstore.Progress) -> str:
+    """Refresh every research page in the library, labelled by session.
+
+    Pre- and post-market runs are the same pipeline on purpose: the scan
+    reads whatever quotes are live when it runs, and that is precisely what
+    makes one a pre-market view and the other a post-close view. Nothing is
+    faked about the session — the label records when it ran, and each page's
+    updated_at carries the timestamp.
+    """
+    from datetime import datetime
+    from stockanalysis.reporting.research import refresh_research
+
+    tickers = library_tickers()
+    if not tickers:
+        raise ValueError("no research pages yet — run a scan first")
+    progress.stage(f"{session}: refreshing {len(tickers)} research page(s)",
+                   0, len(tickers))
+    written = refresh_research(
+        tickers, output_dir=OUTPUT_DIR, charts=False, fetch_news=False,
+        progress_cb=lambda stage, done, total: progress.stage(stage, done, total))
+    progress.stage("done")
+    return (f"{session} scan: refreshed {len(written)} of {len(tickers)} "
+            f"research page(s) at {datetime.now():%H:%M}")
 
 
 def job_news_scan(progress: jobstore.Progress) -> str:
@@ -355,7 +476,7 @@ def dispatch_run(action: str, form: dict) -> str:
         from stockanalysis.reporting.research import load_watchlists
         lists = load_watchlists()
         tickers, seen = [], set()
-        for name in names:
+        for name in expand_all(names):
             for t in lists.get(name) or []:
                 if t not in seen:
                     seen.add(t)
@@ -381,7 +502,7 @@ def dispatch_run(action: str, form: dict) -> str:
                               lambda p: job_research(tickers, p))
 
     if action == "scan":
-        universes = form.get("universe") or []
+        universes = expand_all(form.get("universe") or [])
         raw = first("tickers")
         extra = [t.strip().upper() for t in raw.replace(",", " ").split() if t.strip()]
         if not universes and not extra:
@@ -397,6 +518,70 @@ def dispatch_run(action: str, form: dict) -> str:
         return jobstore.start("scan", label,
                               lambda p: job_scan(universes, include_pf, p,
                                                  extra_tickers=extra))
+
+    if action == "scan_52_week":
+        universes = form.get("universe_52w") or []
+        if not universes:
+            from stockanalysis.core.fifty_two_week import DEFAULT_SOURCE
+            universes = list(DEFAULT_SOURCE)
+        unknown = [u for u in universes if u not in available_universes()]
+        if unknown:
+            return f"unknown universe(s): {', '.join(unknown)}"
+
+        def _pct(key: str, default: float) -> float | None:
+            """Blank -> default; anything unparseable or negative -> None so
+            the caller can turn it into a user-facing error."""
+            raw = first(key, "").strip()
+            if not raw:
+                return default
+            try:
+                val = float(raw)
+            except ValueError:
+                return None
+            return val if val >= 0 else None
+
+        near_high = _pct("near_high_pct", 2.0)
+        near_low = _pct("near_low_pct", 2.0)
+        if near_high is None or near_low is None:
+            return "thresholds must be non-negative numbers (e.g. 2 for 2%)"
+        return jobstore.start(
+            "scan_52_week", f"52-week high/low screen: {' + '.join(universes)}",
+            lambda p: job_52_week(universes, near_high, near_low, p))
+
+    if action == "research_session":
+        session = first("session", "premarket").strip().lower()
+        if session not in ("premarket", "postmarket"):
+            return "session must be 'premarket' or 'postmarket'"
+        # one jobstore kind for both, so the two can't run concurrently over
+        # the same pages and race each other's index writes
+        return jobstore.start("research_session",
+                              f"{session} scan: all research pages",
+                              lambda p: job_research_session(session, p))
+
+    if action == "scan_earnings_today":
+        raw_days = first("days_ahead", "0").strip() or "0"
+        try:
+            days_ahead = int(raw_days)
+        except ValueError:
+            return "days ahead must be a whole number (0 = today only)"
+        if not 0 <= days_ahead <= 14:
+            return "days ahead must be between 0 and 14"
+
+        # ALL_UNIVERSES_SENTINEL keeps "everything I track" reachable from a
+        # single-select; scan_earnings_today() reads None as "every list".
+        picked = [u for u in (form.get("universe_earn") or [])
+                  if u and u != ALL_UNIVERSES_SENTINEL]
+        universes = picked or None
+        unknown = [u for u in picked if u not in available_universes()]
+        if unknown:
+            return f"unknown universe(s): {', '.join(unknown)}"
+
+        scope = " + ".join(picked) if picked else "all watchlists"
+        label = ("earnings today" if not days_ahead
+                 else f"earnings today +{days_ahead}d")
+        return jobstore.start(
+            "scan_earnings_today", f"{label} screen: {scope}",
+            lambda p: job_earnings_today(universes, days_ahead, p))
 
     if action == "news":
         watchlists = form.get("watchlist") or []
@@ -430,6 +615,10 @@ def dispatch_run(action: str, form: dict) -> str:
             return "no ticker given"
         return jobstore.start("ta", f"AI technicals: {ticker}",
                               lambda p: job_ta_analysis(ticker, p))
+
+    if action == "portfolio_risk":
+        return jobstore.start("portfolio_risk", "portfolio risk analysis",
+                              lambda p: job_portfolio_risk(p))
 
     if action == "journal_review":
         trade_id = first("trade_id")
@@ -543,6 +732,236 @@ def search_tickers(query: str, limit: int = 10) -> list[dict]:
 def watchlist_toggle(name: str, ticker: str) -> dict:
     from stockanalysis.reporting.research import toggle_watchlist
     return toggle_watchlist(name, ticker)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCREENER — query the research library through core.screener
+# ─────────────────────────────────────────────────────────────────────────────
+# The universe is the research index (every ticker with a research page),
+# built once per request. That's ~560 rows through a handful of pure
+# functions — a few tens of ms, measured — so there's no cache to invalidate
+# and a screen always reflects the library as it stands right now. If a scan
+# is running while you screen, you get whatever it has already written,
+# which is the same guarantee every other page in this app gives.
+
+SAVED_SCREENS_PATH = PROJECT_ROOT / "data" / "saved_screens.json"
+
+
+def _screen_universe():
+    """The library as the screener sees it: research_index.json with
+    core.research_snapshot filling any field the index is missing.
+
+    The snapshot is what makes the screener robust to the index being
+    rewritten by a process running older code — see research_snapshot.py.
+    Live index values still win field by field, so this only ever adds
+    coverage, never staleness on top of fresh data.
+    """
+    from stockanalysis.core import research_snapshot
+    from stockanalysis.core.screener import build_universe
+    from stockanalysis.reporting.research import (
+        load_research_index, load_watchlists)
+    index = load_research_index(OUTPUT_DIR)
+    try:
+        entries = research_snapshot.merged(
+            index, research_snapshot.load(OUTPUT_DIR))
+    except Exception as e:
+        print(f"[Screener] snapshot unavailable, using index alone ({e})")
+        entries = list(index.values())
+    try:
+        watch = {t for names in load_watchlists().values() for t in (names or [])}
+    except Exception:
+        watch = set()
+    return build_universe(entries, watchlist_tickers=watch)
+
+
+def screen(payload: dict) -> dict:
+    """Run a screen. payload: {rules, weights, composite, sort, limit,
+    preset, query}. Returns JSON-safe results for the Screener page."""
+    from stockanalysis.core import screener as S
+
+    rows = _screen_universe()
+
+    if payload.get("preset"):
+        group = S.preset_group(str(payload["preset"])) or S.Group("AND", [])
+    elif payload.get("query"):
+        group = S.Group("AND", S.parse_query(str(payload["query"])))
+    else:
+        group = S.group_from_json(payload.get("rules"))
+
+    weights = {str(k): float(v) for k, v in (payload.get("weights") or {}).items()}
+    composite = {str(k): float(v)
+                 for k, v in (payload.get("composite") or {}).items()}
+    sort = str(payload.get("sort") or "match")
+    try:
+        limit = int(payload.get("limit") or 100)
+    except (TypeError, ValueError):
+        limit = 100
+
+    res = S.screen(rows, group, weights=weights or None,
+                   composite_weights=composite or None, sort=sort, limit=limit)
+
+    return {
+        "ok": True,
+        "universe": res.total,
+        "count": res.summary["count"],
+        "shown": len(res.matches),
+        "summary": res.summary,
+        "results": [_screen_row(m) for m in res.matches],
+        # Pills echo back the parsed rules so a natural-language search
+        # becomes editable pills rather than an opaque query string.
+        "rules": S.group_to_json(group),
+        "pills": [{"text": S.describe(c), "field": c.field}
+                  for c in S._walk(group)],
+        "stats": res.stats,
+        "missing": [{"field": k, "label": _field_label(k), "rows": v}
+                    for k, v in sorted(res.missing_counts.items(),
+                                       key=lambda kv: -kv[1]) if v],
+        "refine": S.refine_suggestions(group),
+    }
+
+
+def _field_label(key: str) -> str:
+    from stockanalysis.core.screener import FIELD_BY_KEY
+    spec = FIELD_BY_KEY.get(key)
+    return spec.label if spec else key
+
+
+# Columns every result card shows, plus whatever the screen filtered on.
+_SCREEN_KEYS = (
+    "ticker", "name", "sector", "industry", "price", "quality", "quality_label",
+    "health", "health_label", "moat", "moat_total", "moat_label", "rs_rank",
+    "eps_growth", "forward_pe", "inst_own", "market_cap", "category", "grade",
+    "conviction", "conv_stars", "conv_action", "above_200ma", "in_buy_zone",
+    "buy_zone_label", "buy_zone_score", "abs_vs_8ema", "pct_vs_8ema",
+    "pct_vs_50ma", "pct_vs_200ma", "breakout_probability", "swing_score",
+    "daytrade_score", "rr", "dist_52w_high", "rvol", "atr_pct", "rsi",
+    "days_to_earnings", "earnings_soon", "canslim", "updated_at",
+    "recovered", "data_as_of",
+    "match_score", "composite", "why", "matched_fields",
+)
+
+
+def _screen_row(m: dict) -> dict:
+    return {k: m.get(k) for k in _SCREEN_KEYS}
+
+
+def screener_meta() -> dict:
+    """Field registry + presets + saved searches — everything the page needs
+    to build its pickers without hardcoding a second copy of the registry."""
+    from stockanalysis.core import screener as S
+    return {
+        "fields": [{"key": f.key, "label": f.label, "group": f.group,
+                    "kind": f.kind, "unit": f.unit, "hint": f.hint,
+                    "values": list(f.values), "decimals": f.decimals,
+                    "direction": f.direction,
+                    "ops": list(S.OPS_FOR_KIND.get(f.kind, ("gte",)))}
+                   for f in S.FIELDS],
+        "groups": list(S.FIELD_GROUPS),
+        "operators": S.OPERATORS,
+        "presets": [{"key": p["key"], "icon": p["icon"], "name": p["name"],
+                     "desc": p["desc"],
+                     "conditions": [S.conditions_to_json(c)
+                                    for c in p["conditions"]],
+                     "pills": [S.describe(c) for c in p["conditions"]]}
+                    for p in S.PRESETS],
+        "enums": _enum_values(),
+        "composite_defaults": S.COMPOSITE_DEFAULTS,
+        "saved": load_saved_screens(),
+        "universe": len(_screen_universe()),
+    }
+
+
+def _enum_values() -> dict:
+    """Real values present in the library for the free-form enums (sector,
+    industry), so the picker offers what actually exists instead of a
+    hardcoded list that drifts."""
+    from stockanalysis.core.screener import FIELDS, ENUM
+    rows = _screen_universe()
+    out = {}
+    for f in FIELDS:
+        if f.kind != ENUM:
+            continue
+        if f.values:
+            out[f.key] = list(f.values)
+        else:
+            out[f.key] = sorted({str(r.get(f.src)) for r in rows
+                                 if r.get(f.src)})
+    return out
+
+
+def screener_suggest(prefix: str) -> list[dict]:
+    from stockanalysis.core.screener import suggest
+    return suggest(prefix)
+
+
+# ── saved searches ───────────────────────────────────────────────────────────
+
+def load_saved_screens() -> list[dict]:
+    import json
+    if not SAVED_SCREENS_PATH.exists():
+        return list(_STARTER_SCREENS)
+    try:
+        data = json.loads(SAVED_SCREENS_PATH.read_text())
+    except (ValueError, OSError):
+        return list(_STARTER_SCREENS)
+    return data if isinstance(data, list) else list(_STARTER_SCREENS)
+
+
+def _write_saved_screens(screens: list[dict]) -> None:
+    import json
+    SAVED_SCREENS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SAVED_SCREENS_PATH.write_text(json.dumps(screens, indent=2))
+
+
+def save_screen(payload: dict) -> dict:
+    """Create or overwrite a saved search by name."""
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        return {"ok": False, "message": "Give the search a name"}
+    rules = payload.get("rules") or {}
+    screens = [s for s in load_saved_screens() if s.get("name") != name]
+    screens.append({"name": name, "icon": payload.get("icon") or "⭐",
+                    "rules": rules, "sort": payload.get("sort") or "match"})
+    screens.sort(key=lambda s: s.get("name") or "")
+    _write_saved_screens(screens)
+    return {"ok": True, "message": f"Saved “{name}”", "saved": screens}
+
+
+def delete_screen(name: str) -> dict:
+    screens = load_saved_screens()
+    kept = [s for s in screens if s.get("name") != name]
+    if len(kept) == len(screens):
+        return {"ok": False, "message": f"No saved search named “{name}”"}
+    _write_saved_screens(kept)
+    return {"ok": True, "message": f"Deleted “{name}”", "saved": kept}
+
+
+# Shipped so the Saved panel isn't empty on first load. They're written to
+# disk on the first edit, after which they're ordinary user rows.
+def _mk(*conds) -> dict:
+    from stockanalysis.core.screener import Condition, Group, group_to_json
+    return group_to_json(Group("AND", [Condition(*c) for c in conds]))
+
+
+_STARTER_SCREENS: tuple[dict, ...] = (
+    {"name": "AI Leaders", "icon": "⭐", "sort": "match",
+     "rules": _mk(("quality", "gt", 90), ("moat", "gte", 3),
+                  ("eps_growth", "gt", 25), ("rs_rank", "gt", 80))},
+    {"name": "Buy Zone", "icon": "⭐", "sort": "match",
+     "rules": _mk(("in_buy_zone", "eq", True), ("above_200ma", "eq", True))},
+    {"name": "Cheap Growth", "icon": "⭐", "sort": "composite",
+     "rules": _mk(("forward_pe", "lt", 25), ("eps_growth", "gt", 20),
+                  ("quality", "gt", 80))},
+    {"name": "High RS Stocks", "icon": "⭐", "sort": "rs",
+     "rules": _mk(("rs_rank", "gt", 90), ("above_200ma", "eq", True))},
+    {"name": "Strong Fundamentals", "icon": "⭐", "sort": "quality",
+     "rules": _mk(("quality", "gt", 85), ("health", "gt", 80),
+                  ("moat", "gte", 3))},
+    {"name": "Swing Ready", "icon": "⭐", "sort": "match",
+     "rules": _mk(("swing_score", "gt", 75), ("abs_vs_8ema", "within", 2))},
+    {"name": "Turnaround Candidates", "icon": "⭐", "sort": "match",
+     "rules": _mk(("is_turnaround", "eq", True), ("health", "gt", 60))},
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

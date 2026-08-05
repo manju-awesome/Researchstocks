@@ -2,5 +2,14 @@
 July01-2027/StockAnalysis_Version1/data/cache/
 July01-2027/StockAnalysis_Version1/data/output/
 
+# Secrets — the project .gitignore covers its own .env, but this one sits at
+# the repo root and carries live API keys (Resend, Anthropic) plus account size
+.env
+*.key
+
+# Browser-saved pages that land here by accident, not source
+/1.html
+/Dashboard · Trading Workstation.html
+
 __pycache__/
 *.pyc

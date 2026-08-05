@@ -20,7 +20,15 @@ data/cache/
 
 # User's real positions — personal financial data, never committed
 data/portfolio.csv
+data/options_positions.csv
+data/backups/
+
+# Day Trade live state (spydaytrader): open 0DTE positions, the closed-trade
+# journal and signal dedup state — same reasoning as portfolio.csv above
+data/spy/*.json
+!data/spy/.gitkeep
 
 # OS
 .DS_Store
 Thumbs.db
+data/regime_latest.json
