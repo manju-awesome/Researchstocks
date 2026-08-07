@@ -20,10 +20,11 @@
         "PYTHONUNBUFFERED=1",
         "python3",
         "July01-2027/StockAnalysis_Version1/src/stockanalysis/webapp/app.py",
-        "--port", "8897",
-        "--no-scheduler"
+        "--no-scheduler",
+        "--no-spy-daemon"
       ],
-      "port": 8897
+      "port": 8897,
+      "autoPort": true
     },
     {
       "name": "workstation-dashboard",
@@ -33,18 +34,6 @@
         "--directory", "July01-2027/StockAnalysis_Version1/data/output"
       ],
       "port": 8788
-    },
-    {
-      "name": "spy-daytrader-webapp",
-      "runtimeExecutable": "env",
-      "runtimeArgs": [
-        "TZ=America/New_York",
-        "PYTHONUNBUFFERED=1",
-        "python3",
-        "SPY_DayTrader/src/spydaytrader/webapp/app.py",
-        "--port", "8900"
-      ],
-      "port": 8900
     }
   ]
 }

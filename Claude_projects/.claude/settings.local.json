@@ -12,7 +12,18 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:9000/research)",
       "Bash(python3 -m unittest discover tests)",
       "Bash(python3 -c \"import ast; ast.parse\\(open\\('src/stockanalysis/webapp/pages.py'\\).read\\(\\)\\)\")",
-      "Bash(pkill -f \"app.py --port 9000\")"
+      "Bash(pkill -f \"app.py --port 9000\")",
+      "Bash(xargs '-I{}' python3 -c ' *)",
+      "Bash(sed 's/[0-9]\\\\{4\\\\}$/XXXX/')",
+      "Bash(python3 scripts/sync_broker_positions.py show)",
+      "mcp__07c0a842-d75f-47ff-8673-b1111a4bab3a__get_accounts",
+      "mcp__07c0a842-d75f-47ff-8673-b1111a4bab3a__get_equity_positions",
+      "Bash(python3 -c \"import numpy, scipy\")",
+      "Bash(python3 -c \"import numpy; print\\('numpy', numpy.__version__\\)\")",
+      "Bash(python3 -c \"import yfinance; print\\('yfinance', yfinance.__version__\\)\")",
+      "Bash(timeout 540 python3 -c ' *)",
+      "Bash(grep -vE \"^\\\\[|^$\")",
+      "Bash(grep -vE \"^\\\\[|HTTP Error|^$\")"
     ]
   }
 }
