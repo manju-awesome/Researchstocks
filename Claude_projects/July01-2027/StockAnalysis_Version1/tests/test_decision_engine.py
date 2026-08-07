@@ -152,5 +152,101 @@ class TestScoreRow(unittest.TestCase):
         self.assertEqual(r["ticker"], "TEST")
 
 
+
+class TestActions(unittest.TestCase):
+    def _strong(self, **kw):
+        base = dict(quality=90, health=85, moat=4, eps_growth=40,
+                    rs_rank=92, swing_score=85, breakout_probability=85,
+                    rr=3.5, rvol=1.8, abs_vs_8ema=1.0, above_200ma=True,
+                    above_50ma=True, days_to_earnings=40)
+        base.update(kw)          # kw wins; passing both would be a TypeError
+        return _row(**base)
+
+    def test_exactly_one_action_and_it_is_a_known_one(self):
+        d = DE.decide(self._strong())
+        self.assertIn(d["action"], DE.ACTIONS)
+        self.assertNotIn("/", d["action"])          # no "BUY/WATCH"
+
+    def test_strategy_decides_which_score_gates(self):
+        # Strong company, poor setup: a long-term buy, not a swing entry.
+        row = _row(quality=95, health=90, moat=4, eps_growth=50, rs_rank=88,
+                   swing_score=20, breakout_probability=10, rr=2.5,
+                   rvol=0.5, abs_vs_8ema=1.0, days_to_earnings=40)
+        lt = DE.decide(row, strategy="LONGTERM")["action"]
+        sw = DE.decide(row, strategy="SWING")["action"]
+        self.assertNotEqual(lt, sw)
+
+    def test_balanced_requires_both_scores(self):
+        # max() would let this through; min() is the honest reading.
+        row = _row(quality=20, health=25, moat=0, eps_growth=-5,
+                   swing_score=90, rs_rank=95, rr=3.0, days_to_earnings=40)
+        self.assertNotEqual(DE.decide(row, strategy="BALANCED")["action"],
+                            "BUY NOW")
+
+    def test_imminent_earnings_downgrades_a_buy(self):
+        row = self._strong(days_to_earnings=1)
+        d = DE.decide(row, strategy="SWING")
+        self.assertEqual(d["action"], "WAIT")
+        self.assertEqual(d["earnings_risk"], "CRITICAL")
+        self.assertTrue(any("Earnings" in r for r in d["risks"]))
+
+    def test_earnings_strategy_opt_in_restores_the_buy(self):
+        row = self._strong(days_to_earnings=3)
+        d = DE.decide(row, strategy="SWING", earnings_strategy=True)
+        self.assertNotEqual(d["action"], "WAIT")
+
+    def test_weak_quality_is_speculative_not_a_buy(self):
+        row = self._strong(quality=30, health=35)
+        self.assertEqual(DE.decide(row, strategy="SWING")["action"],
+                         "SPECULATIVE")
+
+    def test_negative_rr_is_disqualifying(self):
+        self.assertEqual(DE.decide(self._strong(rr=0.4))["action"], "AVOID")
+
+    def test_insufficient_data_never_yields_a_buy(self):
+        d = DE.decide({"ticker": "X", "quality": 90})
+        self.assertEqual(d["action"], "AVOID")
+        self.assertFalse(d["reliable"])
+
+    def test_extended_price_becomes_buy_on_pullback(self):
+        # No breakout in progress — a genuine breakout IS extended, and is
+        # entered on the breakout, so it must not be diverted to "pullback".
+        row = self._strong(abs_vs_8ema=9.0, in_buy_zone=False,
+                           breakout_probability=30, rvol=0.9)
+        d = DE.decide(row, strategy="SWING")
+        self.assertIn(d["action"], ("BUY ON PULLBACK", "WATCH"))
+        self.assertTrue(d["triggers"])
+
+    def test_watch_always_says_what_would_change_it(self):
+        row = _row(quality=75, health=70, moat=2, eps_growth=18, rs_rank=72,
+                   swing_score=66, breakout_probability=75, rr=1.4,
+                   rvol=0.9, abs_vs_8ema=6.0, days_to_earnings=40)
+        d = DE.decide(row, strategy="SWING")
+        if d["action"] in ("WATCH", "WAIT"):
+            self.assertTrue(d["triggers"])
+
+    def test_defensive_regime_is_stricter_than_favorable(self):
+        row = _row(quality=80, health=75, moat=3, eps_growth=25, rs_rank=82,
+                   swing_score=78, breakout_probability=72, rr=2.2,
+                   rvol=1.3, abs_vs_8ema=1.5, days_to_earnings=40)
+        fav = DE.decide(row, strategy="SWING", regime="FAVORABLE")["action"]
+        dfn = DE.decide(row, strategy="SWING", regime="DEFENSIVE")["action"]
+        order = {a: i for i, a in enumerate(
+            ["BUY NOW", "BREAKOUT ENTRY", "BUY ZONE", "BUY ON PULLBACK",
+             "WATCH", "WAIT", "SPECULATIVE", "AVOID"])}
+        self.assertGreaterEqual(order[dfn], order[fav])
+
+    def test_earnings_risk_bands(self):
+        self.assertEqual(DE.earnings_risk(1), "CRITICAL")
+        self.assertEqual(DE.earnings_risk(5), "HIGH")
+        self.assertEqual(DE.earnings_risk(10), "MEDIUM")
+        self.assertEqual(DE.earnings_risk(40), "LOW")
+        self.assertEqual(DE.earnings_risk(None), "UNKNOWN")
+
+    def test_recovered_data_is_flagged_as_a_risk(self):
+        row = self._strong(recovered=True, data_as_of="2026-08-05 16:45")
+        self.assertTrue(any("snapshot" in r for r in
+                            DE.decide(row)["risks"]))
+
 if __name__ == "__main__":
     unittest.main()

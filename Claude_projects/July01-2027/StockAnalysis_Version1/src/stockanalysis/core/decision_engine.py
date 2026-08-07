@@ -269,3 +269,212 @@ def score_row(row: dict, regime_favorable: bool | None = None) -> dict:
         "reliable": (inv["coverage"] >= MIN_COVERAGE
                      and swing["coverage"] >= MIN_COVERAGE),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ACTIONS — exactly one primary action per stock
+# ─────────────────────────────────────────────────────────────────────────────
+# Thresholds are set from the library's real distribution, not from round
+# numbers. Swing tops out at 83 and confluence at 9/10, so the natural-looking
+# ">= 85 and >= 8/10" gate for BUY NOW is empty by construction — not because
+# nothing qualifies but because the scale doesn't reach there. The cutoffs
+# below sit at roughly the 97th/90th percentile of what the scores actually
+# produce, which is what "exceptional" has to mean if the label is to name
+# anything. Moving the goalposts to a rounder number would give a screen that
+# reads as rigorous and returns nothing.
+BUY_NOW_SCORE = 78
+BUY_NOW_CONFLUENCE = 7
+PULLBACK_SCORE = 72
+PULLBACK_CONFLUENCE = 6
+WATCH_SCORE = 65
+MIN_RR = 2.0
+
+ACTIONS = ("BUY NOW", "BUY ZONE", "BUY ON PULLBACK", "BREAKOUT ENTRY",
+           "WATCH", "WAIT", "SPECULATIVE", "AVOID")
+
+ACTION_ICONS = {"BUY NOW": "🟢", "BUY ZONE": "🟢", "BUY ON PULLBACK": "🟢",
+                "BREAKOUT ENTRY": "🚀", "WATCH": "🔵", "WAIT": "⏳",
+                "SPECULATIVE": "🟡", "AVOID": "🔴"}
+
+# Earnings proximity. An imminent report is a gap risk no setup quality
+# offsets, so it downgrades rather than scoring.
+EARNINGS_BANDS = ((2, "CRITICAL"), (7, "HIGH"), (14, "MEDIUM"))
+
+
+def earnings_risk(days) -> str:
+    d = _f(days)
+    if d is None:
+        return "UNKNOWN"
+    if d < 0:
+        return "LOW"
+    for limit, label in EARNINGS_BANDS:
+        if d <= limit:
+            return label
+    return "LOW"
+
+
+STRATEGIES = ("LONGTERM", "SWING", "BALANCED")
+
+
+def _primary_score(inv, swing, strategy: str) -> int:
+    """Which score gates the action.
+
+    Using max() here — the obvious shortcut — silently undoes the whole
+    point of scoring investment and swing separately: it lets a strong chart
+    on a weak company, or a strong company with no setup, both reach BUY
+    NOW. Neither is a buy for the same reason, and calling them the same
+    thing hides which one you are actually taking.
+
+    LONGTERM gates on the company, SWING on the setup, and BALANCED demands
+    both — the lower of the two, which is the honest reading when no
+    strategy has been declared.
+    """
+    inv, swing = inv or 0, swing or 0
+    if strategy == "LONGTERM":
+        return inv
+    if strategy == "SWING":
+        return swing
+    return min(inv, swing)
+
+
+def decide(row: dict, scores: dict | None = None,
+           regime: str = "FAVORABLE",
+           strategy: str = "BALANCED",
+           earnings_strategy: bool = False) -> dict:
+    """One primary action for one row, with the reasoning that produced it.
+
+    `regime` (FAVORABLE / SELECTIVE / DEFENSIVE) only changes how selective
+    the gates are — it is not a market prediction. `earnings_strategy=True`
+    is the explicit opt-in that stops an imminent report downgrading a buy.
+    """
+    s = scores or score_row(row)
+    inv = s["investment"]["score"]
+    swing = s["swing"]["score"]
+    conf = s["confluence"]["score"]
+    best = _primary_score(inv, swing, strategy)
+
+    rr = _f(row.get("rr"))
+    quality = _f(row.get("quality"))
+    health = _f(row.get("health"))
+    dist8 = _f(row.get("abs_vs_8ema"))
+    above200 = row.get("above_200ma")
+    in_zone = row.get("in_buy_zone") is True
+    breakout = _f(row.get("breakout_probability"))
+    rs = _f(row.get("rs_rank"))
+    rvol = _f(row.get("rvol"))
+    er = earnings_risk(row.get("days_to_earnings"))
+
+    # Regime tightens the gates rather than vetoing anything outright.
+    bump = {"FAVORABLE": 0, "SELECTIVE": 3, "DEFENSIVE": 6}.get(regime, 0)
+    buy_score = BUY_NOW_SCORE + bump
+    buy_conf = BUY_NOW_CONFLUENCE + (1 if regime == "DEFENSIVE" else 0)
+
+    blockers, triggers = [], []
+
+    # ── disqualifiers first ──────────────────────────────────────────────
+    if not s["reliable"]:
+        return _verdict("AVOID", row, s, er,
+                        why=["Insufficient data to judge this setup"],
+                        blockers=["Key inputs missing — "
+                                  + ", ".join(sorted(set(
+                                      s["investment"]["missing"]
+                                      + s["swing"]["missing"]))[:4])],
+                        triggers=["Run a scan so the missing fields populate"])
+    if above200 is False and (inv or 0) < 60:
+        blockers.append("Below the 200-day with weak fundamentals")
+    if health is not None and health < 30:
+        blockers.append(f"Balance sheet weak (health {health:.0f})")
+    if rr is not None and rr < 1.0:
+        blockers.append(f"R:R {rr:.1f} — risk exceeds reward")
+    if blockers:
+        return _verdict("AVOID", row, s, er, blockers=blockers)
+
+    # Attractive but fragile: never mixed in with high-conviction buys.
+    speculative = ((quality is not None and quality < 45)
+                   or (health is not None and health < 45))
+
+    # ── the positive ladder ──────────────────────────────────────────────
+    if er in ("HIGH", "CRITICAL") and not earnings_strategy:
+        # Downgrade, don't disqualify — the setup may be fine, the timing
+        # isn't. §14: BUY NOW becomes WAIT unless explicitly overridden.
+        if best >= WATCH_SCORE:
+            return _verdict("WAIT", row, s, er,
+                            blockers=[f"Earnings in "
+                                      f"{_f(row.get('days_to_earnings')):.0f} days"],
+                            triggers=["Re-assess once the report is out"])
+
+    if speculative and best >= WATCH_SCORE:
+        return _verdict("SPECULATIVE", row, s, er,
+                        blockers=["Quality or balance sheet is weak — size "
+                                  "this as a speculation, not a core position"])
+
+    if (swing or 0) >= buy_score and (rs or 0) >= 80 and (breakout or 0) >= 70 \
+            and (rvol or 0) >= 1.2 and (rr or 0) >= MIN_RR:
+        return _verdict("BREAKOUT ENTRY", row, s, er)
+
+    if best >= buy_score and conf >= buy_conf and (rr or 0) >= MIN_RR \
+            and (in_zone or (dist8 is not None and dist8 <= 3)):
+        return _verdict("BUY NOW", row, s, er)
+
+    if in_zone and (inv or 0) >= PULLBACK_SCORE and (quality or 0) >= 70 \
+            and (health or 0) >= 60:
+        return _verdict("BUY ZONE", row, s, er)
+
+    if best >= PULLBACK_SCORE and conf >= PULLBACK_CONFLUENCE:
+        if dist8 is not None and dist8 > 3:
+            triggers.append(f"Pull back toward the 8/21 EMA "
+                            f"(now {dist8:.1f}% above it)")
+            return _verdict("BUY ON PULLBACK", row, s, er, triggers=triggers)
+        if rr is not None and rr < MIN_RR:
+            triggers.append(f"R:R improves above {MIN_RR:.0f} (now {rr:.1f})")
+            return _verdict("WAIT", row, s, er,
+                            blockers=[f"R:R only {rr:.1f}"], triggers=triggers)
+        return _verdict("BUY ON PULLBACK", row, s, er, triggers=triggers)
+
+    if best >= WATCH_SCORE:
+        if breakout is not None and breakout >= 70 and (rvol or 0) < 1.2:
+            triggers.append("Breakout confirms on above-average volume")
+        if dist8 is not None and dist8 > 3:
+            triggers.append(f"Price returns to the 8 EMA "
+                            f"({dist8:.1f}% above it now)")
+        if rr is not None and rr < MIN_RR:
+            triggers.append(f"R:R improves above {MIN_RR:.0f} (now {rr:.1f})")
+        if not in_zone and row.get("buy_zone_label"):
+            triggers.append("Price enters the buy zone")
+        return _verdict("WATCH", row, s, er, triggers=triggers or
+                        ["A valid entry appears"])
+
+    return _verdict("AVOID", row, s, er,
+                    blockers=[f"Scores below the watch threshold "
+                              f"(best {best})"])
+
+
+def _verdict(action, row, scores, er, why=None, blockers=None, triggers=None):
+    """Assemble the audit alongside the action — §9/§22: never a score
+    without the reasoning that produced it."""
+    conf = scores["confluence"]
+    positives = why or [f"{n}" for n in conf["hits"]][:6]
+    missing = conf["misses"][:4]
+    unknown = sorted(set(scores["investment"]["missing"]
+                         + scores["swing"]["missing"]))
+    risks = list(blockers or [])
+    if er in ("HIGH", "CRITICAL") and not any("Earnings" in r for r in risks):
+        risks.append(f"Earnings risk {er}")
+    if row.get("recovered"):
+        risks.append(f"Data recovered from snapshot, as of "
+                     f"{row.get('data_as_of') or 'an earlier scan'}")
+    return {
+        "ticker": row.get("ticker"),
+        "action": action,
+        "icon": ACTION_ICONS.get(action, ""),
+        "investment": scores["investment"]["score"],
+        "swing": scores["swing"]["score"],
+        "confluence": conf["score"],
+        "reliable": scores["reliable"],
+        "earnings_risk": er,
+        "why": positives,
+        "missing": missing,
+        "unknown_fields": unknown,
+        "risks": risks,
+        "triggers": triggers or [],
+    }
