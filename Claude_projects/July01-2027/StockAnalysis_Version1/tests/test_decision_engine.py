@@ -335,3 +335,56 @@ class TestEarningsGateAppliesToEveryBuy(unittest.TestCase):
                          "BUY ZONE")
         self.assertNotEqual(DE.decide(row, strategy="SWING")["action"],
                             "BUY ZONE")
+
+
+class TestLadderStructure(unittest.TestCase):
+    """The rewrite exists to make the bug class unreachable, not just to
+    fix the three instances of it. These assert the structure, so a new
+    rule cannot reintroduce them."""
+
+    def test_every_action_in_the_ladder_is_a_declared_action(self):
+        for rule in DE.LADDER:
+            with self.subTest(action=rule["action"]):
+                self.assertIn(rule["action"], DE.ACTIONS)
+
+    def test_the_ladder_always_reaches_a_verdict(self):
+        # The last rule must be unconditional or a row could fall through.
+        self.assertTrue(DE.LADDER[-1]["test"]({}))
+
+    def test_every_buy_action_is_marked_buy(self):
+        # `buy` is what makes the engine apply the earnings and
+        # data-quality guards; an unmarked buy rule would bypass both.
+        buys = {"BUY NOW", "BUY ZONE", "BUY ON PULLBACK", "BREAKOUT ENTRY"}
+        for rule in DE.LADDER:
+            with self.subTest(action=rule["action"]):
+                if rule["action"] in buys:
+                    self.assertTrue(rule["buy"])
+
+    def test_no_buy_rule_can_fire_inside_the_earnings_window(self):
+        # Structural, not per-branch: the engine skips every rule marked
+        # buy, so this holds for rules that do not exist yet.
+        buys = {"BUY NOW", "BUY ZONE", "BUY ON PULLBACK", "BREAKOUT ENTRY"}
+        row = _row(quality=95, health=95, moat=4, eps_growth=50, rs_rank=95,
+                   swing_score=90, breakout_probability=95, rr=4.0, rvol=2.0,
+                   abs_vs_8ema=0.5, pct_vs_8ema=-0.5, in_buy_zone=True,
+                   days_to_earnings=1)
+        for strategy in DE.STRATEGIES:
+            with self.subTest(strategy=strategy):
+                self.assertNotIn(DE.decide(row, strategy=strategy)["action"],
+                                 buys)
+
+    def test_the_strategy_score_is_resolved_once(self):
+        # Three separate branches once read the investment score while the
+        # caller had asked for a swing decision. `best` now comes from one
+        # place, so a swing decision cannot be gated on the company.
+        row = _row(quality=95, health=95, moat=4, eps_growth=50,
+                   swing_score=20, rs_rank=20, breakout_probability=10,
+                   rr=3.0, rvol=0.5, in_buy_zone=True, days_to_earnings=40)
+        ctx = DE._context(row, DE.score_row(row), "FAVORABLE", "SWING", False)
+        self.assertEqual(ctx["best"], ctx["swing"])
+        ctx_lt = DE._context(row, DE.score_row(row), "FAVORABLE", "LONGTERM", False)
+        self.assertEqual(ctx_lt["best"], ctx_lt["inv"])
+
+    def test_a_missing_input_never_satisfies_a_threshold(self):
+        self.assertFalse(DE._gt(None, 50))
+        self.assertTrue(DE._gt(50, 50))
