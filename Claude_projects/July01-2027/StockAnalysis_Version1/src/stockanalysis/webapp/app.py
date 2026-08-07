@@ -110,6 +110,11 @@ class WorkstationHandler(SimpleHTTPRequestHandler):
             self._send_json(api.screener_meta())
             return
 
+        if path == "/api/screener/ticker":
+            q = (query.get("q") or [""])[0]
+            self._send_json(api.screener_ticker(q))
+            return
+
         if path == "/api/screener/suggest":
             q = (query.get("q") or [""])[0]
             self._send_json(api.screener_suggest(q))

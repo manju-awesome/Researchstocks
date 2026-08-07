@@ -56,7 +56,12 @@ def screener_page() -> tuple[str, str]:
   </div>
   <button class="btn" onclick="scrRunNL()">Search</button>
   <button class="btn secondary" onclick="scrOpenPicker()">+ Add condition</button>
+  <input id="scr-lookup" placeholder="Look up a ticker…" autocomplete="off"
+         style="width:150px" title="Which of the presets does this ticker qualify for?"
+         onkeydown="if(event.key==='Enter'){{scrLookup();return false}}">
+  <button class="btn secondary" onclick="scrLookup()">Where does it fit?</button>
 </div>
+<div id="scr-lookupresult"></div>
 
 <div class="scr-presetbar">
   <input id="scr-presetsearch" placeholder="Filter presets…" autocomplete="off"
@@ -82,6 +87,16 @@ def screener_page() -> tuple[str, str]:
       <option value="LONGTERM">Long-term</option>
       <option value="SWING">Swing</option>
       <option value="BALANCED">Balanced</option>
+    </select>
+    <label style="font-size:11px;color:#898781">Action</label>
+    <select id="scr-groupby" onchange="scrOnActionPick(this.value)"
+            title="All actions groups the results into sections; pick one to see only those">
+      <option value="">All actions</option>
+    </select>
+    <label style="font-size:11px;color:#898781">Buy Zone</label>
+    <select id="scr-bzpick" onchange="scrOnBuyZonePick(this.value)"
+            title="Filter by the technical entry-quality label">
+      <option value="">All</option>
     </select>
     <label style="font-size:11px;color:#898781">Sort</label>
     <select id="scr-sort" onchange="scrRun()">
@@ -522,6 +537,70 @@ async function scrDeleteSaved(i, ev) {
   else toast(data.message || 'Delete failed', 'err');
 }
 
+// ── ticker lookup ──────────────────────────────────────────────────────────
+// The inverse of a screen: not "what matches these rules" but "which of the
+// 62 screens does this name already qualify for". A ticker in twelve
+// presets is a different proposition from one scraping into a single loose
+// screen, and no individual result list shows that.
+async function scrLookup() {
+  const box = document.getElementById('scr-lookupresult');
+  const q = document.getElementById('scr-lookup').value.trim();
+  if (!q) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="font-size:11px;color:#898781;padding:6px">Looking up…</div>';
+  let d;
+  try {
+    d = await (await fetch('/api/screener/ticker?q=' + encodeURIComponent(q))).json();
+  } catch (e) { box.innerHTML = ''; toast('Lookup failed: ' + e, 'err'); return; }
+
+  if (!d.ok) {
+    const near = (d.suggestions || []).length
+      ? ' Did you mean ' + d.suggestions.map(scrEsc).join(', ') + '?' : '';
+    box.innerHTML = `<div class="scr-note">${scrEsc(d.message)}.${near}</div>`;
+    return;
+  }
+
+  const byGroup = {};
+  for (const p of d.presets) (byGroup[p.group] = byGroup[p.group] || []).push(p);
+  const chips = Object.keys(byGroup).map(g => `
+    <div style="margin-bottom:5px"><span style="font-size:10px;color:#898781;
+      text-transform:uppercase;letter-spacing:.3px">${scrEsc(g)}</span><br>
+      ${byGroup[g].map(p => `<span class="chip" style="cursor:pointer;margin:2px 4px 2px 0"
+        onclick="scrApplyPreset(this.dataset.k)" data-k="${scrEsc(p.key)}"
+        title="Open this screen">${p.icon} ${scrEsc(p.name)}</span>`).join('')}
+    </div>`).join('');
+
+  const none = !d.presets.length
+    ? `<div style="font-size:11.5px;color:#898781">Qualifies for none of the
+       ${d.total_presets} presets — it is in the library but not in any
+       prebuilt screen.</div>` : '';
+  const stale = d.recovered
+    ? `<div style="font-size:10.5px;color:#633806;margin-top:5px">↺ values as of
+       ${scrEsc((d.data_as_of || '').slice(0, 16))} — recovered from the snapshot</div>` : '';
+
+  box.innerHTML = `<div style="background:white;border:0.5px solid #e1e0d9;
+    border-radius:11px;padding:12px 15px;margin-bottom:12px">
+    <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+      <a class="scr-tk" href="/research/${scrEsc(d.ticker)}.html">${scrEsc(d.ticker)}</a>
+      <span style="font-size:11.5px;color:#898781">${scrEsc(d.name || '')}</span>
+      <span class="chip" style="margin:0">${scrEsc(d.sector || '')}</span>
+      ${d.category ? `<span class="chip" style="margin:0">${scrEsc(d.category)}</span>` : ''}
+      ${d.buy_zone_label ? `<span class="chip" style="margin:0">${scrEsc(d.buy_zone_label)}</span>` : ''}
+      <span style="margin-left:auto;font-size:11px;color:#898781">
+        Appears in <b style="color:#0C447C">${d.presets.length}</b> of ${d.total_presets} screens</span>
+    </div>
+    <div class="scr-meta" style="margin-top:7px">
+      <span>Inv <b>${d.investment ?? '—'}</b></span>
+      <span>Swing <b>${d.swing ?? '—'}</b></span>
+      <span>Confluence <b>${d.confluence}/10</b></span>
+      <span>Long-term <b>${scrEsc(d.actions.LONGTERM)}</b></span>
+      <span>Swing <b>${scrEsc(d.actions.SWING)}</b></span>
+    </div>
+    <div style="margin-top:9px">${chips}${none}</div>${stale}
+    <div style="font-size:10px;color:#898781;margin-top:4px">
+      Click a screen to open it.</div>
+  </div>`;
+}
+
 // ── natural language ────────────────────────────────────────────────────────
 let scrSugTimer = null;
 function scrOnType(v) {
@@ -762,6 +841,8 @@ async function scrRun(extra) {
   if (seq !== scrSeq) return;
   if (!data.ok) { toast(data.message || 'Screen failed', 'err'); return; }
   LAST = data;
+  scrRenderActionPicker(data);
+  scrRenderBuyZonePicker(data);
   // A natural-language search comes back as real rules, so the pills and
   // every later edit operate on what the parser actually understood.
   if (extra && extra.query) RULES = data.rules;
@@ -879,8 +960,11 @@ let resultFilter = null;      // {kind, value} or null
 
 const SCR_TILE_TESTS = {
   above200: r => r.above_200ma === true,
-  buyzone:  r => r.buy_zone_label === 'Buy Zone'
-                 || r.buy_zone_label === 'Strong Buy Zone',
+  // No value = both buy-zone tiers (what the summary tile counts); with a
+  // value = that exact label, which is what the dropdown selects.
+  buyzone:  (r, v) => v ? r.buy_zone_label === v
+                        : (r.buy_zone_label === 'Buy Zone'
+                           || r.buy_zone_label === 'Strong Buy Zone'),
   watchlist: r => r.buy_zone_label === 'Watch List',
   earnings: r => r.earnings_soon === true,
   action:   (r, v) => r.action === v,
@@ -903,6 +987,16 @@ function scrSetResultFilter(kind, value) {
   const same = resultFilter && resultFilter.kind === kind
                && resultFilter.value === value;
   resultFilter = (!kind || same) ? null : {kind, value};
+  // The tiles and the two dropdowns are one control in three places, so
+  // selecting in any of them clears the others rather than implying a
+  // combined filter the engine never applied.
+  for (const [id, kind] of [['scr-groupby', 'action'], ['scr-bzpick', 'buyzone']]) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    const want = (resultFilter && resultFilter.kind === kind)
+      ? (resultFilter.value || '') : '';
+    sel.value = [...sel.options].some(o => o.value === want) ? want : '';
+  }
   if (LAST) { scrRenderSummary(LAST); scrRenderResults(LAST); }
 }
 
@@ -918,6 +1012,52 @@ function scrFilterLabel() {
   const names = {above200: 'Above 200MA', buyzone: 'Buy Zone',
                  watchlist: 'Watch List', earnings: 'Earnings ≤7d'};
   return resultFilter.value || names[resultFilter.kind] || resultFilter.kind;
+}
+
+// Options are the actions actually present in these results, with counts —
+// listing every possible action would offer groups that are empty for this
+// screen, and the count is the reason to pick one.
+function scrRenderActionPicker(d) {
+  const sel = document.getElementById('scr-groupby');
+  if (!sel) return;
+  const counts = d.actions || {};
+  const order = ['BUY NOW', 'BREAKOUT ENTRY', 'BUY ZONE', 'BUY ON PULLBACK',
+                 'WATCH', 'WAIT', 'SPECULATIVE', 'AVOID'];
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All actions</option>' +
+    order.filter(a => counts[a]).map(a =>
+      `<option value="${a}">${scrEsc(a)} (${counts[a]})</option>`).join('');
+  // Keep the selection if that action still exists in the new results.
+  sel.value = [...sel.options].some(o => o.value === current) ? current : '';
+}
+
+// Ordered best-entry-first, not alphabetically — the ranking is the point
+// of the label, and only the tiers present in these results are offered.
+const SCR_BZ_ORDER = ['Strong Buy Zone', 'Buy Zone', 'Watch List',
+                      'Hold / Monitor', 'Avoid'];
+
+function scrRenderBuyZonePicker(d) {
+  const sel = document.getElementById('scr-bzpick');
+  if (!sel) return;
+  const counts = {};
+  for (const r of (d.results || [])) {
+    if (r.buy_zone_label) counts[r.buy_zone_label] = (counts[r.buy_zone_label] || 0) + 1;
+  }
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All</option>' +
+    SCR_BZ_ORDER.filter(k => counts[k]).map(k =>
+      `<option value="${scrEsc(k)}">${scrEsc(k)} (${counts[k]})</option>`).join('');
+  sel.value = [...sel.options].some(o => o.value === current) ? current : '';
+}
+
+function scrOnBuyZonePick(value) {
+  scrSetResultFilter(value ? 'buyzone' : null, value || undefined);
+}
+
+function scrOnActionPick(value) {
+  // Reuses the tile drill-down so the dropdown, the tiles and the banner
+  // can never disagree about what is being shown.
+  scrSetResultFilter(value ? 'action' : null, value || undefined);
 }
 
 function scrToggleView() {
@@ -946,9 +1086,57 @@ function scrRenderResults(d) {
     box.innerHTML = banner + '<div class="scr-empty">No rows in this group.</div>';
     return;
   }
-  box.innerHTML = banner + (VIEW === 'cards'
-    ? rows.map(scrCard).join('')
-    : scrTable(Object.assign({}, d, {results: rows})));
+  // Sections only when showing every action — picking one already narrows
+  // it, and a single-section header would be noise.
+  const groupBy = (resultFilter && resultFilter.kind === 'action')
+    ? '' : 'action';   // buy-zone picks stay grouped by action
+  if (!groupBy || VIEW !== 'cards') {
+    box.innerHTML = banner + (VIEW === 'cards'
+      ? rows.map(scrCard).join('')
+      : scrTable(Object.assign({}, d, {results: rows})));
+    return;
+  }
+  box.innerHTML = banner + scrGrouped(rows, groupBy);
+}
+
+// Grouping keeps the current sort inside each section rather than
+// re-sorting — the order you chose still means something within a group,
+// and a section that reordered itself would make the sort control a lie.
+const SCR_GROUPERS = {
+  action:   r => r.action || 'No decision',
+};
+
+function scrGroupOrder(groupBy, keys) {
+  // Actions run actionable-first, matching the engine's own ladder; the
+  // rest are ordered by size, which is the only ordering that means
+  // anything for a sector or a label.
+  if (groupBy === 'action') {
+    const rank = {};
+    ['BUY NOW', 'BREAKOUT ENTRY', 'BUY ZONE', 'BUY ON PULLBACK',
+     'WATCH', 'WAIT', 'SPECULATIVE', 'AVOID'].forEach((a, i) => { rank[a] = i; });
+    return keys.slice().sort((a, b) =>
+      (rank[a] ?? 99) - (rank[b] ?? 99) || a.localeCompare(b));
+  }
+  return keys;
+}
+
+function scrGrouped(rows, groupBy) {
+  const fn = SCR_GROUPERS[groupBy];
+  if (!fn) return rows.map(scrCard).join('');
+  const buckets = {};
+  for (const r of rows) (buckets[fn(r)] = buckets[fn(r)] || []).push(r);
+  const keys = scrGroupOrder(groupBy, Object.keys(buckets));
+  return keys.map(k => {
+    const tone = groupBy === 'action'
+      ? (SCR_ACTION_TONE[k] || ['#f1efea', '#52514e']) : ['#f1efea', '#52514e'];
+    return `<div style="margin:14px 0 7px;display:flex;gap:9px;align-items:center">
+        <span style="background:${tone[0]};color:${tone[1]};font-size:11.5px;
+          font-weight:700;padding:4px 12px;border-radius:20px">${scrEsc(k)}</span>
+        <span style="font-size:11px;color:#898781">${buckets[k].length}
+          stock${buckets[k].length === 1 ? '' : 's'}</span>
+        <span style="flex:1;height:1px;background:#e1e0d9"></span>
+      </div>` + buckets[k].map(scrCard).join('');
+  }).join('');
 }
 
 // An empty result is a question ("why?"), so answer it with the engine's

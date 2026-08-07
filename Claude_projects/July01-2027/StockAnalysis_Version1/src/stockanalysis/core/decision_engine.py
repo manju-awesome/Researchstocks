@@ -413,7 +413,13 @@ def _watch_triggers(c) -> list[str]:
         side = "above" if c["pct8"] > 0 else "below"
         out.append(f"Price returns to the 8 EMA "
                    f"({abs(c['pct8']):.1f}% {side} it now)")
-    if c["rr"] is not None and c["rr"] < MIN_RR:
+    if c["rr"] is None:
+        # A missing R:R blocks every buy gate just as firmly as a poor one,
+        # but said nothing — MU carries the library's best investment score
+        # and could never reach BUY NOW because this field is absent, with
+        # no hint on the card as to why.
+        out.append("R:R is unknown — no target/stop levels for this ticker")
+    elif c["rr"] < MIN_RR:
         out.append(f"R:R improves above {MIN_RR:.0f} (now {c['rr']:.1f})")
     if not c["in_zone"] and c["row"].get("buy_zone_label"):
         out.append("Price enters the buy zone")

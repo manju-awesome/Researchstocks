@@ -1070,6 +1070,68 @@ def _enum_values(rows: list[dict] | None = None) -> dict:
     return out
 
 
+def screener_ticker(query: str) -> dict:
+    """Which presets a single ticker qualifies for.
+
+    The screener answers "what matches this screen"; this answers the
+    inverse — "which screens does this name already appear in". A ticker in
+    six presets is a different proposition from one scraping into a single
+    loose screen, and that is not visible from any one result list.
+
+    Evaluating all 62 presets against one row costs a few milliseconds, so
+    it runs live rather than off a cache that could disagree with the grid.
+    """
+    from stockanalysis.core import screener as S
+    from stockanalysis.core import decision_engine as DE
+
+    ticker = (query or "").strip().upper()
+    if not ticker:
+        return {"ok": False, "message": "Enter a ticker"}
+
+    rows = _screen_universe()
+    match = next((r for r in rows if (r.get("ticker") or "").upper() == ticker),
+                 None)
+    if match is None:
+        near = sorted(r["ticker"] for r in rows
+                      if r.get("ticker", "").startswith(ticker[:2]))[:6]
+        return {"ok": False, "ticker": ticker,
+                "message": f"{ticker} is not in the research library",
+                "suggestions": near}
+
+    hits = []
+    for preset in S.PRESETS:
+        group = S.preset_group(preset["key"])
+        if group and S.eval_group(match, group):
+            hits.append({"key": preset["key"], "icon": preset["icon"],
+                         "name": preset["name"], "group": preset["group"],
+                         "kind": "preset"})
+    for saved in load_saved_screens():
+        try:
+            if S.eval_group(match, S.group_from_json(saved.get("rules"))):
+                hits.append({"key": "saved:" + saved["name"],
+                             "icon": saved.get("icon") or "⭐",
+                             "name": saved["name"], "group": "My screens",
+                             "kind": "saved"})
+        except Exception:
+            continue
+
+    scores = DE.score_row(match)
+    return {
+        "ok": True, "ticker": ticker, "name": match.get("name"),
+        "sector": match.get("sector"), "price": match.get("price"),
+        "presets": hits, "total_presets": len(S.PRESETS),
+        "investment": scores["investment"]["score"],
+        "swing": scores["swing"]["score"],
+        "confluence": scores["confluence"]["score"],
+        "actions": {s: DE.decide(match, strategy=s)["action"]
+                    for s in ("LONGTERM", "SWING")},
+        "buy_zone_label": match.get("buy_zone_label"),
+        "category": match.get("category"),
+        "recovered": match.get("recovered"),
+        "data_as_of": match.get("data_as_of"),
+    }
+
+
 def screener_suggest(prefix: str) -> list[dict]:
     from stockanalysis.core.screener import suggest
     return suggest(prefix)
