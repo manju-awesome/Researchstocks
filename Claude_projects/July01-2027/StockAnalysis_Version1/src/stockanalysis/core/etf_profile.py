@@ -354,7 +354,23 @@ def set_theme(output_dir: str | Path, ticker: str,
 # it — SMH being up 50% YTD means something different next to QQQ's number.
 # IWM and VTI appear here and in the holdings table on purpose: they are
 # genuinely both, and hiding either would misrepresent one of the two roles.
-BENCHMARKS = ("SPY", "VOO", "QQQ", "QQQM", "DIA", "MDY", "IWM", "VTI")
+# ^VIX is an index, not a fund — no expense ratio, AUM or holdings — but it
+# belongs on the strip because fear is the other half of the market read.
+# Its direction is INVERTED relative to every other row here: VIX above its
+# 200-day means rising fear, which is risk-off, so anything colouring "up =
+# green" has to special-case it or it will report panic as strength.
+BENCHMARKS = ("SPY", "VOO", "QQQ", "QQQM", "DIA", "MDY", "IWM", "VTI", "^VIX")
+INVERTED = ("^VIX",)
+
+
+def is_inverted(ticker: str) -> bool:
+    """True when a rising value is a deterioration, not an improvement."""
+    return str(ticker or "").upper() in INVERTED
+
+
+def display_ticker(ticker: str) -> str:
+    """^VIX reads as VIX everywhere a human sees it."""
+    return str(ticker or "").lstrip("^")
 
 
 def is_benchmark(ticker: str) -> bool:

@@ -206,7 +206,8 @@ def dashboard_page() -> tuple[str, str]:
           f'<div style="font-size:16px;font-weight:600">{market.get("vix") if market.get("vix") is not None else "—"}</div></div>'
         + f'<div style="margin-left:auto">{badge(regime.get("regime", "Unknown").upper(), regime_status)}</div>'
         + '</div>'
-        + f'<div style="font-size:11px;color:#898781;margin-top:8px">{esc(regime.get("guidance", ""))}</div>')
+        + f'<div style="font-size:11px;color:#898781;margin-top:8px">{esc(regime.get("guidance", ""))}</div>'
+        + _leadership_html())
 
     # ── Hero: today's opportunity ───────────────────────────────────────────
     risk_status = {"LOW": "good", "MEDIUM": "watch", "HIGH": "bad"}.get(opp.get("risk"), "muted")
@@ -329,6 +330,67 @@ def dashboard_page() -> tuple[str, str]:
 # ─────────────────────────────────────────────────────────────────────────────
 # AI SENTIMENT
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def _leadership_html() -> str:
+    """Benchmark leadership under the Market Status tiles.
+
+    The tiles above come from snapshot.json and only move when a scan runs;
+    this reads the ETF profiles, which refresh independently. Both are
+    labelled with where they came from rather than blended into one
+    apparently-live number.
+
+    It answers what the regime badge cannot: the badge says how strong, this
+    says which part of the market is carrying it. QQQ leading while the Dow
+    lags is a different tape from all three advancing together, even when
+    the badge reads the same.
+    """
+    from stockanalysis.core import etf_profile
+    from stockanalysis.core.market_regime import benchmark_leadership
+    try:
+        profiles = etf_profile.load_profiles(OUTPUT_DIR)
+        lead = benchmark_leadership(profiles)
+    except Exception as e:
+        print(f"[Dashboard] leadership unavailable ({e})")
+        return ""
+    if not lead.get("legs"):
+        return ""
+
+    tone = {"good": ("#E1F5EE", "#085041"), "watch": ("#FAEEDA", "#633806"),
+            "bad": ("#FCEBEB", "#791F1F"), "muted": ("#f1efea", "#52514e")}
+    bg, fg = tone.get(lead.get("tone"), tone["muted"])
+
+    legs = "".join(
+        f'<span style="margin-right:14px">{esc(l["ticker"])} '
+        f'<b style="color:{"#0F6E56" if l["above_200ma"] else "#A32D2D"}">'
+        f'{"↑" if l["above_200ma"] else "↓"} '
+        f'{l["dist_ma200"]:+.1f}%</b></span>'
+        for l in lead["legs"])
+
+    vix = profiles.get("^VIX") or {}
+    vix_html = ""
+    if vix.get("price") is not None:
+        # Above its 200-day means rising fear — the opposite reading to
+        # every other leg here, so it is coloured and worded separately.
+        calm = (vix.get("dist_ma200") or 0) < 0
+        vix_html = (f'<span style="margin-right:14px">VIX '
+                    f'<b style="color:{"#0F6E56" if calm else "#A32D2D"}">'
+                    f'{vix["price"]:.1f} {"calm" if calm else "elevated"}</b></span>')
+
+    missing = ""
+    if lead.get("missing"):
+        missing = (f'<div style="margin-top:3px;font-size:10px">No 200-day data '
+                   f'for {esc(", ".join(lead["missing"]))} — this read uses the rest.</div>')
+
+    stamp = (profiles.get("SPY") or {}).get("quote_at") or ""
+    return (f'<div style="background:{bg};color:{fg};border-radius:9px;'
+            f'padding:9px 12px;margin-top:10px;font-size:11.5px">'
+            f'<b>{esc(lead["verdict"])}</b> — {esc(lead["detail"])}'
+            f'<div style="margin-top:5px;font-size:10.5px;opacity:.85">'
+            f'{legs}{vix_html}<span style="opacity:.7">vs 200-day'
+            f'{" · ETF profiles as of " + esc(stamp[:16]) if stamp else ""}</span></div>'
+            f'{missing}</div>')
+
 
 def _ai_sentiment_teaser() -> str:
     """Compact score+link card for the home Dashboard — hidden until the
@@ -1981,7 +2043,12 @@ def research_page() -> tuple[str, str]:
     // Benchmarks in the order given, so the reference strip reads
     // large-cap → tech → industrials → small → mid → total-market rather
     // than alphabetically.
-    const ETF_BENCH_ORDER = ['SPY', 'VOO', 'QQQ', 'QQQM', 'DIA', 'MDY', 'IWM', 'VTI'];
+    const ETF_BENCH_ORDER = ['SPY', 'VOO', 'QQQ', 'QQQM', 'DIA', 'MDY', 'IWM',
+                             'VTI', '^VIX'];
+    // VIX rises when the market falls, so "up = green" would paint a fear
+    // spike as strength. Its colours are flipped and its distance-from-200
+    // is labelled as fear rather than trend.
+    const ETF_INVERTED = new Set(['^VIX']);
 
     // Trend is measured against the 200-day, not today's close — see
     // core/market_regime.benchmark_leadership for why.
@@ -2010,19 +2077,27 @@ def research_page() -> tuple[str, str]:
       if (!rows || !rows.length) return '';
       const cell = r => {{
         const chg = r.etf_change_pct;
-        const c = chg > 0 ? '#0F6E56' : chg < 0 ? '#A32D2D' : '#898781';
+        const inv = ETF_INVERTED.has(r.ticker);
+        const up = '#0F6E56', down = '#A32D2D';
+        const c = chg > 0 ? (inv ? down : up) : chg < 0 ? (inv ? up : down) : '#898781';
         const held = r.is_holding
           ? ' <span style="font-size:9px;color:#8a6d1a" title="Also one of your positions">held</span>' : '';
         return `<div style="flex:0 0 auto;min-width:118px;background:#faf9f5;
           border:0.5px solid #e1e0d9;border-radius:9px;padding:8px 11px">
-          <div style="font-size:12px;font-weight:700">${{r.ticker}}${{held}}</div>
+          <div style="font-size:12px;font-weight:700">${{r.ticker.replace('^','')}}${{held}}</div>
           <div style="font-size:14px;font-weight:600;margin:1px 0">${{fmtMoney(r.price)}}</div>
           <div style="font-size:11px;font-weight:600;color:${{c}}">${{
             chg == null ? '—' : (chg > 0 ? '+' : '') + chg.toFixed(2) + '%'}}</div>
-          <div style="font-size:9.5px;color:#898781;margin-top:2px">
-            YTD ${{r.etf_ytd_return == null ? '—' : r.etf_ytd_return.toFixed(1) + '%'}}
-            · vs200 ${{r.etf_dist_ma200 == null ? '—' :
-              (r.etf_dist_ma200 > 0 ? '+' : '') + r.etf_dist_ma200.toFixed(1) + '%'}}</div>
+          <div style="font-size:9.5px;color:#898781;margin-top:2px">${{
+            inv
+              ? (r.etf_dist_ma200 == null ? 'vs200 —'
+                 : (r.etf_dist_ma200 < 0 ? 'calm' : 'elevated') + ' · ' +
+                   (r.etf_dist_ma200 > 0 ? '+' : '') + r.etf_dist_ma200.toFixed(0) +
+                   '% vs 200d')
+              : 'YTD ' + (r.etf_ytd_return == null ? '—' : r.etf_ytd_return.toFixed(1) + '%') +
+                ' · vs200 ' + (r.etf_dist_ma200 == null ? '—' :
+                  (r.etf_dist_ma200 > 0 ? '+' : '') + r.etf_dist_ma200.toFixed(1) + '%')
+          }}</div>
         </div>`;
       }};
       return `<div style="margin-bottom:14px">
