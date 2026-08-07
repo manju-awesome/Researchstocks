@@ -217,6 +217,19 @@ FIELDS: tuple[Field, ...] = (
           "short_interest", "%", None, decimals=1),
     Field("investment_score", "Investment Score", "Fundamentals", NUM,
           "investment_score", "", UP, decimals=0),
+    # Decision-engine scores (core/decision_engine.py), computed here so they
+    # can be screened and preset on like any other field. Distinct keys from
+    # the scan's own investment_score/swing_score, which measure different
+    # things — conflating them in the picker would be a trap.
+    Field("decision_investment", "Long-term Score", "Fundamentals", NUM,
+          "decision_investment", "", UP,
+          hint="Decision engine: company quality 0-100", decimals=0),
+    Field("decision_swing", "Swing Setup Score", "Technical", NUM,
+          "decision_swing", "", UP,
+          hint="Decision engine: setup quality 0-100", decimals=0),
+    Field("decision_confluence", "Confluence", "Technical", NUM,
+          "decision_confluence", "", UP,
+          hint="Independent factors agreeing, 0-10", decimals=0),
     Field("conviction", "Conviction Score", "Fundamentals", NUM, "conviction",
           "", UP, hint="0-100 composite: quality + setup + timing",
           decimals=0),
@@ -348,6 +361,7 @@ def build_universe(index_rows: Iterable[dict],
     computing them means every ticker has them regardless of when its
     research page was last written.
     """
+    from stockanalysis.core import decision_engine as _de
     from stockanalysis.core.buy_zone import compute_buy_zone
     from stockanalysis.core.company_scores import (
         compute_business_quality, compute_economic_moat,
@@ -480,7 +494,12 @@ def build_universe(index_rows: Iterable[dict],
             "grade": _s(entry.get("grade")) or _s(raw.get("Grade")),
             "buy_zone_label": bz_label,
             "buy_zone_score": _f(bz.get("score")),
-            "in_buy_zone": None if bz_label is None else bz_label == "Buy Zone",
+            # Both buy-zone tiers, not just the middle one. Testing == "Buy
+            # Zone" excluded "Strong Buy Zone" — the better category — so
+            # the Near Buy Zone preset and the engine's BUY ZONE action
+            # silently skipped the best-scoring entries.
+            "in_buy_zone": (None if bz_label is None
+                            else bz_label in ("Buy Zone", "Strong Buy Zone")),
             "is_turnaround": None if category is None else category == "Turnaround",
             "is_momentum": None if category is None else category == "Momentum",
             "is_momentum_pullback": (None if category is None
@@ -507,6 +526,26 @@ def build_universe(index_rows: Iterable[dict],
             "key_level_score": _f(entry.get("key_level_score")),
             "entry_gate_pass": _b(raw.get("Entry_Gate_Pass")),
         }
+        # Decision scores need the row assembled first — they read the same
+        # normalised fields everything else does.
+        # Published only when enough of the inputs were measurable. An ETF
+        # has no margins, moat or EPS, so its investment score comes off RS
+        # and the 200MA alone — CIBR scored 95 from 10% coverage, which is
+        # the exact failure MIN_COVERAGE exists to stop. Below the bar the
+        # field reads as missing data, which the screener already reports,
+        # rather than as a number that outranks a fully-measured company.
+        try:
+            inv = _de.investment_score(row)
+            swing = _de.swing_score(row)
+            row["decision_investment"] = (
+                inv["score"] if inv["coverage"] >= _de.MIN_COVERAGE else None)
+            row["decision_swing"] = (
+                swing["score"] if swing["coverage"] >= _de.MIN_COVERAGE else None)
+            row["decision_confluence"] = _de.confluence(row)["score"]
+        except Exception:            # never let scoring break the universe
+            row["decision_investment"] = None
+            row["decision_swing"] = None
+            row["decision_confluence"] = None
         # Breakout needs both inputs; with either missing the answer is
         # "unknown", not False — otherwise a data gap reads as a rejection.
         row["is_breakout"] = (None if (dist_52wh is None or rvol is None)
@@ -951,6 +990,14 @@ def summarize(matches: list[dict]) -> dict:
         "avg_match": avg("match_score"),
         "above_200ma": count("above_200ma"),
         "in_buy_zone": count("in_buy_zone"),
+        # Broken out by label: "in buy zone" alone hides how many are one
+        # notch away, which is the more useful number when the strict count
+        # is small (the label is deliberately selective — ~10% of the
+        # library — so a single tile often reads 0).
+        "strong_buy_zone": sum(1 for m in matches
+                               if m.get("buy_zone_label") == "Strong Buy Zone"),
+        "watch_list": sum(1 for m in matches
+                          if m.get("buy_zone_label") == "Watch List"),
         "canslim": count("canslim"),
         "earnings_soon": count("earnings_soon"),
         "recovered": count("recovered"),
@@ -1012,6 +1059,16 @@ PRESETS: tuple[dict, ...] = (
      "conditions": [_c("dist_52w_high", "gte", -5), _c("rs_rank", "gt", 70)]},
 
     # ── Quality ─────────────────────────────────────────────────────────────
+    {"key": "longterm_ready", "icon": "🎓", "name": "Long-term Ready",
+     "group": "Quality",
+     "desc": "Decision engine rates the company 80+ — a business to own",
+     "strategy": "LONGTERM",
+     "conditions": [_c("decision_investment", "gt", 80)]},
+    {"key": "swing_ready", "icon": "🏄", "name": "Swing Ready",
+     "group": "Setups",
+     "desc": "Decision engine rates the setup 80+ — a trade to take",
+     "strategy": "SWING",
+     "conditions": [_c("decision_swing", "gt", 80)]},
     {"key": "high_conviction", "icon": "⭐", "name": "High Conviction",
      "group": "Quality",
      "desc": "Best composite of company, setup and timing in the library",
@@ -1089,8 +1146,8 @@ PRESETS: tuple[dict, ...] = (
     {"key": "vcp", "icon": "🌀", "name": "VCP Setups",
      "group": "Setups", "desc": "Volatility contraction patterns",
      "conditions": [_c("is_vcp", "eq", True)]},
-    {"key": "swing", "icon": "⚡", "name": "Swing Ready",
-     "group": "Setups", "desc": "Strong swing score, tight to the 8 EMA",
+    {"key": "swing", "icon": "⚡", "name": "Swing Score 70+",
+     "group": "Setups", "desc": "Scan's swing score high, tight to the 8 EMA",
      "conditions": [_c("swing_score", "gt", 70),
                     _c("abs_vs_8ema", "within", 3)]},
     {"key": "day_trade", "icon": "☀️", "name": "Day Trade Ready",
@@ -1179,6 +1236,25 @@ PRESETS: tuple[dict, ...] = (
      "group": "Risk", "desc": "Crowded shorts — squeeze fuel or a warning",
      "conditions": [_c("short_interest", "gt", 10)]},
 )
+
+# Which decision strategy a preset implies. A preset already expresses an
+# intent — "Swing Ready" selects on setup quality — so the action shown for
+# its results has to be gated on the same score. Without this the page can
+# select ALL on a swing score of 82 and then label it AVOID off a long-term
+# score of 53, contradicting the screen that produced it.
+PRESET_GROUP_STRATEGY = {
+    "Momentum": "SWING", "Setups": "SWING", "Events": "SWING",
+    "Quality": "LONGTERM", "Value": "LONGTERM", "Ownership": "LONGTERM",
+    "Contrarian": "LONGTERM", "Themes": "LONGTERM", "Risk": "LONGTERM",
+}
+
+
+def preset_strategy(key: str) -> str:
+    """Explicit per-preset strategy wins; otherwise the group's."""
+    p = PRESET_BY_KEY.get(key) or {}
+    return p.get("strategy") or PRESET_GROUP_STRATEGY.get(
+        p.get("group", ""), "LONGTERM")
+
 
 PRESET_BY_KEY = {p["key"]: p for p in PRESETS}
 

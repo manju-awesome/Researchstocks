@@ -76,9 +76,17 @@ def screener_page() -> tuple[str, str]:
 <div class="scr-resulthead">
   <div id="scr-resulttitle" style="font-size:13px;font-weight:600">Results</div>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+    <label style="font-size:11px;color:#898781">Strategy</label>
+    <select id="scr-strategy" onchange="scrRun()"
+            title="Which score gates the action: the company, the setup, or both">
+      <option value="LONGTERM">Long-term</option>
+      <option value="SWING">Swing</option>
+      <option value="BALANCED">Balanced</option>
+    </select>
     <label style="font-size:11px;color:#898781">Sort</label>
     <select id="scr-sort" onchange="scrRun()">
       <option value="match">Match score</option>
+      <option value="decision">Action, then score</option>
       <option value="composite">Weighted composite</option>
       <option value="quality">Quality</option>
       <option value="rs">RS rank</option>
@@ -227,7 +235,8 @@ _MODALS = """
     </div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="closeModal('scr-modal-picker')">Cancel</button>
-      <button class="btn" onclick="scrAddCondition()">Add condition</button>
+      <button class="btn" id="scr-condsubmit"
+              onclick="scrAddCondition()">Add condition</button>
     </div>
   </div>
 </dialog>
@@ -340,7 +349,8 @@ function scrRenderRules() {
     const n = st ? ` <span class="n">${st.alone}</span>` : '';
     const pill = `<span class="scr-pill${c.negate ? ' neg' : ''}" title="${
       st ? scrEsc(st.text) + ' — matches ' + st.alone + ' on its own; drop it and the screen returns ' + st.without : ''}">
-        <span onclick="scrToggleNeg(${i})" style="cursor:pointer">${
+        <span onclick="scrEditRule(${i})" style="cursor:pointer"
+              title="Click to change the operator or value">${
           scrEsc(st ? st.text : (c.field || ''))}${n}</span>
         <button class="x" onclick="scrRemove(${i})">×</button></span>`;
     const join = i < RULES.items.length - 1
@@ -349,7 +359,7 @@ function scrRenderRules() {
   });
   box.innerHTML = parts.join('') +
     '<div style="font-size:10px;color:#898781;margin-top:7px">' +
-    'Click a pill to negate it · click ' + RULES.op + ' to switch to ' +
+    'Click a pill to edit it · click ' + RULES.op + ' to switch to ' +
     (RULES.op === 'AND' ? 'OR' : 'AND') + ' · the small number is how many ' +
     'tickers that rule matches on its own</div>';
 }
@@ -357,13 +367,28 @@ function scrRenderRules() {
 // ── presets & saved ─────────────────────────────────────────────────────────
 let presetGroup = '';        // '' = all groups
 
+// Saved searches are shown as presets in their own group. They are the
+// same thing from the user's side — a named screen with a count — and
+// keeping them only in a dropdown hid the ones you actually built.
+const MY_SCREENS = 'My screens';
+
+function scrAllPresets() {
+  const saved = (META.saved || []).map(s => ({
+    key: 'saved:' + s.name, icon: s.icon || '⭐', name: s.name,
+    desc: (s.pills || []).join('  AND  ') || 'Saved screen',
+    group: MY_SCREENS, count: s.count, saved: true,
+    conditions: ((s.rules || {}).items || []).filter(i => !i.items),
+    pills: s.pills || [], strategy: s.strategy_mode || null,
+  }));
+  return saved.concat(META.presets || []);
+}
+
 function scrRenderPresetTabs() {
-  const groups = META.preset_groups || [];
+  const all = scrAllPresets();
+  const groups = [MY_SCREENS, ...(META.preset_groups || [])];
   const counts = {};
-  for (const p of (META.presets || [])) {
-    counts[p.group] = (counts[p.group] || 0) + 1;
-  }
-  const tabs = [['', 'All', (META.presets || []).length],
+  for (const p of all) counts[p.group] = (counts[p.group] || 0) + 1;
+  const tabs = [['', 'All', all.length],
                 ...groups.map(g => [g, g, counts[g] || 0])].filter(t => t[2]);
   document.getElementById('scr-presettabs').innerHTML = tabs.map(([val, label, n]) =>
     `<button class="scr-ptab${presetGroup === val ? ' on' : ''}"
@@ -378,7 +403,7 @@ function scrSetPresetGroup(g) {
 
 function scrRenderPresets() {
   const q = (document.getElementById('scr-presetsearch').value || '').trim().toLowerCase();
-  const all = META.presets || [];
+  const all = scrAllPresets();
   const shown = all.filter(p =>
     (!presetGroup || p.group === presetGroup) &&
     (!q || p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q) ||
@@ -391,7 +416,7 @@ function scrRenderPresets() {
         // library just has nothing matching it right now, and hiding it would
         // look like the preset doesn't exist.
         `<div class="scr-preset${p.count === 0 ? ' zero' : ''}"
-              onclick="scrApplyPreset('${p.key}')"
+              onclick="scrApplyPreset(this.dataset.k)" data-k="${scrEsc(p.key)}"
               title="${scrEsc(p.pills.join('  AND  '))}${p.count === 0 ?
                 '\n\nNothing in the library matches this right now.' : ''}">
            <span class="n">${p.count}</span>
@@ -401,11 +426,20 @@ function scrRenderPresets() {
 }
 
 function scrApplyPreset(key) {
-  const p = (META.presets || []).find(x => x.key === key);
+  const p = scrAllPresets().find(x => x.key === key);
   if (!p) return;
   RULES = { op: 'AND', negate: false, items: p.conditions.map(c => Object.assign({}, c)) };
   document.getElementById('scr-nl').value = '';
-  document.getElementById('scr-sort').value = 'match';
+  const savedDef = p.saved
+    ? (META.saved || []).find(s => s.name === p.name) : null;
+  document.getElementById('scr-sort').value =
+    (savedDef && savedDef.sort) || 'match';
+  // The preset picks the strategy too. A screen selecting on setup quality
+  // must have its verdicts gated on the setup score, or the page
+  // contradicts itself — Swing Ready picking ALL on swing 82, then
+  // labelling it AVOID off a long-term score of 53.
+  const sel = document.getElementById('scr-strategy');
+  if (sel && p.strategy) sel.value = p.strategy;
   scrRun();
 }
 
@@ -563,13 +597,37 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── field picker ────────────────────────────────────────────────────────────
-function scrOpenPicker(preselect) {
+let EDIT_INDEX = null;      // rule being edited, or null when adding
+
+function scrEditRule(i) {
+  const c = RULES.items[i];
+  if (!c || c.items) return;
+  EDIT_INDEX = i;
+  scrOpenPicker(c.field, c);
+}
+
+function scrOpenPicker(preselect, existing) {
+  if (!existing) EDIT_INDEX = null;
   document.getElementById('scr-fieldsearch').value = '';
   PICKED = null;
   document.getElementById('scr-condform').style.display = 'none';
   scrRenderPicker();
   openModal('scr-modal-picker');
   if (preselect) scrPickField(preselect);
+  const submit = document.getElementById('scr-condsubmit');
+  if (submit) submit.textContent = existing ? 'Update rule' : 'Add condition';
+  if (existing) {
+    // Prefill so editing changes one thing rather than retyping the rule.
+    const op = document.getElementById('scr-condop');
+    if (op) { op.value = existing.op; scrPickerOpChanged(); }
+    const v = document.getElementById('scr-condvalue');
+    if (v && existing.value !== null && existing.value !== undefined) {
+      v.value = existing.value;
+    }
+    const v2 = document.getElementById('scr-condvalue2');
+    if (v2 && existing.value2 != null) v2.value = existing.value2;
+    document.getElementById('scr-condneg').checked = !!existing.negate;
+  }
 }
 
 function scrRenderPicker() {
@@ -647,6 +705,12 @@ function scrAddCondition() {
   if (v2 && v2.value !== '') cond.value2 = parseFloat(v2.value);
   document.getElementById('scr-condneg').checked = false;
   closeModal('scr-modal-picker');
+  if (EDIT_INDEX !== null) {
+    RULES.items[EDIT_INDEX] = cond;
+    EDIT_INDEX = null;
+    scrRun();
+    return;
+  }
   scrAdd([cond], false);
 }
 
@@ -679,6 +743,7 @@ async function scrRun(extra) {
   const seq = ++scrSeq;
   const payload = Object.assign({
     rules: RULES, composite: WEIGHTS,
+    strategy: (document.getElementById('scr-strategy') || {}).value || 'LONGTERM',
     sort: document.getElementById('scr-sort').value, limit: 200,
   }, extra || {});
   document.getElementById('scr-livecount').textContent = '…';
@@ -700,6 +765,9 @@ async function scrRun(extra) {
   // A natural-language search comes back as real rules, so the pills and
   // every later edit operate on what the parser actually understood.
   if (extra && extra.query) RULES = data.rules;
+  // A new result set makes any drill-down stale — the group it named may
+  // not exist in these rows.
+  resultFilter = null;
   scrRenderRules();
   scrRenderSummary(data);
   scrRenderResults(data);
@@ -726,12 +794,14 @@ function scrRenderSummary(d) {
     html = '<div class="scr-stats">' + tiles.map(t =>
       `<div class="scr-stat"><div class="v">${t[1]}${t[2] || ''}</div>
          <div class="l">${t[0]}</div></div>`).join('') +
-      `<div class="scr-stat"><div class="v">${s.above_200ma}</div>
-         <div class="l">Above 200MA</div></div>
-       <div class="scr-stat"><div class="v">${s.in_buy_zone}</div>
-         <div class="l">In Buy Zone</div></div>
-       <div class="scr-stat"><div class="v">${s.earnings_soon}</div>
-         <div class="l">Earnings ≤7d</div></div></div>`;
+      scrCountTile('above200', 'Above 200MA', s.above_200ma) +
+      scrCountTile('buyzone', 'Buy Zone',
+        (s.strong_buy_zone || 0) + (s.in_buy_zone || 0),
+        `<span style="font-size:11px;color:#898781">(${s.strong_buy_zone || 0} strong)</span>`,
+        'Buy Zone label from core/buy_zone.py — purely technical entry quality') +
+      scrCountTile('watchlist', 'Watch List', s.watch_list || 0) +
+      scrCountTile('earnings', 'Earnings ≤7d', s.earnings_soon) +
+      scrStrategyTile(d) + scrActionTiles(d) + '</div>';
   }
   document.getElementById('scr-summary').innerHTML = html;
 
@@ -767,6 +837,89 @@ function scrRenderSummary(d) {
     : '';
 }
 
+// Which score gated the actions below. Without it a red AVOID on a stock
+// the screen deliberately selected reads as a contradiction rather than as
+// "avoid for THIS purpose" — see the ALL case: swing 82, long-term 53.
+function scrStrategyTile(d) {
+  const label = {LONGTERM: 'Long-term', SWING: 'Swing', BALANCED: 'Balanced'}[d.strategy]
+    || d.strategy || '—';
+  const sub = {LONGTERM: 'gated on company quality',
+               SWING: 'gated on setup quality',
+               BALANCED: 'needs both'}[d.strategy] || '';
+  return `<div class="scr-stat" style="background:#E6F1FB;border-color:#cfe2f5"
+    title="${sub}"><div class="v" style="font-size:15px;color:#0C447C">${label}</div>
+    <div class="l">Strategy</div></div>`;
+}
+
+// Decision counts, actionable first — the point of the layer is to shrink a
+// long list to the few worth acting on, so the counts lead with those.
+function scrActionTiles(d) {
+  const counts = d.actions || {};
+  const order = ['BUY NOW', 'BREAKOUT ENTRY', 'BUY ZONE', 'BUY ON PULLBACK',
+                 'WATCH', 'WAIT', 'SPECULATIVE'];
+  const shown = order.filter(a => counts[a]);
+  if (!shown.length) return '';
+  return shown.map(a => {
+    const [bg, fg] = SCR_ACTION_TONE[a] || ['#f1efea', '#52514e'];
+    const on = resultFilter && resultFilter.value === a;
+    return `<div class="scr-stat" onclick="scrSetResultFilter('action', '${a}')"
+      title="Click to show only these"
+      style="background:${bg};cursor:pointer;border-color:${on ? fg : 'transparent'}">
+      <div class="v" style="color:${fg}">${counts[a]}</div>
+      <div class="l" style="color:${fg};opacity:.85">${scrEsc(a)}</div></div>`;
+  }).join('');
+}
+
+// ── drill-down from the summary ────────────────────────────────────────────
+// The tiles describe the current result set, so clicking one narrows the
+// list to that subset rather than re-running the screen — the numbers and
+// the rows below them stay the same population, which is the only way the
+// count can be trusted to match what you then see.
+let resultFilter = null;      // {kind, value} or null
+
+const SCR_TILE_TESTS = {
+  above200: r => r.above_200ma === true,
+  buyzone:  r => r.buy_zone_label === 'Buy Zone'
+                 || r.buy_zone_label === 'Strong Buy Zone',
+  watchlist: r => r.buy_zone_label === 'Watch List',
+  earnings: r => r.earnings_soon === true,
+  action:   (r, v) => r.action === v,
+};
+
+function scrCountTile(kind, label, value, extra, title) {
+  const on = resultFilter && resultFilter.kind === kind && !resultFilter.value;
+  const dead = !value;      // nothing to drill into
+  return `<div class="scr-stat${on ? ' on' : ''}"
+    ${dead ? '' : `onclick="scrSetResultFilter('${kind}')"`}
+    style="${dead ? '' : 'cursor:pointer'}${on ? ';border-color:#185FA5;background:#E6F1FB' : ''}"
+    title="${title || (dead ? '' : 'Click to show only these')}">
+    <div class="v">${value}${extra ? ' ' + extra : ''}</div>
+    <div class="l">${label}</div></div>`;
+}
+
+function scrSetResultFilter(kind, value) {
+  // A falsy kind clears — "Show all" and clicking the active tile again
+  // both land here, and neither should leave a filter with no test behind.
+  const same = resultFilter && resultFilter.kind === kind
+               && resultFilter.value === value;
+  resultFilter = (!kind || same) ? null : {kind, value};
+  if (LAST) { scrRenderSummary(LAST); scrRenderResults(LAST); }
+}
+
+function scrFilteredResults(d) {
+  if (!resultFilter) return d.results;
+  const test = SCR_TILE_TESTS[resultFilter.kind];
+  if (!test) return d.results;
+  return d.results.filter(r => test(r, resultFilter.value));
+}
+
+function scrFilterLabel() {
+  if (!resultFilter) return '';
+  const names = {above200: 'Above 200MA', buyzone: 'Buy Zone',
+                 watchlist: 'Watch List', earnings: 'Earnings ≤7d'};
+  return resultFilter.value || names[resultFilter.kind] || resultFilter.kind;
+}
+
 function scrToggleView() {
   VIEW = VIEW === 'cards' ? 'table' : 'cards';
   document.getElementById('scr-viewbtn').textContent =
@@ -780,9 +933,22 @@ function scrRenderResults(d) {
     box.innerHTML = scrEmptyHelp(d);
     return;
   }
-  box.innerHTML = VIEW === 'cards'
-    ? d.results.map(scrCard).join('')
-    : scrTable(d);
+  const rows = scrFilteredResults(d);
+  const banner = resultFilter
+    ? `<div style="display:flex;gap:9px;align-items:center;background:#E6F1FB;
+         color:#0C447C;border-radius:9px;padding:8px 12px;margin-bottom:10px;
+         font-size:11.5px">Showing <b>${rows.length}</b> of ${d.results.length}
+         — <b>${scrEsc(scrFilterLabel())}</b>
+         <button class="btn secondary" style="font-size:10px;padding:3px 9px;
+           margin-left:auto" onclick="scrSetResultFilter(null)">Show all</button></div>`
+    : '';
+  if (!rows.length) {
+    box.innerHTML = banner + '<div class="scr-empty">No rows in this group.</div>';
+    return;
+  }
+  box.innerHTML = banner + (VIEW === 'cards'
+    ? rows.map(scrCard).join('')
+    : scrTable(Object.assign({}, d, {results: rows})));
 }
 
 // An empty result is a question ("why?"), so answer it with the engine's
@@ -824,6 +990,56 @@ function scrBig(v) {
   return '$' + Math.round(v);
 }
 
+// ── decision layer (core/decision_engine.py) ────────────────────────────────
+// The screener says which stocks match; these say what to do about each one.
+// Both are shown: the match score is why it is on the list, the action is
+// what the decision engine makes of it, and they answer different questions.
+const SCR_ACTION_TONE = {
+  'BUY NOW':         ['#E1F5EE', '#085041'],
+  'BUY ZONE':        ['#E1F5EE', '#085041'],
+  'BUY ON PULLBACK': ['#E1F5EE', '#085041'],
+  'BREAKOUT ENTRY':  ['#E6F1FB', '#0C447C'],
+  'WATCH':           ['#E6F1FB', '#0C447C'],
+  'WAIT':            ['#FAEEDA', '#633806'],
+  'SPECULATIVE':     ['#FAEEDA', '#633806'],
+  'AVOID':           ['#FCEBEB', '#791F1F'],
+};
+
+function scrActionBadge(r) {
+  if (!r.action) return '';
+  const [bg, fg] = SCR_ACTION_TONE[r.action] || ['#f1efea', '#52514e'];
+  // An action resting on thin data is marked, not hidden — the engine
+  // already refuses to issue a buy in that case, but the caveat travels.
+  const thin = r.decision_reliable === false
+    ? ' <span title="Some scoring inputs are missing for this ticker">·⚠</span>' : '';
+  return `<span style="background:${bg};color:${fg};font-size:11px;font-weight:700;
+    padding:3px 10px;border-radius:20px">${r.action_icon || ''} ${scrEsc(r.action)}${thin}</span>`;
+}
+
+function scrDecisionRow(r) {
+  if (!r.action) return '';
+  const s = (label, v, title) => v == null ? '' :
+    `<span title="${title}">${label} <b>${v}</b></span>`;
+  const bits = [
+    s('Inv', r.inv_score, 'Investment score — company quality, 0-100'),
+    s('Swing', r.swing_dec, 'Swing score — setup quality, 0-100'),
+    r.confluence == null ? '' :
+      `<span title="Independent factors agreeing, out of 10">Confluence
+        <b>${r.confluence}/10</b></span>`,
+    r.earnings_risk && r.earnings_risk !== 'LOW' && r.earnings_risk !== 'UNKNOWN'
+      ? `<span style="color:#8a6d1a">Earnings ${scrEsc(r.earnings_risk)}</span>` : '',
+  ].filter(Boolean).join('');
+  // "What would change this" is the point of a WATCH — without it the
+  // verdict is just a label you have to re-derive tomorrow.
+  const trig = (r.decision_triggers || []).length
+    ? `<div style="font-size:10.5px;color:#0C447C;margin-top:3px">→ ${
+        (r.decision_triggers || []).map(scrEsc).join(' · ')}</div>` : '';
+  const risks = (r.decision_risks || []).length
+    ? `<div style="font-size:10.5px;color:#8a6d1a;margin-top:3px">⚠ ${
+        (r.decision_risks || []).map(scrEsc).join(' · ')}</div>` : '';
+  return `<div class="scr-meta" style="margin-top:7px">${bits}</div>${trig}${risks}`;
+}
+
 function scrCard(r) {
   const why = (r.why || []).map(w =>
     `<div class="${w.passed ? '' : 'no'}">${w.passed ? '✓' : '✗'} ${scrEsc(w.text)}</div>`
@@ -862,9 +1078,11 @@ function scrCard(r) {
         text-overflow:ellipsis;white-space:nowrap">${scrEsc(name)}</span>
       ${tags}${recovered}
       <span style="font-size:11px;color:#8a6d1a">${stars}</span>
+      ${scrActionBadge(r)}
       <div class="scr-ms"><div class="v">${r.match_score}</div>
         <div class="l">match</div></div>
     </div>
+    ${scrDecisionRow(r)}
     <div class="scr-meta">${meta}</div>
     <div class="scr-why">${why}</div>
   </div>`;

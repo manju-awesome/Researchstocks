@@ -883,6 +883,41 @@ def screen(payload: dict) -> dict:
     res = S.screen(rows, group, weights=weights or None,
                    composite_weights=composite or None, sort=sort, limit=limit)
 
+    # Decision layer over the matches. Screening decides membership; this
+    # says what to do about each one. Applied after the sort/limit so it
+    # only runs over the page being returned, not the whole universe.
+    from stockanalysis.core import decision_engine as DE
+    strategy = str(payload.get("strategy") or "LONGTERM").upper()
+    if strategy not in DE.STRATEGIES:
+        strategy = "LONGTERM"
+    regime = str(payload.get("regime") or "FAVORABLE").upper()
+    for m in res.matches:
+        try:
+            d = DE.decide(m, regime=regime, strategy=strategy)
+        except Exception as e:                              # pragma: no cover
+            print(f"[Screener] decision failed for {m.get('ticker')}: {e}")
+            continue
+        m["action"] = d["action"]
+        m["action_icon"] = d["icon"]
+        m["inv_score"] = d["investment"]
+        m["swing_dec"] = d["swing"]
+        m["confluence"] = d["confluence"]
+        m["decision_triggers"] = d["triggers"]
+        m["decision_risks"] = d["risks"]
+        m["earnings_risk"] = d["earnings_risk"]
+        m["decision_reliable"] = d["reliable"]
+
+    if sort == "decision":
+        # Actionable first, then by how strongly it scored. The engine's
+        # action order is the ranking — sorting by score alone would put a
+        # high-scoring AVOID above a BUY.
+        rank = {a: i for i, a in enumerate(DE.ACTIONS)}
+        res.matches.sort(key=lambda m: (
+            rank.get(m.get("action"), len(DE.ACTIONS)),
+            -(m.get("inv_score") or 0) if strategy == "LONGTERM"
+            else -(m.get("swing_dec") or 0),
+            -(m.get("confluence") or 0)))
+
     return {
         "ok": True,
         "universe": res.total,
@@ -900,7 +935,19 @@ def screen(payload: dict) -> dict:
                     for k, v in sorted(res.missing_counts.items(),
                                        key=lambda kv: -kv[1]) if v],
         "refine": S.refine_suggestions(group),
+        "strategy": strategy,
+        "actions": _action_counts(res.matches),
     }
+
+
+def _action_counts(matches: list[dict]) -> dict:
+    """Tally by action so the page can lead with what is actionable."""
+    out: dict = {}
+    for m in matches:
+        a = m.get("action")
+        if a:
+            out[a] = out.get(a, 0) + 1
+    return out
 
 
 def _field_label(key: str) -> str:
@@ -921,6 +968,9 @@ _SCREEN_KEYS = (
     "days_to_earnings", "earnings_soon", "canslim", "updated_at",
     "recovered", "data_as_of",
     "match_score", "composite", "why", "matched_fields",
+    # decision layer (core/decision_engine.py)
+    "action", "action_icon", "inv_score", "swing_dec", "confluence",
+    "decision_triggers", "decision_risks", "earnings_risk", "decision_reliable",
 )
 
 
@@ -953,6 +1003,7 @@ def screener_meta() -> dict:
         # the last scan, not on the preset.
         "presets": [{"key": p["key"], "icon": p["icon"], "name": p["name"],
                      "desc": p["desc"], "group": p.get("group", "Other"),
+                     "strategy": S.preset_strategy(p["key"]),
                      "count": S.screen(rows, S.preset_group(p["key"]),
                                        with_stats=False).summary["count"],
                      "conditions": [S.conditions_to_json(c)
@@ -962,9 +1013,29 @@ def screener_meta() -> dict:
         "preset_groups": list(S.PRESET_GROUPS),
         "enums": _enum_values(rows),
         "composite_defaults": S.COMPOSITE_DEFAULTS,
-        "saved": load_saved_screens(),
+        "saved": _saved_with_counts(rows),
         "universe": len(rows),
     }
+
+
+def _saved_with_counts(rows: list[dict]) -> list[dict]:
+    """Saved searches with a live match count, so they can render in the
+    preset grid alongside the built-ins instead of only in a dropdown — a
+    screen you built yourself is the one you most want a count on."""
+    from stockanalysis.core import screener as S
+    out = []
+    for s in load_saved_screens():
+        entry = dict(s)
+        try:
+            group = S.group_from_json(s.get("rules"))
+            entry["count"] = S.screen(rows, group, with_stats=False
+                                      ).summary["count"]
+            entry["pills"] = [S.describe(c) for c in S._walk(group)]
+        except Exception:
+            entry["count"] = None
+            entry["pills"] = []
+        out.append(entry)
+    return out
 
 
 def _enum_values(rows: list[dict] | None = None) -> dict:

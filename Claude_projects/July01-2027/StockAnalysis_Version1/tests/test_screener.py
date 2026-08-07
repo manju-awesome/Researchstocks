@@ -608,5 +608,95 @@ class TestPresetLibrary(unittest.TestCase):
         self.assertGreaterEqual(len(S.PRESETS), 30)
 
 
+class TestDecisionFields(unittest.TestCase):
+    """The decision-engine scores are exposed as screenable fields so
+    presets can gate on them — with the coverage guard intact."""
+
+    def _full(self, **kw):
+        raw = {"Ticker": "AAA", "Current Price": 100.0, "8EMA": 99.0,
+               "50MA": 90.0, "200MA": 80.0, "Above_200MA": "True",
+               "GrossMargin%": 60.0, "OperatingMargin%": 30.0,
+               "ReturnOnEquity%": 30.0, "FCF_Margin%": 25.0, "Revenue": 25.0,
+               "EPS_Growth%": 40.0, "DebtToEquity": 30.0, "Inst_Own%": 80.0,
+               "CurrentRatio": 2.0, "QuickRatio": 1.5, "TotalCash": 1e10,
+               "TotalDebt": 1e9, "FCF_Positive": "True", "RS_Rank": 90,
+               "Forward_PE": 18.0, "RVOL": 1.6, "Swing_Score": 85,
+               "Breakout_Probability": 85.0, "RR_T2": 3.0}
+        raw.update(kw)
+        return {"ticker": "AAA", "sector": "Technology", "raw": raw}
+
+    def test_scores_are_screenable(self):
+        rows = S.build_universe([self._full()])
+        self.assertIsNotNone(rows[0]["decision_investment"])
+        self.assertIsNotNone(rows[0]["decision_swing"])
+        self.assertIn("decision_investment", S.FIELD_BY_KEY)
+        self.assertIn("decision_swing", S.FIELD_BY_KEY)
+
+    def test_a_fund_gets_no_investment_score(self):
+        # An ETF has no margins, moat or EPS — scoring it off RS and the
+        # 200MA alone produced a 95 that outranked fully-measured companies.
+        rows = S.build_universe([{
+            "ticker": "CIBR", "sector": "ETF",
+            "raw": {"Ticker": "CIBR", "Current Price": 100.0, "200MA": 80.0,
+                    "Above_200MA": "True", "RS_Rank": 95}}])
+        self.assertIsNone(rows[0]["decision_investment"])
+
+    def test_the_two_ready_presets_exist_and_gate_at_80(self):
+        for key in ("longterm_ready", "swing_ready"):
+            preset = S.PRESET_BY_KEY[key]
+            cond = preset["conditions"][0]
+            with self.subTest(preset=key):
+                self.assertEqual(cond.value, 80)
+                self.assertEqual(cond.op, "gt")
+                self.assertIn(cond.field, S.FIELD_BY_KEY)
+
+    def test_ready_presets_select_on_the_right_score(self):
+        self.assertEqual(S.PRESET_BY_KEY["longterm_ready"]["conditions"][0].field,
+                         "decision_investment")
+        self.assertEqual(S.PRESET_BY_KEY["swing_ready"]["conditions"][0].field,
+                         "decision_swing")
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPresetStrategy(unittest.TestCase):
+    """A preset expresses an intent; the action shown for its results has to
+    be gated on the matching score or the page contradicts its own screen."""
+
+    def test_the_ready_presets_declare_their_own_score(self):
+        self.assertEqual(S.preset_strategy("longterm_ready"), "LONGTERM")
+        self.assertEqual(S.preset_strategy("swing_ready"), "SWING")
+
+    def test_setup_presets_default_to_swing(self):
+        self.assertEqual(S.preset_strategy("todays_breakouts"), "SWING")
+        self.assertEqual(S.preset_strategy("near_buy_zone"), "SWING")
+
+    def test_quality_presets_default_to_longterm(self):
+        self.assertEqual(S.preset_strategy("compounders"), "LONGTERM")
+        self.assertEqual(S.preset_strategy("hedge_fund"), "LONGTERM")
+
+    def test_every_preset_resolves_to_a_real_strategy(self):
+        from stockanalysis.core.decision_engine import STRATEGIES
+        for p in S.PRESETS:
+            with self.subTest(preset=p["key"]):
+                self.assertIn(S.preset_strategy(p["key"]), STRATEGIES)
+
+    def test_an_unknown_key_falls_back_safely(self):
+        self.assertEqual(S.preset_strategy("nope"), "LONGTERM")
+
+
+class TestBuyZoneTiers(unittest.TestCase):
+    def test_strong_buy_zone_counts_as_in_buy_zone(self):
+        # Testing == "Buy Zone" excluded the better tier, so the Near Buy
+        # Zone preset skipped exactly the names it should have led with.
+        rows = S.build_universe([
+            {"ticker": "AAA", "raw": {"Ticker": "AAA", "Current Price": 100.0,
+                                      "Pct_vs_8EMA": -0.5, "Dist_52W_High%": -8.0,
+                                      "Above_200MA": "True", "Price_vs_50MA%": 1.0,
+                                      "Pullback_Vol_Ratio": 0.6,
+                                      "VolumeDryingUp": "True", "RS_Rank": 95,
+                                      "RSI_14": 50.0}}])
+        self.assertEqual(rows[0]["buy_zone_label"], "Strong Buy Zone")
+        self.assertTrue(rows[0]["in_buy_zone"])
