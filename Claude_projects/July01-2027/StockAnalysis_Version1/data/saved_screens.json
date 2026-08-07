@@ -194,6 +194,47 @@
     }
   },
   {
+    "name": "SwingTrades",
+    "icon": "\u2b50",
+    "rules": {
+      "op": "AND",
+      "negate": false,
+      "items": [
+        {
+          "field": "swing_score",
+          "op": "gt",
+          "value": 75,
+          "value2": null,
+          "negate": false,
+          "weight": 1
+        },
+        {
+          "field": "abs_vs_8ema",
+          "op": "within",
+          "value": 2,
+          "value2": null,
+          "negate": false,
+          "weight": 1
+        },
+        {
+          "field": "breakout_probability",
+          "op": "gt",
+          "value": 70,
+          "value2": null,
+          "negate": false,
+          "weight": 1
+        },
+        {
+          "field": "rr",
+          "op": "gt",
+          "value": 3,
+          "negate": false
+        }
+      ]
+    },
+    "sort": "match"
+  },
+  {
     "name": "Turnaround Candidates",
     "icon": "\u2b50",
     "sort": "match",
@@ -219,5 +260,40 @@
         }
       ]
     }
+  },
+  {
+    "name": "put_candidate",
+    "icon": "\u2b50",
+    "rules": {
+      "op": "AND",
+      "negate": false,
+      "items": [
+        {
+          "field": "rsi",
+          "op": "gt",
+          "value": 70,
+          "negate": false
+        },
+        {
+          "field": "pct_vs_8ema",
+          "op": "gt",
+          "value": 5,
+          "negate": false
+        },
+        {
+          "field": "rvol",
+          "op": "lt",
+          "value": 1,
+          "negate": false
+        },
+        {
+          "field": "dist_52w_high",
+          "op": "within",
+          "value": -5,
+          "negate": false
+        }
+      ]
+    },
+    "sort": "match"
   }
 ]

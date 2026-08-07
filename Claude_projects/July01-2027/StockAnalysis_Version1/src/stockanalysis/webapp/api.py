@@ -317,6 +317,76 @@ def job_earnings_today(universes: list[str] | None, days_ahead: int,
               f"tick it in Run a Scan to grade them.")
 
 
+def job_etf_profiles(progress: jobstore.Progress) -> str:
+    """Refresh theme / holdings / expense ratio / AUM for every ETF in the
+    library. Separate from the scan because none of it comes from the equity
+    pipeline — and because it's cheap enough (~0.5s a fund) to run on its own
+    whenever a new fund is added."""
+    from stockanalysis.core import etf_profile
+    from stockanalysis.reporting.research import load_research_index
+    index = load_research_index(OUTPUT_DIR)
+    tickers = etf_profile.etf_tickers(index.values())
+    if not tickers:
+        return "no ETFs in the library — add funds and run a scan first"
+    result = etf_profile.refresh_profiles(
+        tickers, OUTPUT_DIR,
+        progress_cb=lambda stage, done, total: progress.stage(stage, done, total))
+    msg = f"{result['ok']} of {result['requested']} fund(s) updated"
+    if result["failed"]:
+        msg += f", {result['failed']} failed: " + "; ".join(result["errors"][:3])
+    return msg
+
+
+def etf_set_theme(form: dict) -> dict:
+    """Rename a fund's theme from the ETF views. form: parse_qs-style dict."""
+    from stockanalysis.core import etf_profile
+    ticker = (form.get("ticker") or [""])[0]
+    theme = (form.get("theme") or [""])[0]
+    try:
+        return etf_profile.set_theme(OUTPUT_DIR, ticker, theme)
+    except Exception as e:
+        return {"ok": False, "message": f"could not save theme: {e}"}
+
+
+ETF_ALLOCATIONS_PATH = PROJECT_ROOT / "data" / "etf_allocations.json"
+
+
+def load_etf_allocations() -> dict:
+    import json
+    if not ETF_ALLOCATIONS_PATH.exists():
+        return {}
+    try:
+        data = json.loads(ETF_ALLOCATIONS_PATH.read_text())
+    except (ValueError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def etf_portfolio(payload: dict) -> dict:
+    """Look-through analysis for a set of ETF weights, and persist them.
+
+    Saved so the panel comes back with your book still entered — the same
+    atomic write the other user-state files use, since two servers on
+    different ports have clobbered a plain write here before.
+    """
+    import json
+    from stockanalysis.core import etf_portfolio as PF
+    from stockanalysis.core import etf_profile
+
+    allocations = payload.get("allocations") or {}
+    if payload.get("save", True):
+        try:
+            ETF_ALLOCATIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            tmp = ETF_ALLOCATIONS_PATH.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(allocations, indent=2))
+            tmp.replace(ETF_ALLOCATIONS_PATH)
+        except OSError as e:
+            print(f"[ETF] could not save allocations ({e})")
+
+    result = PF.analyze(allocations, etf_profile.load_profiles(OUTPUT_DIR))
+    return result
+
+
 def library_tickers() -> list[str]:
     """Every ticker with a research page — the index is the library, so this
     is what "all tickers in the research library" means."""
@@ -583,6 +653,10 @@ def dispatch_run(action: str, form: dict) -> str:
             "scan_earnings_today", f"{label} screen: {scope}",
             lambda p: job_earnings_today(universes, days_ahead, p))
 
+    if action == "etf_profiles":
+        return jobstore.start("etf_profiles", "ETF profiles refresh",
+                              job_etf_profiles)
+
     if action == "news":
         watchlists = form.get("watchlist") or []
         tickers = watchlist_tickers(watchlists)
@@ -767,11 +841,20 @@ def _screen_universe():
     except Exception as e:
         print(f"[Screener] snapshot unavailable, using index alone ({e})")
         entries = list(index.values())
+    # Tickers no scan ever got a quote for are dropped rather than screened.
+    # They can't satisfy any condition, so keeping them would only inflate
+    # every "no value for N of M tickers" note with symbols that have no data
+    # to begin with — and the entry gate stamps them Category=Avoid, so they
+    # would wrongly match a "Category = Avoid" screen as if that were a
+    # finding. The Research page names them; see research_snapshot.has_quote.
+    entries = [e for e in entries if research_snapshot.has_quote(e)]
     try:
-        watch = {t for names in load_watchlists().values() for t in (names or [])}
+        watchlists = load_watchlists()
     except Exception:
-        watch = set()
-    return build_universe(entries, watchlist_tickers=watch)
+        watchlists = {}
+    watch = {t for names in watchlists.values() for t in (names or [])}
+    return build_universe(entries, watchlist_tickers=watch,
+                          watchlist_map=watchlists)
 
 
 def screen(payload: dict) -> dict:
@@ -847,8 +930,14 @@ def _screen_row(m: dict) -> dict:
 
 def screener_meta() -> dict:
     """Field registry + presets + saved searches — everything the page needs
-    to build its pickers without hardcoding a second copy of the registry."""
+    to build its pickers without hardcoding a second copy of the registry.
+
+    The universe is built once and reused: this used to call
+    _screen_universe() three times (counts, enum values, preset counts),
+    which is the same ~560-row build repeated for no reason.
+    """
     from stockanalysis.core import screener as S
+    rows = _screen_universe()
     return {
         "fields": [{"key": f.key, "label": f.label, "group": f.group,
                     "kind": f.kind, "unit": f.unit, "hint": f.hint,
@@ -858,34 +947,41 @@ def screener_meta() -> dict:
                    for f in S.FIELDS],
         "groups": list(S.FIELD_GROUPS),
         "operators": S.OPERATORS,
+        # Counts are computed live (~60ms for the whole set) rather than
+        # cached, so a preset that currently matches nothing says so on its
+        # card instead of after a click. Whether a screen is empty depends on
+        # the last scan, not on the preset.
         "presets": [{"key": p["key"], "icon": p["icon"], "name": p["name"],
-                     "desc": p["desc"],
+                     "desc": p["desc"], "group": p.get("group", "Other"),
+                     "count": S.screen(rows, S.preset_group(p["key"]),
+                                       with_stats=False).summary["count"],
                      "conditions": [S.conditions_to_json(c)
                                     for c in p["conditions"]],
                      "pills": [S.describe(c) for c in p["conditions"]]}
                     for p in S.PRESETS],
-        "enums": _enum_values(),
+        "preset_groups": list(S.PRESET_GROUPS),
+        "enums": _enum_values(rows),
         "composite_defaults": S.COMPOSITE_DEFAULTS,
         "saved": load_saved_screens(),
-        "universe": len(_screen_universe()),
+        "universe": len(rows),
     }
 
 
-def _enum_values() -> dict:
+def _enum_values(rows: list[dict] | None = None) -> dict:
     """Real values present in the library for the free-form enums (sector,
-    industry), so the picker offers what actually exists instead of a
-    hardcoded list that drifts."""
-    from stockanalysis.core.screener import FIELDS, ENUM
-    rows = _screen_universe()
+    industry) and lists (watchlists), so the picker offers what actually
+    exists instead of a hardcoded list that drifts."""
+    from stockanalysis.core.screener import FIELDS, ENUM, LIST
+    if rows is None:
+        rows = _screen_universe()
     out = {}
     for f in FIELDS:
-        if f.kind != ENUM:
-            continue
-        if f.values:
-            out[f.key] = list(f.values)
-        else:
-            out[f.key] = sorted({str(r.get(f.src)) for r in rows
-                                 if r.get(f.src)})
+        if f.kind == ENUM:
+            out[f.key] = list(f.values) if f.values else sorted(
+                {str(r.get(f.src)) for r in rows if r.get(f.src)})
+        elif f.kind == LIST:
+            out[f.key] = sorted({str(v) for r in rows
+                                 for v in (r.get(f.src) or [])})
     return out
 
 
@@ -896,21 +992,78 @@ def screener_suggest(prefix: str) -> list[dict]:
 
 # ── saved searches ───────────────────────────────────────────────────────────
 
-def load_saved_screens() -> list[dict]:
+def _read_saved_screens() -> list[dict] | None:
+    """Saved searches from disk. None means "the file is there but couldn't
+    be read" — deliberately distinct from "no file yet".
+
+    The distinction is the whole point. This used to answer both cases with
+    the shipped starter list, so a read that lost a race with a rewrite
+    returned the defaults, and the next save persisted them — silently
+    replacing the user's own searches with stock ones. Substituting defaults
+    for data you failed to read is indistinguishable from the user having
+    deleted their work.
+    """
     import json
     if not SAVED_SCREENS_PATH.exists():
-        return list(_STARTER_SCREENS)
+        return []
     try:
         data = json.loads(SAVED_SCREENS_PATH.read_text())
     except (ValueError, OSError):
+        return None
+    return data if isinstance(data, list) else None
+
+
+def load_saved_screens() -> list[dict]:
+    """For display. Seeds the starter list only when there is genuinely no
+    file — never as a stand-in for an unreadable one."""
+    screens = _read_saved_screens()
+    if screens is None:
+        print("[Screener] saved_screens.json unreadable — showing it as empty "
+              "rather than overwriting it with defaults")
+        return []
+    # An existing file holding [] means the user deleted everything; only a
+    # missing file means "first run, offer the starters". Seeding on empty
+    # would resurrect deleted searches on the next save.
+    if not screens and not SAVED_SCREENS_PATH.exists():
         return list(_STARTER_SCREENS)
-    return data if isinstance(data, list) else list(_STARTER_SCREENS)
+    return screens
 
 
 def _write_saved_screens(screens: list[dict]) -> None:
+    """Atomic: write a sibling temp file and rename over the target.
+
+    A plain write_text() truncates first, so a reader in another process (the
+    workstation is routinely run on more than one port) can observe an empty
+    or half-written file. rename() is atomic on the same filesystem, so a
+    reader sees either the old file or the new one, never a torn one.
+    """
     import json
     SAVED_SCREENS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SAVED_SCREENS_PATH.write_text(json.dumps(screens, indent=2))
+    tmp = SAVED_SCREENS_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(screens, indent=2))
+    tmp.replace(SAVED_SCREENS_PATH)
+
+
+def _mutate_saved_screens(change) -> dict:
+    """Read-modify-write guarded against clobbering an unreadable file.
+
+    `change(screens) -> (new_screens, result)`. If the file exists but can't
+    be parsed we refuse to write at all: overwriting it would turn a
+    transient read failure into permanent data loss, which is exactly how
+    two of these went missing on 2026-08-05.
+    """
+    screens = _read_saved_screens()
+    if screens is None:
+        return {"ok": False, "message":
+                "saved_screens.json could not be read — refusing to overwrite "
+                "it. Check the file, then try again."}
+    if not screens and not SAVED_SCREENS_PATH.exists():
+        screens = list(_STARTER_SCREENS)
+    new_screens, result = change(screens)
+    if new_screens is not None:
+        _write_saved_screens(new_screens)
+        result["saved"] = new_screens
+    return result
 
 
 def save_screen(payload: dict) -> dict:
@@ -919,21 +1072,27 @@ def save_screen(payload: dict) -> dict:
     if not name:
         return {"ok": False, "message": "Give the search a name"}
     rules = payload.get("rules") or {}
-    screens = [s for s in load_saved_screens() if s.get("name") != name]
-    screens.append({"name": name, "icon": payload.get("icon") or "⭐",
-                    "rules": rules, "sort": payload.get("sort") or "match"})
-    screens.sort(key=lambda s: s.get("name") or "")
-    _write_saved_screens(screens)
-    return {"ok": True, "message": f"Saved “{name}”", "saved": screens}
+
+    def change(screens):
+        kept = [s for s in screens if s.get("name") != name]
+        kept.append({"name": name, "icon": payload.get("icon") or "⭐",
+                     "rules": rules, "sort": payload.get("sort") or "match"})
+        kept.sort(key=lambda s: s.get("name") or "")
+        return kept, {"ok": True, "message": f"Saved “{name}”"}
+
+    return _mutate_saved_screens(change)
 
 
 def delete_screen(name: str) -> dict:
-    screens = load_saved_screens()
-    kept = [s for s in screens if s.get("name") != name]
-    if len(kept) == len(screens):
-        return {"ok": False, "message": f"No saved search named “{name}”"}
-    _write_saved_screens(kept)
-    return {"ok": True, "message": f"Deleted “{name}”", "saved": kept}
+    def change(screens):
+        kept = [s for s in screens if s.get("name") != name]
+        if len(kept) == len(screens):
+            return None, {"ok": False,
+                          "message": f"No saved search named “{name}”",
+                          "saved": screens}
+        return kept, {"ok": True, "message": f"Deleted “{name}”"}
+
+    return _mutate_saved_screens(change)
 
 
 # Shipped so the Saved panel isn't empty on first load. They're written to

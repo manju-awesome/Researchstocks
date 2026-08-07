@@ -62,6 +62,9 @@ from typing import Any, Callable, Iterable
 # everything into one namespace so the registry stays a flat table.
 
 NUM, BOOL, ENUM = "num", "bool", "enum"
+# LIST: the row holds several values at once (a ticker sits on many
+# watchlists), so the test is membership rather than equality.
+LIST = "list"
 
 # Higher-is-better (1) or lower-is-better (-1). Used by match scoring to
 # decide which direction "exceeds the threshold" means, and by the weighted
@@ -248,6 +251,11 @@ FIELDS: tuple[Field, ...] = (
           hint="RSI below 30"),
     Field("is_watchlist", "On a watchlist", "Categories", BOOL,
           "is_watchlist"),
+    # Themes like "AI" have no field in the scan — the user's own watchlist
+    # is what defines them in this app, so screen on that rather than
+    # approximating with a sector and calling it AI.
+    Field("watchlist", "On watchlist", "Categories", LIST, "watchlists",
+          hint="Membership of a named watchlist, e.g. AI or Dividend"),
 
     # ── Options ─────────────────────────────────────────────────────────────
     Field("call_candidate", "Call Candidate", "Options", BOOL,
@@ -329,7 +337,9 @@ def _abs(v: float | None) -> float | None:
 
 
 def build_universe(index_rows: Iterable[dict],
-                   watchlist_tickers: set[str] | None = None) -> list[dict]:
+                   watchlist_tickers: set[str] | None = None,
+                   watchlist_map: dict[str, Iterable[str]] | None = None
+                   ) -> list[dict]:
     """research_index.json entries -> flat rows this engine can screen.
 
     The derived scores (quality / moat / health / buy zone) are computed here
@@ -343,7 +353,13 @@ def build_universe(index_rows: Iterable[dict],
         compute_business_quality, compute_economic_moat,
         compute_financial_health)
 
-    watch = watchlist_tickers or set()
+    # Invert name -> tickers once, so per-row membership is a dict lookup
+    # rather than a scan of every list.
+    lists_by_ticker: dict[str, list[str]] = {}
+    for name, tickers in (watchlist_map or {}).items():
+        for t in (tickers or []):
+            lists_by_ticker.setdefault(str(t), []).append(name)
+    watch = set(watchlist_tickers or ()) or set(lists_by_ticker)
     out: list[dict] = []
     for entry in index_rows:
         raw = entry.get("raw") or {}
@@ -473,6 +489,7 @@ def build_universe(index_rows: Iterable[dict],
             "is_long_term": _b(raw.get("Investment_Pass")),
             "is_oversold": None if rsi is None else rsi < 30,
             "is_watchlist": ticker in watch,
+            "watchlists": sorted(lists_by_ticker.get(ticker, ())),
 
             # options
             "call_candidate": _b(raw.get("Call_Candidate")),
@@ -532,7 +549,7 @@ OPERATORS: dict[str, str] = {
     "gt": ">", "gte": "≥", "lt": "<", "lte": "≤",
     "eq": "is", "ne": "is not",
     "within": "is within", "between": "is between",
-    "in": "is any of",
+    "in": "is any of", "has": "includes",
 }
 
 # Which operators the picker offers per field type.
@@ -540,6 +557,7 @@ OPS_FOR_KIND = {
     NUM: ("gt", "gte", "lt", "lte", "eq", "ne", "between", "within"),
     BOOL: ("eq",),
     ENUM: ("eq", "ne", "in"),
+    LIST: ("has",),
 }
 
 
@@ -644,7 +662,16 @@ def eval_condition(row: dict, cond: Condition) -> CondResult:
         return CondResult(cond.field, label, False, True, None,
                           f"{label} — no data", 0.0)
 
-    if spec.kind == BOOL:
+    if spec.kind == LIST:
+        # An empty list is a real answer ("on no watchlists"), not missing
+        # data — the row was checked and simply isn't a member.
+        members = actual if isinstance(actual, (list, tuple, set)) else []
+        wanted = str(cond.value)
+        passed = wanted in {str(m) for m in members}
+        shown = ", ".join(str(m) for m in members) or "none"
+        result = CondResult(cond.field, label, passed, False, list(members),
+                            f"{label}: {shown}", 1.0)
+    elif spec.kind == BOOL:
         want = _b(cond.value)
         want = True if want is None else want
         passed = bool(actual) is want
@@ -938,42 +965,219 @@ def _c(field: str, op: str, value: Any, value2: Any = None) -> Condition:
     return Condition(field=field, op=op, value=value, value2=value2)
 
 
+# Thresholds are calibrated against the live library's distributions, not
+# picked for how they read. Several round numbers are unusable here: the
+# conviction composite tops out in the high 70s, so "conviction > 80" is an
+# empty screen by construction, and Conv_Stars never reaches 5. Institutional
+# ownership has a median near 90%, so ">70%" is not a filter at all.
+#
+# Valuation floors matter as much as ceilings: Forward P/E goes negative for
+# loss-making companies, so a bare "P/E < 25" quietly admits every company
+# with no earnings — the opposite of a value screen. Those use `between`.
+#
+# PRESET_GROUPS orders the sections in the UI.
+PRESET_GROUPS = ("Momentum", "Quality", "Value", "Setups", "Ownership",
+                 "Contrarian", "Themes", "Events", "Risk")
+
 PRESETS: tuple[dict, ...] = (
-    {"key": "ai_leaders", "icon": "🚀", "name": "AI Leaders",
-     "desc": "High-quality compounders with a moat and real growth",
-     "conditions": [_c("quality", "gt", 90), _c("moat", "gte", 3),
-                    _c("eps_growth", "gt", 25), _c("rs_rank", "gt", 80)]},
-    {"key": "momentum_breakout", "icon": "📈", "name": "Momentum Breakout",
-     "desc": "Leaders breaking out with the trend behind them",
-     "conditions": [_c("rs_rank", "gt", 90), _c("breakout_probability", "gt", 80),
-                    _c("above_200ma", "eq", True),
-                    _c("is_momentum", "eq", True)]},
-    {"key": "turnaround", "icon": "🔄", "name": "Turnaround",
-     "desc": "Repairing businesses reclaiming the 50 MA",
-     "conditions": [_c("is_turnaround", "eq", True), _c("quality", "gt", 80),
-                    _c("health", "gt", 70), _c("abs_vs_50ma", "within", 3)]},
-    {"key": "compounders", "icon": "💎", "name": "Long-Term Compounders",
-     "desc": "Institutional-grade quality with durable economics",
-     "conditions": [_c("quality", "gt", 90), _c("moat", "gte", 3),
-                    _c("health", "gt", 85), _c("inst_own", "gt", 70),
-                    _c("eps_growth", "gt", 15)]},
-    {"key": "buy_zone", "icon": "🎯", "name": "Buy Zone",
-     "desc": "Entry-ready names with the trend and R:R lined up",
-     "conditions": [_c("in_buy_zone", "eq", True),
-                    _c("above_200ma", "eq", True), _c("rs_rank", "gt", 80),
-                    _c("rr", "gte", 3)]},
-    {"key": "swing", "icon": "⚡", "name": "Swing Trades",
-     "desc": "Tight to the 8 EMA with a breakout building",
-     "conditions": [_c("swing_score", "gt", 75), _c("abs_vs_8ema", "within", 2),
-                    _c("breakout_probability", "gt", 70)]},
-    {"key": "value_growth", "icon": "📊", "name": "Value Growth",
-     "desc": "Growth that hasn't repriced yet",
-     "conditions": [_c("forward_pe", "lt", 25), _c("eps_growth", "gt", 20),
-                    _c("quality", "gt", 85), _c("moat", "gte", 3)]},
-    {"key": "hedge_fund", "icon": "🛡️", "name": "Hedge Fund Favorites",
-     "desc": "Crowded in the good way — quality the institutions already own",
-     "conditions": [_c("inst_own", "gt", 80), _c("quality", "gt", 90),
-                    _c("conv_stars", "gte", 4)]},
+    # ── Momentum ────────────────────────────────────────────────────────────
+    {"key": "todays_breakouts", "icon": "🚀", "name": "Today's Breakouts",
+     "group": "Momentum",
+     "desc": "High breakout probability firing on above-average volume",
+     "conditions": [_c("breakout_probability", "gte", 80),
+                    _c("rvol", "gte", 1.2), _c("above_200ma", "eq", True)]},
+    {"key": "high_rs", "icon": "🔥", "name": "High RS",
+     "group": "Momentum", "desc": "Top-decile relative strength, trend intact",
+     "conditions": [_c("rs_rank", "gt", 85), _c("above_200ma", "eq", True)]},
+    {"key": "near_ath", "icon": "🏔️", "name": "Near ATH",
+     "group": "Momentum", "desc": "Within 3% of the 52-week high",
+     "conditions": [_c("dist_52w_high", "gte", -3),
+                    _c("above_200ma", "eq", True)]},
+    {"key": "momentum_leaders", "icon": "📈", "name": "Momentum Leaders",
+     "group": "Momentum", "desc": "Momentum setups with the tape agreeing",
+     "conditions": [_c("is_momentum", "eq", True), _c("rs_rank", "gt", 70)]},
+    {"key": "momentum_pullback", "icon": "🎢", "name": "Momentum Pullback",
+     "group": "Momentum",
+     "desc": "Uptrends resting on the 8 EMA rather than breaking down",
+     "conditions": [_c("is_momentum_pullback", "eq", True),
+                    _c("abs_vs_8ema", "within", 3)]},
+    {"key": "volume_surge", "icon": "📢", "name": "Volume Surge",
+     "group": "Momentum", "desc": "Unusual volume behind an uptrend",
+     "conditions": [_c("rvol", "gte", 1.5), _c("above_200ma", "eq", True)]},
+    {"key": "golden_cross", "icon": "✨", "name": "Golden Cross",
+     "group": "Momentum", "desc": "50 MA above the 200 MA with RS confirming",
+     "conditions": [_c("golden_cross", "eq", True), _c("rs_rank", "gt", 60)]},
+    {"key": "week52_high_club", "icon": "🎖️", "name": "52-Week High Club",
+     "group": "Momentum", "desc": "Pressing the highs with leadership RS",
+     "conditions": [_c("dist_52w_high", "gte", -5), _c("rs_rank", "gt", 70)]},
+
+    # ── Quality ─────────────────────────────────────────────────────────────
+    {"key": "high_conviction", "icon": "⭐", "name": "High Conviction",
+     "group": "Quality",
+     "desc": "Best composite of company, setup and timing in the library",
+     "conditions": [_c("conviction", "gte", 60), _c("conv_stars", "gte", 3)]},
+    {"key": "high_moat", "icon": "🏰", "name": "High Moat",
+     "group": "Quality", "desc": "Elite economics on 3+ of 4 moat checks",
+     "conditions": [_c("moat", "gte", 3), _c("quality", "gt", 70)]},
+    {"key": "high_eps", "icon": "💹", "name": "High EPS Growth",
+     "group": "Quality", "desc": "Earnings compounding fast, margins to match",
+     "conditions": [_c("eps_growth", "gt", 50), _c("quality", "gt", 60)]},
+    {"key": "strong_earnings", "icon": "📊", "name": "Strong Earnings",
+     "group": "Quality", "desc": "Earnings and revenue both growing, CANSLIM pass",
+     "conditions": [_c("eps_growth", "gt", 25), _c("revenue_growth", "gt", 10),
+                    _c("canslim", "eq", True)]},
+    {"key": "elite_margins", "icon": "💎", "name": "Elite Margins",
+     "group": "Quality", "desc": "Gross and operating margins in the top decile",
+     "conditions": [_c("gross_margin", "gt", 60),
+                    _c("operating_margin", "gt", 25)]},
+    {"key": "fortress_balance", "icon": "🏦", "name": "Fortress Balance Sheet",
+     "group": "Quality", "desc": "Strong liquidity, little leverage",
+     "conditions": [_c("health", "gt", 80), _c("debt_to_equity", "lt", 50)]},
+    {"key": "high_roe", "icon": "⚙️", "name": "High ROE Compounders",
+     "group": "Quality", "desc": "Returns on equity well above cost of capital",
+     "conditions": [_c("roe", "gt", 25), _c("quality", "gt", 70)]},
+    {"key": "cash_machines", "icon": "💰", "name": "Cash Machines",
+     "group": "Quality", "desc": "Converts revenue into free cash flow",
+     "conditions": [_c("fcf_margin", "gt", 20), _c("quality", "gt", 65)]},
+    {"key": "compounders", "icon": "🌱", "name": "Long-Term Compounders",
+     "group": "Quality", "desc": "Quality, moat and balance sheet all strong",
+     "conditions": [_c("quality", "gt", 85), _c("moat", "gte", 3),
+                    _c("health", "gt", 75)]},
+
+    # ── Value ───────────────────────────────────────────────────────────────
+    {"key": "garp", "icon": "⚖️", "name": "Growth at Reasonable Price",
+     "group": "Value", "desc": "PEG under 2 with growth actually behind it",
+     "conditions": [Condition("peg_ratio", "between", 0, 2),
+                    _c("eps_growth", "gt", 20), _c("quality", "gt", 60)]},
+    {"key": "cheap_quality", "icon": "🏷️", "name": "Cheap Quality",
+     "group": "Value", "desc": "Good businesses on a below-median multiple",
+     "conditions": [Condition("forward_pe", "between", 0, 18),
+                    _c("quality", "gt", 65)]},
+    {"key": "value_momentum", "icon": "🧲", "name": "Value + Momentum",
+     "group": "Value", "desc": "Cheap and already working",
+     "conditions": [Condition("forward_pe", "between", 0, 20),
+                    _c("rs_rank", "gt", 70)]},
+    {"key": "deep_value", "icon": "🪙", "name": "Deep Value",
+     "group": "Value", "desc": "Bottom-decile multiples that still pay the bills",
+     "conditions": [Condition("forward_pe", "between", 0, 12),
+                    _c("health", "gt", 50)]},
+    {"key": "undervalued_ai", "icon": "🤖", "name": "Undervalued AI",
+     "group": "Value",
+     "desc": "Names on your AI watchlist not yet priced for perfection",
+     "conditions": [_c("watchlist", "has", "AI"),
+                    Condition("forward_pe", "between", 0, 30)]},
+
+    # ── Setups ──────────────────────────────────────────────────────────────
+    {"key": "near_buy_zone", "icon": "🎯", "name": "Near Buy Zone",
+     "group": "Setups", "desc": "The buy-zone scorer says entry-ready",
+     "conditions": [_c("in_buy_zone", "eq", True)]},
+    {"key": "buy_zone_quality", "icon": "🥇", "name": "Buy Zone + Quality",
+     "group": "Setups", "desc": "Entry-ready and worth owning",
+     "conditions": [_c("in_buy_zone", "eq", True), _c("quality", "gt", 65)]},
+    {"key": "near_support", "icon": "🛟", "name": "Near Support",
+     "group": "Setups", "desc": "Sitting on a tested level in an uptrend",
+     "conditions": [_c("dist_to_support", "within", 2),
+                    _c("above_200ma", "eq", True)]},
+    {"key": "near_8ema", "icon": "📏", "name": "Near 8 EMA",
+     "group": "Setups", "desc": "Within 1% of the 8 EMA",
+     "conditions": [_c("abs_vs_8ema", "within", 1),
+                    _c("above_200ma", "eq", True)]},
+    {"key": "near_50ma", "icon": "📐", "name": "Near 50 MA",
+     "group": "Setups", "desc": "Testing the 50 MA from above",
+     "conditions": [_c("abs_vs_50ma", "within", 2),
+                    _c("above_200ma", "eq", True)]},
+    {"key": "vcp", "icon": "🌀", "name": "VCP Setups",
+     "group": "Setups", "desc": "Volatility contraction patterns",
+     "conditions": [_c("is_vcp", "eq", True)]},
+    {"key": "swing", "icon": "⚡", "name": "Swing Ready",
+     "group": "Setups", "desc": "Strong swing score, tight to the 8 EMA",
+     "conditions": [_c("swing_score", "gt", 70),
+                    _c("abs_vs_8ema", "within", 3)]},
+    {"key": "day_trade", "icon": "☀️", "name": "Day Trade Ready",
+     "group": "Setups", "desc": "Intraday score with the volume to move",
+     "conditions": [_c("daytrade_score", "gt", 60), _c("rvol", "gte", 1.5)]},
+    {"key": "best_rr", "icon": "📶", "name": "Best Risk : Reward",
+     "group": "Setups", "desc": "4:1 or better to the next resistance",
+     "conditions": [_c("rr", "gte", 4), _c("above_200ma", "eq", True)]},
+
+    # ── Ownership ───────────────────────────────────────────────────────────
+    {"key": "institutional_buying", "icon": "🏛️", "name": "Institutional Buying",
+     "group": "Ownership", "desc": "Institutions adding, not just holding",
+     "conditions": [_c("inst_own_chg", "gt", 3), _c("inst_own", "gt", 85)]},
+    {"key": "hedge_fund", "icon": "🛡️", "name": "Top Hedge Fund Picks",
+     "group": "Ownership",
+     "desc": "Heavily institutionally owned and high quality with it",
+     "conditions": [_c("inst_own", "gt", 95), _c("quality", "gt", 70),
+                    _c("conv_stars", "gte", 3)]},
+    {"key": "accumulation", "icon": "📥", "name": "Under Accumulation",
+     "group": "Ownership", "desc": "Ownership rising while the trend holds",
+     "conditions": [_c("inst_own_chg", "gt", 5),
+                    _c("above_200ma", "eq", True)]},
+
+    # ── Contrarian ──────────────────────────────────────────────────────────
+    {"key": "oversold_quality", "icon": "🧊", "name": "Oversold Quality",
+     "group": "Contrarian", "desc": "Good businesses with RSI in the cellar",
+     "conditions": [_c("quality", "gt", 70), _c("rsi", "lt", 40)]},
+    {"key": "recovery", "icon": "🔄", "name": "Recovery Candidates",
+     "group": "Contrarian", "desc": "Turnarounds with a survivable balance sheet",
+     "conditions": [_c("is_turnaround", "eq", True), _c("health", "gt", 50)]},
+    {"key": "oversold_bounce", "icon": "🪃", "name": "Oversold Bounce",
+     "group": "Contrarian", "desc": "Washed out with a bounce setup at support",
+     "conditions": [_c("rsi", "lt", 40), _c("bounce_probability", "gt", 50)]},
+    {"key": "off_the_lows", "icon": "🕳️", "name": "Near 52-Week Low",
+     "group": "Contrarian", "desc": "Close to the lows but still a real business",
+     "conditions": [_c("dist_52w_low", "lt", 15), _c("quality", "gt", 55)]},
+
+    # ── Themes ──────────────────────────────────────────────────────────────
+    {"key": "ai_leaders", "icon": "🤖", "name": "AI Leaders",
+     "group": "Themes", "desc": "Your AI watchlist, filtered to what's working",
+     "conditions": [_c("watchlist", "has", "AI"), _c("quality", "gt", 65),
+                    _c("rs_rank", "gt", 60)]},
+    {"key": "ai_momentum", "icon": "⚡", "name": "AI Momentum",
+     "group": "Themes", "desc": "AI names in a momentum setup",
+     "conditions": [_c("watchlist", "has", "AI"),
+                    _c("above_200ma", "eq", True), _c("rs_rank", "gt", 70)]},
+    {"key": "semis", "icon": "🔌", "name": "Semiconductors",
+     "group": "Themes", "desc": "The semi complex, ranked by strength",
+     "conditions": [_c("industry", "eq", "Semiconductors"),
+                    _c("rs_rank", "gt", 50)]},
+    {"key": "dividend_quality", "icon": "🧾", "name": "Dividend Quality",
+     "group": "Themes", "desc": "Your dividend list, screened for balance sheet",
+     "conditions": [_c("watchlist", "has", "Dividend"), _c("health", "gt", 55)]},
+    {"key": "small_caps", "icon": "🌾", "name": "Best Small Caps",
+     "group": "Themes", "desc": "Sub-$10B with quality and relative strength",
+     "conditions": [Condition("market_cap", "between", 1e9, 1e10),
+                    _c("quality", "gt", 60), _c("rs_rank", "gt", 60)]},
+    {"key": "mega_caps", "icon": "🐘", "name": "Mega Cap Leaders",
+     "group": "Themes", "desc": "$200B+ still outperforming",
+     "conditions": [_c("market_cap", "gte", 2e11), _c("rs_rank", "gt", 60)]},
+
+    # ── Events ──────────────────────────────────────────────────────────────
+    {"key": "earnings_soon", "icon": "📅", "name": "Earnings This Week",
+     "group": "Events", "desc": "Reporting within 7 days — size accordingly",
+     "conditions": [_c("earnings_soon", "eq", True)]},
+    {"key": "post_earnings_strength", "icon": "🎆", "name": "Post-Earnings Strength",
+     "group": "Events",
+     "desc": "Growing and leading, with the next report more than a week out",
+     "conditions": [_c("eps_growth", "gt", 25), _c("rs_rank", "gt", 70),
+                    _c("days_to_earnings", "gt", 7)]},
+    {"key": "call_candidates", "icon": "📞", "name": "Call Candidates",
+     "group": "Events", "desc": "The scan's bullish option setups",
+     "conditions": [_c("call_candidate", "eq", True)]},
+    {"key": "put_candidates", "icon": "🔻", "name": "Put Candidates",
+     "group": "Events", "desc": "The scan's bearish option setups",
+     "conditions": [_c("put_candidate", "eq", True)]},
+
+    # ── Risk ────────────────────────────────────────────────────────────────
+    {"key": "extended", "icon": "🌡️", "name": "Extended / Overbought",
+     "group": "Risk", "desc": "Stretched from the 8 EMA — a don't-chase list",
+     "conditions": [_c("abs_vs_8ema", "gt", 8), _c("rsi", "gt", 70)]},
+    {"key": "death_cross", "icon": "💀", "name": "Death Cross",
+     "group": "Risk", "desc": "50 MA below the 200 MA — avoid or hedge",
+     "conditions": [_c("death_cross", "eq", True)]},
+    {"key": "high_short_interest", "icon": "🎈", "name": "High Short Interest",
+     "group": "Risk", "desc": "Crowded shorts — squeeze fuel or a warning",
+     "conditions": [_c("short_interest", "gt", 10)]},
 )
 
 PRESET_BY_KEY = {p["key"]: p for p in PRESETS}
@@ -1332,12 +1536,6 @@ def suggest(prefix: str, limit: int = 8) -> list[dict]:
         out.append({"label": label, "kind": kind,
                     "conditions": [conditions_to_json(c) for c in conds]})
 
-    # Presets whose name matches come first — one click, fully formed.
-    for preset in PRESETS:
-        if _starts(p, preset["name"]):
-            add(f'{preset["icon"]} {preset["name"]}', preset["conditions"],
-                "preset")
-
     # Anchor matches first — typing "turn" wants every Turnaround combo.
     # Matching a combo's *label* must not drag in its whole group, or "qual"
     # leads with Turnaround because one of its combos is "Turnaround +
@@ -1348,6 +1546,13 @@ def suggest(prefix: str, limit: int = 8) -> list[dict]:
         if _starts(p, hay):
             for label, conds in combos:
                 add(label, conds, "combo")
+
+    # Then matching presets — capped, because there are ~50 of them and
+    # several share a word like "Quality"; letting them all in would bury
+    # the field the user is actually typing.
+    matched_presets = [x for x in PRESETS if _starts(p, x["name"])]
+    for preset in matched_presets[:3]:
+        add(f'{preset["icon"]} {preset["name"]}', preset["conditions"], "preset")
 
     # …then individual combos that mention the term, whatever their anchor.
     for combos in _COMBOS.values():
@@ -1473,6 +1678,8 @@ def describe(cond: Condition) -> str:
     if spec is None:
         return cond.field
     prefix = "NOT " if cond.negate else ""
+    if spec.kind == LIST:
+        return f'{prefix}On "{cond.value}" watchlist'
     if spec.kind == BOOL:
         want = _b(cond.value)
         want = True if want is None else want

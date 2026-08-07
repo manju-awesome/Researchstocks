@@ -36,6 +36,11 @@ def screener_page() -> tuple[str, str]:
     </div>
   </div>
   <div style="display:flex;gap:8px;margin-left:auto;align-items:center">
+    <div id="scr-savedwrap" style="position:relative">
+      <button class="btn secondary" onclick="scrToggleSaved(event)">
+        ⭐ Saved <span id="scr-savedcount">(0)</span> ▾</button>
+      <div id="scr-savedmenu"></div>
+    </div>
     <button class="btn secondary" onclick="scrOpenSave()">☆ Save search</button>
     <button class="btn secondary" onclick="scrReset()">Clear all</button>
   </div>
@@ -53,6 +58,12 @@ def screener_page() -> tuple[str, str]:
   <button class="btn secondary" onclick="scrOpenPicker()">+ Add condition</button>
 </div>
 
+<div class="scr-presetbar">
+  <input id="scr-presetsearch" placeholder="Filter presets…" autocomplete="off"
+         oninput="scrRenderPresets()" style="width:200px">
+  <div id="scr-presettabs" class="scr-presettabs"></div>
+  <span id="scr-presetcount" style="font-size:11px;color:#898781;margin-left:auto"></span>
+</div>
 <div id="scr-presets" class="scr-presets"></div>
 
 {card("Active rules", '<div id="scr-rules"></div>', icon="🧩",
@@ -79,11 +90,12 @@ def screener_page() -> tuple[str, str]:
     </select>
     <button class="btn secondary" onclick="scrOpenWeights()">⚖ Weights</button>
     <button class="btn secondary" onclick="scrToggleView()" id="scr-viewbtn">Table view</button>
+    <button class="btn secondary" onclick="scrDownloadCsv()"
+            title="Download these results, including the rules each stock matched">⬇ CSV</button>
   </div>
 </div>
 <div id="scr-results"><div class="scr-empty">Loading…</div></div>
 
-{_SAVED_PANEL}
 {_MODALS}
 """
     return body, _JS
@@ -101,13 +113,29 @@ _STYLE = """
 .scr-sug:first-child { border-top:none }
 .scr-sug:hover, .scr-sug.on { background:#E6F1FB }
 .scr-sug .k { margin-left:auto; font-size:10px; color:#898781; text-transform:uppercase }
-.scr-presets { display:flex; gap:8px; overflow-x:auto; padding-bottom:10px; margin-bottom:4px }
-.scr-preset { flex:0 0 auto; background:white; border:0.5px solid #e1e0d9; border-radius:10px;
-  padding:9px 13px; cursor:pointer; min-width:150px }
+.scr-presetbar { display:flex; gap:8px; align-items:center; margin-bottom:9px; flex-wrap:wrap }
+.scr-presettabs { display:flex; gap:4px; flex-wrap:wrap }
+.scr-ptab { font-size:11px; font-weight:600; padding:4px 11px; border-radius:14px;
+  cursor:pointer; border:1px solid #d9d7ce; background:transparent; color:#52514e }
+.scr-ptab:hover { border-color:#185FA5; color:#185FA5 }
+.scr-ptab.on { background:#185FA5; border-color:#185FA5; color:white }
+/* A grid, not a horizontal scroller: 51 presets in a one-line strip means
+   scrolling blind past 40 of them. */
+.scr-presets { display:grid; grid-template-columns:repeat(auto-fill, minmax(186px, 1fr));
+  gap:8px; margin-bottom:14px; max-height:330px; overflow-y:auto; padding-right:2px }
+.scr-preset { background:white; border:0.5px solid #e1e0d9; border-radius:10px;
+  padding:9px 12px; cursor:pointer; position:relative }
 .scr-preset:hover { border-color:#185FA5; background:#F7FBFF }
 .scr-preset.on { border-color:#185FA5; background:#E6F1FB }
-.scr-preset b { display:block; font-size:12px; margin-bottom:2px }
-.scr-preset span { font-size:10px; color:#898781; line-height:1.35; display:block }
+.scr-preset.zero { opacity:.5 }
+.scr-preset b { display:block; font-size:12px; margin-bottom:2px; padding-right:30px }
+.scr-preset span.d { font-size:10px; color:#898781; line-height:1.35; display:block }
+/* The live match count, so an empty screen is visible before it's clicked */
+.scr-preset .n { position:absolute; top:8px; right:9px; font-size:10px; font-weight:700;
+  color:#0C447C; background:#E6F1FB; border-radius:9px; padding:1px 6px }
+.scr-preset.zero .n { color:#898781; background:#f1efea }
+.scr-presetempty { grid-column:1/-1; padding:16px; text-align:center; color:#898781;
+  font-size:12px }
 .scr-live { font-size:11px; font-weight:600; color:#0C447C; background:#E6F1FB;
   padding:3px 9px; border-radius:20px }
 .scr-pill { display:inline-flex; align-items:center; gap:7px; background:#E6F1FB; color:#0C447C;
@@ -152,13 +180,21 @@ _STYLE = """
 .scr-ms { margin-left:auto; text-align:right; flex-shrink:0 }
 .scr-ms .v { font-size:17px; font-weight:700; color:#0F6E56 }
 .scr-ms .l { font-size:9px; color:#898781; text-transform:uppercase }
-.scr-saved { display:flex; gap:7px; flex-wrap:wrap }
-.scr-savedchip { display:inline-flex; align-items:center; gap:7px; background:white;
-  border:0.5px solid #e1e0d9; border-radius:20px; padding:5px 7px 5px 12px; font-size:11.5px;
+#scr-savedmenu { position:absolute; top:34px; right:0; min-width:246px; background:white;
+  border:0.5px solid #e1e0d9; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.12);
+  z-index:70; display:none; overflow:hidden; max-height:340px; overflow-y:auto }
+#scr-savedmenu.open { display:block }
+.scr-savedrow { display:flex; align-items:center; gap:8px; padding:8px 10px 8px 13px;
+  font-size:12px; border-top:0.5px solid #f1efea }
+.scr-savedrow:first-child { border-top:none }
+.scr-savedrow:hover { background:#E6F1FB }
+.scr-savedrow .nm { flex:1; cursor:pointer; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis }
+.scr-savedrow .x { flex-shrink:0; border:none; background:rgba(0,0,0,.06); color:#52514e;
+  border-radius:50%; width:18px; height:18px; line-height:16px; font-size:12px; padding:0;
   cursor:pointer }
-.scr-savedchip:hover { border-color:#185FA5; background:#F7FBFF }
-.scr-savedchip .x { border:none; background:rgba(0,0,0,.06); border-radius:50%; width:17px;
-  height:17px; line-height:15px; font-size:12px; padding:0; cursor:pointer }
+.scr-savedrow .x:hover { background:#FCEBEB; color:#791F1F }
+.scr-savedempty { padding:13px; font-size:11.5px; color:#898781; line-height:1.45 }
 .scr-wrow { display:flex; align-items:center; gap:9px; margin-bottom:8px }
 .scr-wrow label { font-size:12px; flex:1 }
 .scr-wrow input[type=range] { flex:1.4 }
@@ -167,15 +203,6 @@ _STYLE = """
   overflow-x:auto }
 .scr-tablewrap td.hit { background:#E1F5EE; font-weight:600 }
 </style>
-"""
-
-
-_SAVED_PANEL = """
-<div style="margin-top:22px">
-  <div style="font-size:11px;color:#898781;text-transform:uppercase;letter-spacing:.3px;
-              margin-bottom:8px">Saved searches</div>
-  <div id="scr-saved" class="scr-saved"></div>
-</div>
 """
 
 
@@ -265,6 +292,7 @@ async function scrInit() {
   } catch (e) { toast('Could not load screener fields', 'err'); return; }
   WEIGHTS = Object.assign({}, META.composite_defaults);
   document.getElementById('scr-universe').textContent = META.universe;
+  scrRenderPresetTabs();
   scrRenderPresets();
   scrRenderSaved();
   scrRun();
@@ -327,11 +355,49 @@ function scrRenderRules() {
 }
 
 // ── presets & saved ─────────────────────────────────────────────────────────
+let presetGroup = '';        // '' = all groups
+
+function scrRenderPresetTabs() {
+  const groups = META.preset_groups || [];
+  const counts = {};
+  for (const p of (META.presets || [])) {
+    counts[p.group] = (counts[p.group] || 0) + 1;
+  }
+  const tabs = [['', 'All', (META.presets || []).length],
+                ...groups.map(g => [g, g, counts[g] || 0])].filter(t => t[2]);
+  document.getElementById('scr-presettabs').innerHTML = tabs.map(([val, label, n]) =>
+    `<button class="scr-ptab${presetGroup === val ? ' on' : ''}"
+       onclick="scrSetPresetGroup('${val}')">${scrEsc(label)} ${n}</button>`).join('');
+}
+
+function scrSetPresetGroup(g) {
+  presetGroup = g;
+  scrRenderPresetTabs();
+  scrRenderPresets();
+}
+
 function scrRenderPresets() {
-  document.getElementById('scr-presets').innerHTML = (META.presets || []).map(p =>
-    `<div class="scr-preset" onclick="scrApplyPreset('${p.key}')"
-          title="${scrEsc(p.pills.join('  AND  '))}">
-       <b>${p.icon} ${scrEsc(p.name)}</b><span>${scrEsc(p.desc)}</span></div>`).join('');
+  const q = (document.getElementById('scr-presetsearch').value || '').trim().toLowerCase();
+  const all = META.presets || [];
+  const shown = all.filter(p =>
+    (!presetGroup || p.group === presetGroup) &&
+    (!q || p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q) ||
+     (p.pills || []).some(t => t.toLowerCase().includes(q))));
+  document.getElementById('scr-presetcount').textContent =
+    `${shown.length} of ${all.length} presets`;
+  document.getElementById('scr-presets').innerHTML = shown.length
+    ? shown.map(p =>
+        // count === 0 is dimmed rather than hidden: the screen is valid, the
+        // library just has nothing matching it right now, and hiding it would
+        // look like the preset doesn't exist.
+        `<div class="scr-preset${p.count === 0 ? ' zero' : ''}"
+              onclick="scrApplyPreset('${p.key}')"
+              title="${scrEsc(p.pills.join('  AND  '))}${p.count === 0 ?
+                '\n\nNothing in the library matches this right now.' : ''}">
+           <span class="n">${p.count}</span>
+           <b>${p.icon} ${scrEsc(p.name)}</b>
+           <span class="d">${scrEsc(p.desc)}</span></div>`).join('')
+    : '<div class="scr-presetempty">No preset matches that search.</div>';
 }
 
 function scrApplyPreset(key) {
@@ -339,25 +405,45 @@ function scrApplyPreset(key) {
   if (!p) return;
   RULES = { op: 'AND', negate: false, items: p.conditions.map(c => Object.assign({}, c)) };
   document.getElementById('scr-nl').value = '';
+  document.getElementById('scr-sort').value = 'match';
   scrRun();
 }
 
-function scrRenderSaved() {
-  const box = document.getElementById('scr-saved');
-  const saved = (META && META.saved) || [];
-  if (!saved.length) {
-    box.innerHTML = '<div style="font-size:12px;color:#898781">' +
-      'Nothing saved yet — build a screen and hit ☆ Save search.</div>';
-    return;
-  }
-  box.innerHTML = saved.map(s =>
-    `<span class="scr-savedchip">
-       <span onclick="scrLoadSaved('${scrEsc(s.name)}')">${s.icon || '⭐'} ${scrEsc(s.name)}</span>
-       <button class="x" onclick="scrDeleteSaved('${scrEsc(s.name)}')">×</button></span>`).join('');
+function scrToggleSaved(ev) {
+  if (ev) ev.stopPropagation();       // don't hit the close-on-outside-click
+  document.getElementById('scr-savedmenu').classList.toggle('open');
 }
 
-function scrLoadSaved(name) {
-  const s = (META.saved || []).find(x => x.name === name);
+function scrCloseSaved() {
+  const m = document.getElementById('scr-savedmenu');
+  if (m) m.classList.remove('open');
+}
+
+function scrRenderSaved() {
+  const saved = (META && META.saved) || [];
+  const count = document.getElementById('scr-savedcount');
+  if (count) count.textContent = '(' + saved.length + ')';
+  const box = document.getElementById('scr-savedmenu');
+  if (!box) return;
+  // Handlers take the index, not the name: a saved search called
+  // Bill's picks would otherwise close the inlined JS string early, and
+  // HTML-escaping the quote doesn't help because the attribute value is
+  // unescaped back to ' before the JS parser ever sees it.
+  box.innerHTML = saved.length
+    ? saved.map((s, i) =>
+        `<div class="scr-savedrow">
+           <span class="nm" onclick="scrLoadSaved(${i})"
+                 title="${scrEsc(s.name)}">${s.icon || '⭐'} ${scrEsc(s.name)}</span>
+           <button class="x" title="Delete this saved search"
+                   onclick="scrDeleteSaved(${i}, event)">×</button>
+         </div>`).join('')
+    : '<div class="scr-savedempty">Nothing saved yet — build a screen ' +
+      'and hit ☆ Save search.</div>';
+}
+
+function scrLoadSaved(i) {
+  const s = (META.saved || [])[i];
+  scrCloseSaved();
   if (!s) return;
   RULES = JSON.parse(JSON.stringify(s.rules || { op: 'AND', items: [] }));
   if (!RULES.items) RULES = { op: 'AND', negate: false, items: [] };
@@ -390,9 +476,12 @@ async function scrSave(ev) {
   return false;
 }
 
-async function scrDeleteSaved(name) {
+async function scrDeleteSaved(i, ev) {
+  if (ev) ev.stopPropagation();      // deleting must not also load the row
+  const s = (META.saved || [])[i];
+  if (!s) return;
   const res = await fetch('/api/screener/delete', {
-    method: 'POST', body: JSON.stringify({ name }),
+    method: 'POST', body: JSON.stringify({ name: s.name }),
   });
   const data = await res.json();
   if (data.ok) { META.saved = data.saved; scrRenderSaved(); toast(data.message, 'ok'); }
@@ -467,6 +556,10 @@ document.addEventListener('click', (e) => {
   const box = document.getElementById('scr-suggest');
   if (box && !e.target.closest('#scr-nl') && !e.target.closest('#scr-suggest'))
     box.style.display = 'none';
+  if (!e.target.closest('#scr-savedwrap')) scrCloseSaved();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') scrCloseSaved();
 });
 
 // ── field picker ────────────────────────────────────────────────────────────
@@ -520,7 +613,9 @@ function scrPickerOpChanged() {
   if (f.kind === 'bool') {
     wrap.innerHTML = `<select id="scr-condvalue">
         <option value="true">Yes</option><option value="false">No</option></select>`;
-  } else if (f.kind === 'enum') {
+  } else if (f.kind === 'enum' || f.kind === 'list') {
+    // list = the row holds many values (watchlists); the picker still
+    // chooses one, the engine tests membership rather than equality.
     const vals = (META.enums && META.enums[f.key]) || f.values || [];
     wrap.innerHTML = `<select id="scr-condvalue">${vals.map(v =>
       `<option value="${scrEsc(v)}">${scrEsc(v)}</option>`).join('')}</select>`;
@@ -541,7 +636,7 @@ function scrAddCondition() {
   const el = document.getElementById('scr-condvalue');
   let value = el ? el.value : null;
   if (PICKED.kind === 'bool') value = value === 'true';
-  else if (PICKED.kind !== 'enum') {
+  else if (PICKED.kind !== 'enum' && PICKED.kind !== 'list') {
     if (value === '' || value === null) { toast('Enter a value', 'err'); return; }
     value = parseFloat(value);
     if (isNaN(value)) { toast('Enter a number', 'err'); return; }
@@ -808,6 +903,112 @@ function scrTable(d) {
     <thead><tr><th>Ticker</th><th style="text-align:right">Match</th>
       ${head}<th>Category</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
+}
+
+// ── CSV export ──────────────────────────────────────────────────────────────
+// Exports what the screen returned, not a fixed column set: the fields you
+// filtered on lead, so the numbers that justify each row travel with it. The
+// "Matched" column carries the engine's own per-condition text, which makes
+// an exported screen self-explanatory once it's out of the app.
+function scrCsvEscape(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+async function scrDownloadCsv() {
+  if (!LAST || !LAST.results || !LAST.results.length) {
+    toast('Nothing to export — this screen matched no stocks', 'err');
+    return;
+  }
+  // The page renders a capped page of results; the file should be the whole
+  // screen. Silently exporting the visible 200 of 540 would look complete.
+  let results = LAST.results;
+  if (LAST.count > results.length) {
+    toast(`Fetching all ${LAST.count} matches…`);
+    try {
+      const res = await fetch('/api/screen', {
+        method: 'POST',
+        body: JSON.stringify({
+          rules: RULES, composite: WEIGHTS,
+          sort: document.getElementById('scr-sort').value,
+          limit: LAST.count,
+        }),
+      });
+      const full = await res.json();
+      if (full.ok && full.results.length) results = full.results;
+    } catch (e) { /* fall back to the page we already have */ }
+    if (results.length < LAST.count) {
+      toast(`Exporting ${results.length} of ${LAST.count} matches`, 'err');
+    }
+  }
+  // Filtered fields first (deduped, in rule order), then the standard set.
+  const filtered = [];
+  const seen = new Set();
+  for (const p of (LAST.pills || [])) {
+    if (seen.has(p.field)) continue;
+    seen.add(p.field);
+    const f = scrField(p.field);
+    if (f) filtered.push(f);
+  }
+  const standard = ['price', 'quality', 'health', 'moat', 'rs_rank', 'eps_growth',
+                    'forward_pe', 'inst_own', 'market_cap', 'conviction',
+                    'conv_stars', 'category', 'grade', 'buy_zone_label',
+                    'breakout_probability', 'swing_score', 'rr', 'days_to_earnings']
+    .filter(k => !seen.has(k)).map(scrField).filter(Boolean);
+  const cols = [...filtered, ...standard];
+
+  const header = ['Ticker', 'Name', 'Sector', 'Match score', 'Composite',
+                  ...cols.map(c => c.label + (c.unit === '%' ? ' (%)' : '')),
+                  'Data as of', 'Matched rules'];
+  const lines = [header.map(scrCsvEscape).join(',')];
+  for (const r of results) {
+    const why = (r.why || []).filter(w => w.passed).map(w => w.text).join(' | ');
+    lines.push([
+      r.ticker, r.name || '', r.sector || '', r.match_score,
+      r.composite === null || r.composite === undefined ? '' : r.composite,
+      // Raw values, not the display strings — a CSV is for a spreadsheet,
+      // and "$2.5T" or "—" would land as text in a numeric column.
+      ...cols.map(c => {
+        const v = r[c.key];
+        if (v === null || v === undefined) return '';
+        return typeof v === 'boolean' ? (v ? 'Yes' : 'No') : v;
+      }),
+      (r.data_as_of || '') + (r.recovered ? ' (from snapshot)' : ''),
+      why,
+    ].map(scrCsvEscape).join(','));
+  }
+
+  const label = scrScreenLabel();
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
+  const name = `screener_${label}_${stamp}.csv`;
+  // BOM + CRLF so Excel reads ★ / ≥ / — as UTF-8 and splits rows properly.
+  const blob = new Blob(['﻿' + lines.join('\r\n')], {type: 'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast(`${results.length} row(s) × ${header.length} column(s) → ${name}`, 'ok');
+}
+
+// A filename that says which screen this was — "screener_2026…csv" ten
+// times in a downloads folder is useless.
+function scrScreenLabel() {
+  const saved = (META.saved || []).find(s =>
+    JSON.stringify(s.rules) === JSON.stringify(RULES));
+  if (saved) return scrSlug(saved.name);
+  const preset = (META.presets || []).find(p =>
+    JSON.stringify(p.conditions.map(c => c.field).sort()) ===
+    JSON.stringify(RULES.items.filter(i => !i.items).map(i => i.field).sort()));
+  if (preset) return scrSlug(preset.name);
+  if (!RULES.items.length) return 'all';
+  return scrSlug((LAST.pills || []).map(p => p.text).join('-')) || 'custom';
+}
+
+function scrSlug(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '').slice(0, 48);
 }
 
 document.addEventListener('DOMContentLoaded', scrInit);

@@ -253,3 +253,27 @@ class TestClobberResistance(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHasQuote(unittest.TestCase):
+    """A failed fetch must be distinguishable from a bad company: the entry
+    gate stamps husk rows Avoid/1-star, which is a verdict made of absent
+    data."""
+
+    def test_price_on_the_entry(self):
+        self.assertTrue(RS.has_quote({"ticker": "AAPL", "price": 311.0}))
+
+    def test_price_only_in_raw(self):
+        self.assertTrue(RS.has_quote({"raw": {"Current Price": 311.0}}))
+
+    def test_husk_row_has_no_quote(self):
+        # exactly the shape the 18 unresolvable symbols arrive in
+        self.assertFalse(RS.has_quote({
+            "ticker": "ANSS", "sector": "N/A", "category": "Avoid",
+            "grade": "X", "conv_action": "AVOID", "conv_stars": 1,
+            "price": None, "raw": {}}))
+
+    def test_empty_and_missing(self):
+        self.assertFalse(RS.has_quote({}))
+        self.assertFalse(RS.has_quote(None))
+        self.assertFalse(RS.has_quote({"price": ""}))

@@ -200,6 +200,24 @@ class WorkstationHandler(SimpleHTTPRequestHandler):
             self._send_json({"ok": True, "watchlists": watchlists})
             return
 
+        if self.path == "/api/etf/portfolio":
+            try:
+                payload = json.loads(raw or b"{}")
+            except ValueError:
+                self._send_json({"ok": False, "message": "expected JSON body"})
+                return
+            try:
+                self._send_json(api.etf_portfolio(payload))
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._send_json({"ok": False, "message": f"analysis failed: {e}"})
+            return
+
+        if self.path == "/api/etf/theme":
+            self._send_json(api.etf_set_theme(form))
+            return
+
         if self.path == "/api/schedule/save":
             self._send_json(api.schedule_save(form))
             return

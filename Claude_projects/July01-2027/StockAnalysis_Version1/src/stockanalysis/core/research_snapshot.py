@@ -150,6 +150,27 @@ def record(output_dir: str | Path, rows: Iterable[dict],
         return 0
 
 
+def has_quote(entry: dict) -> bool:
+    """Did any scan ever obtain a real price for this ticker?
+
+    The distinction matters because a failed fetch is not neutral in this
+    pipeline: get_metrics() swallows per-field errors and returns a husk, so
+    the row arrives with Sector "N/A" and no price, trips the entry gate
+    ("MarketCap<1B, Price<$5") and comes out stamped Category=Avoid,
+    Grade=X, AVOID, 1 star. That reads as "analysed and rejected" when the
+    truth is "never fetched" — a verdict manufactured out of absent data.
+
+    Callers use this to render and screen those tickers as unknown rather
+    than as bad. Symbols that stop resolving at the data source (delisted,
+    acquired, renamed) fail this permanently, which is why the state needs a
+    name instead of being silently scored.
+    """
+    if not entry:
+        return False
+    raw = entry.get("raw") or {}
+    return _is_present(entry.get("price")) or _is_present(raw.get("Current Price"))
+
+
 def merged(index: dict, snap: dict) -> list[dict]:
     """Research-index entries with snapshot values filling the gaps.
 

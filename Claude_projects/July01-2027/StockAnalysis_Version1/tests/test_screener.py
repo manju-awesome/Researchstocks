@@ -518,5 +518,95 @@ class TestFieldRegistry(unittest.TestCase):
         self.assertEqual(S.FIELD_BY_KEY["above_200ma"].format(True), "Yes")
 
 
+class TestWatchlistField(unittest.TestCase):
+    """Themes like "AI" have no scan field — the user's watchlist is what
+    defines them, so membership is a first-class filter."""
+
+    def _rows(self):
+        return S.build_universe(
+            [{"ticker": "NVDA", "raw": {"Ticker": "NVDA", "Current Price": 100}},
+             {"ticker": "KO", "raw": {"Ticker": "KO", "Current Price": 50}}],
+            watchlist_map={"AI": ["NVDA"], "Dividend": ["KO"],
+                           "sp500": ["NVDA", "KO"]})
+
+    def test_membership_matches(self):
+        rows = self._rows()
+        res = S.screen(rows, Group("AND", [_c("watchlist", "has", "AI")]))
+        self.assertEqual([m["ticker"] for m in res.matches], ["NVDA"])
+
+    def test_a_ticker_can_be_on_several_lists(self):
+        nvda = [r for r in self._rows() if r["ticker"] == "NVDA"][0]
+        self.assertEqual(nvda["watchlists"], ["AI", "sp500"])
+
+    def test_not_a_member_is_a_real_answer_not_missing_data(self):
+        ko = [r for r in self._rows() if r["ticker"] == "KO"][0]
+        r = S.eval_condition(ko, _c("watchlist", "has", "AI"))
+        self.assertFalse(r.passed)
+        self.assertFalse(r.missing)
+
+    def test_negation(self):
+        rows = self._rows()
+        res = S.screen(rows, Group("AND", [
+            Condition("watchlist", "has", "AI", negate=True)]))
+        self.assertEqual([m["ticker"] for m in res.matches], ["KO"])
+
+    def test_pill_text(self):
+        self.assertEqual(S.describe(_c("watchlist", "has", "AI")),
+                         'On "AI" watchlist')
+
+
+class TestPresetLibrary(unittest.TestCase):
+    def test_every_preset_has_a_unique_key(self):
+        keys = [p["key"] for p in S.PRESETS]
+        self.assertEqual(len(keys), len(set(keys)), "duplicate preset key")
+
+    def test_every_preset_declares_a_known_group(self):
+        for p in S.PRESETS:
+            with self.subTest(preset=p["key"]):
+                self.assertIn(p["group"], S.PRESET_GROUPS)
+
+    def test_every_preset_has_a_name_and_description(self):
+        for p in S.PRESETS:
+            with self.subTest(preset=p["key"]):
+                self.assertTrue(p["name"] and p["desc"] and p["icon"])
+
+    def test_no_preset_uses_an_unreachable_threshold(self):
+        # Guards the calibration: the conviction composite tops out in the
+        # high 70s and Conv_Stars never reaches 5, so a preset asking for
+        # more would be an empty screen by construction.
+        ceilings = {"conviction": 78, "conv_stars": 4, "moat": 4,
+                    "quality": 100, "health": 100, "rs_rank": 99}
+        for p in S.PRESETS:
+            for c in p["conditions"]:
+                cap = ceilings.get(c.field)
+                if cap is None or c.op not in ("gt", "gte"):
+                    continue
+                with self.subTest(preset=p["key"], field=c.field):
+                    self.assertLess(
+                        c.value if c.op == "gte" else c.value, cap + 1,
+                        f"{p['key']}: {c.field} {c.op} {c.value} exceeds the "
+                        f"observed maximum {cap}")
+
+    def test_valuation_screens_exclude_negative_multiples(self):
+        # A bare "P/E < 25" admits every loss-making company, which is the
+        # opposite of a value screen.
+        for p in S.PRESETS:
+            for c in p["conditions"]:
+                if c.field in ("forward_pe", "peg_ratio"):
+                    with self.subTest(preset=p["key"]):
+                        self.assertEqual(
+                            c.op, "between",
+                            f"{p['key']} bounds {c.field} without a floor")
+                        self.assertGreaterEqual(c.value, 0)
+
+    def test_preset_groups_are_all_populated(self):
+        used = {p["group"] for p in S.PRESETS}
+        for g in S.PRESET_GROUPS:
+            self.assertIn(g, used, f"group {g} has no presets")
+
+    def test_there_are_enough_presets_to_be_worth_browsing(self):
+        self.assertGreaterEqual(len(S.PRESETS), 30)
+
+
 if __name__ == "__main__":
     unittest.main()

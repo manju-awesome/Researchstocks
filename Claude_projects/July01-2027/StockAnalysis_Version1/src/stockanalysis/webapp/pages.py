@@ -1048,10 +1048,150 @@ def scanner_page() -> tuple[str, str]:
     return (
         card("Scan Pipeline", pipeline, "📡")
         + card("Run a Scan", form, "▶️")
+        + _etf_scan_card()
         + card("52-Week High / Low Screen", form_52w, "🎯")
         + card("Earnings Today Screen", form_earn, "📅")
         + card("Recent Scan Files", csv_html, "🗂")
-    ), extra_js
+    ), extra_js + _ETF_SCAN_SORT_JS
+
+
+def _etf_scan_card() -> str:
+    """The fund side of the scanner: what's in the ETF universe, what each
+    one is built on, and what it costs — the equity scan's own columns say
+    nothing useful about a fund, so this reads from the ETF profiles.
+
+    Rendered server-side rather than as another JS table because it is a
+    read-only list of a dozen rows with no filtering or sorting on it.
+    """
+    from stockanalysis.core import etf_profile
+    idx = _read_json(OUTPUT_DIR / "research_index.json") or {}
+    try:
+        profiles = etf_profile.load_profiles(OUTPUT_DIR)
+    except Exception:
+        profiles = {}
+    tickers = etf_profile.etf_tickers(idx.values())
+    refresh = (
+        '<form style="display:inline" onsubmit="submitJob(event, this, null); return false;">'
+        '<input type="hidden" name="action" value="etf_profiles">'
+        '<button class="btn secondary" style="font-size:11px">🧺 Refresh ETF data</button>'
+        '</form>')
+    if not tickers:
+        return card("ETF Universe", empty(
+            "No ETFs in the library yet — add funds to a watchlist and run a "
+            "scan."), "🧺", right=refresh)
+
+    def _pct(v, nd=2):
+        return "—" if v is None else f"{float(v):.{nd}f}%"
+
+    def _chg(p) -> str:
+        """Today's move as of the last profile refresh — timestamped in the
+        tooltip so it isn't mistaken for a live quote."""
+        v = p.get("change_pct")
+        if v is None:
+            return "—"
+        v = float(v)
+        tone = "#0F6E56" if v > 0 else "#A32D2D" if v < 0 else "#898781"
+        abs_v = p.get("change_abs")
+        tip = (f"{'+' if (abs_v or 0) >= 0 else ''}{float(abs_v):.2f} "
+               if abs_v is not None else "")
+        tip += f"as of {p.get('quote_at') or p.get('updated_at') or 'last refresh'}"
+        return (f'<span style="color:{tone};font-weight:600" title="{esc(tip)}">'
+                f'{"+" if v > 0 else ""}{v:.2f}%</span>')
+
+    def _sv(v) -> str:
+        """data-v carries the raw value for the sorter. Rendered text can't
+        be sorted on — "$130.3B" and "$2.3B" compare alphabetically, and
+        "—" would outrank real numbers."""
+        return "" if v is None else str(v)
+
+    rows = []
+    for t in tickers:
+        p = profiles.get(t) or {}
+        holds = p.get("holdings") or []
+        top = " · ".join(f'{h["ticker"]} {_pct(h.get("weight"), 1)}'
+                         for h in holds[:3]) or "—"
+        ytd = p.get("ytd_return")
+        tone = "#0F6E56" if (ytd or 0) >= 0 else "#A32D2D"
+        theme = etf_profile.display_theme(p) or "—"
+        rows.append(
+            f'<tr>'
+            f'<td data-v="{esc(t)}"><a href="/research/{esc(t)}.html">'
+            f'<b>{esc(t)}</b></a></td>'
+            f'<td data-v="{esc(theme)}" style="font-size:11px">{esc(theme)}</td>'
+            f'<td data-v="{esc(p.get("family") or "")}" '
+            f'style="font-size:11px;color:#898781">{esc(p.get("family") or "—")}</td>'
+            f'<td data-v="{_sv(p.get("price"))}">{fmt_money(p.get("price"))}</td>'
+            f'<td data-v="{_sv(p.get("change_pct"))}">{_chg(p)}</td>'
+            f'<td data-v="{_sv(p.get("expense_ratio"))}">'
+            f'{_pct(p.get("expense_ratio"))}</td>'
+            f'<td data-v="{_sv(p.get("aum"))}">{_fmt_aum(p.get("aum"))}</td>'
+            f'<td data-v="{_sv(ytd)}" style="color:{tone}">{_pct(ytd, 1)}</td>'
+            f'<td data-v="{_sv(p.get("holdings_count"))}" '
+            f'style="font-size:10px;color:#898781">{esc(top)}</td></tr>')
+
+    missing = [t for t in tickers if t not in profiles]
+    note = (f'<div style="font-size:11px;color:#633806;background:#FAEEDA;'
+            f'border-radius:8px;padding:8px 11px;margin-bottom:9px">'
+            f'{len(missing)} fund(s) have no profile yet '
+            f'({", ".join(missing[:8])}) — run <b>Refresh ETF data</b>.</div>'
+            ) if missing else ""
+
+    body = (note +
+            '<div style="font-size:11px;color:#898781;margin-bottom:8px">'
+            'Funds are scanned for price and technicals like any other ticker, '
+            'but they have no margins, EPS or moat — so the fundamental grades '
+            'and the Buy Zone score do not apply to them.</div>'
+            '<table id="etf-scan-table"><thead><tr>'
+            + "".join(
+                f'<th onclick="sortEtfScanTable({i})" '
+                f'style="cursor:pointer;user-select:none" '
+                f'title="Sort by {esc(label)}">{esc(label)}</th>'
+                for i, label in enumerate(
+                    ("Ticker", "Theme", "Family", "Price", "Chg today",
+                     "Expense", "AUM", "YTD", "Top holdings")))
+            + '</tr></thead><tbody>'
+            + "".join(rows) + '</tbody></table>')
+    return card(f"ETF Universe ({len(tickers)})", body, "🧺", right=refresh)
+
+
+# Sorts the server-rendered ETF table in place. Kept tiny and local rather
+# than reusing the Research page's sorter, which is bound to RESEARCH_ROWS.
+_ETF_SCAN_SORT_JS = """
+let _etfScanCol = -1, _etfScanDir = 1;
+function sortEtfScanTable(col) {
+  const table = document.getElementById('etf-scan-table');
+  if (!table) return;
+  if (_etfScanCol === col) { _etfScanDir = -_etfScanDir; }
+  else { _etfScanCol = col; _etfScanDir = col <= 2 ? 1 : -1; }
+  const body = table.tBodies[0];
+  const rows = [...body.rows];
+  rows.sort((a, b) => {
+    const av = a.cells[col].dataset.v ?? '', bv = b.cells[col].dataset.v ?? '';
+    // Blank means no data — it sorts last whichever way the column is going.
+    if (av === '' && bv === '') return 0;
+    if (av === '') return 1;
+    if (bv === '') return -1;
+    const an = parseFloat(av), bn = parseFloat(bv);
+    const numeric = !isNaN(an) && !isNaN(bn) && av.trim() !== '' && bv.trim() !== '';
+    return (numeric ? an - bn : String(av).localeCompare(String(bv))) * _etfScanDir;
+  });
+  rows.forEach(r => body.appendChild(r));
+  [...table.tHead.rows[0].cells].forEach((th, i) => {
+    th.textContent = th.textContent.replace(/ [▲▼]$/, '')
+      + (i === col ? (_etfScanDir > 0 ? ' ▲' : ' ▼') : '');
+  });
+}
+"""
+
+
+def _fmt_aum(v) -> str:
+    if v is None:
+        return "—"
+    v = float(v)
+    for cut, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M")):
+        if abs(v) >= cut:
+            return f"${v / cut:,.1f}{suffix}"
+    return f"${v:,.0f}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1067,8 +1207,8 @@ def research_page() -> tuple[str, str]:
     # overwritten by a process running older code still shows its last known
     # values instead of a row of dashes. Live index fields always win; the
     # snapshot only fills what the index no longer carries.
+    from stockanalysis.core import research_snapshot
     try:
-        from stockanalysis.core import research_snapshot
         rows = research_snapshot.merged(idx, research_snapshot.load(OUTPUT_DIR))
     except Exception as e:
         print(f"[Research page] snapshot unavailable ({e})")
@@ -1120,6 +1260,60 @@ def research_page() -> tuple[str, str]:
     # per-row score like the ones in the loop).
     from stockanalysis.core.market_position import attach_peer_positions
     attach_peer_positions(rows)
+    # A ticker no scan ever got a quote for is shown as "no data", not as the
+    # Avoid/AVOID/1-star the entry gate stamps on a husk row — see
+    # research_snapshot.has_quote(). Marked here rather than in the renderer
+    # so the flag also drives the filter counts below.
+    for r in rows:
+        r["no_data"] = not research_snapshot.has_quote(r)
+        if r["no_data"]:
+            # Zeroed scores and an "Avoid" grade on a husk row are artifacts
+            # of the entry gate rejecting a missing price, not findings.
+            # Blanking them here (rather than only in the cell renderers)
+            # keeps sorting and the Action filter honest too — otherwise
+            # sorting by Conviction would rank never-fetched tickers as
+            # genuinely worst-in-library.
+            for k in ("category", "grade", "conv_overall", "conv_stars",
+                      "conv_action", "investment_score", "swing_score",
+                      "daytrade_score", "call_score", "put_score",
+                      "swing_rank", "day_rank", "buy_zone_score",
+                      "buy_zone_label"):
+                r[k] = None
+    no_data_count = sum(1 for r in rows if r["no_data"])
+
+    # ETFs get their own columns: every fundamental the equity table shows
+    # is undefined for a fund, so the same row shape would be all dashes.
+    from stockanalysis.core import etf_profile
+    try:
+        etf_profile.attach_profiles(
+            rows, etf_profile.load_profiles(OUTPUT_DIR))
+    except Exception as e:
+        print(f"[Research page] ETF profiles unavailable ({e})")
+    # A fund with a profile but no library entry still belongs in the ETF
+    # view: everything that tab shows (theme, price, expense, AUM, change,
+    # holdings) comes from the profile, not the equity scan. Requiring a scan
+    # first would hide a newly added ETF from the one view built for it.
+    try:
+        profiles = etf_profile.load_profiles(OUTPUT_DIR)
+        known = {r.get("ticker") for r in rows}
+        for ticker, p in sorted(profiles.items()):
+            if ticker in known or p.get("error"):
+                continue
+            rows.append({"ticker": ticker, "sector": "ETF",
+                         "no_data": False, "not_scanned": True,
+                         "price": p.get("price"), "raw": {}})
+        etf_profile.attach_profiles(rows, profiles)
+    except Exception as e:
+        print(f"[Research page] ETF profile-only rows skipped ({e})")
+
+    etf_count = sum(1 for r in rows if etf_profile.is_etf_row(r))
+    from stockanalysis.webapp.api import load_etf_allocations
+    try:
+        etf_alloc_json = json.dumps(load_etf_allocations())
+    except Exception:
+        etf_alloc_json = "{}"
+    for r in rows:
+        r["is_etf"] = etf_profile.is_etf_row(r)
     rows_json = json.dumps(rows)
     from stockanalysis.reporting.research import SUBLIST_SEP as _SEP
     watch_names = sorted(set(list(watchlists.keys()) or []) |
@@ -1154,7 +1348,37 @@ def research_page() -> tuple[str, str]:
             "or run a scan to populate the library."), pad="40px")
         return body, ""
 
+    # Same preset list the Screener offers, built from the one registry in
+    # core.screener so the two pages can't drift apart.
+    from stockanalysis.core.screener import PRESETS as _PRESETS
+    preset_opts = "".join(
+        f'<option value="{esc(p["key"])}">{esc(p["icon"] + " " + p["name"])}'
+        f'</option>' for p in _PRESETS)
+
+    # Named, not hidden: these tickers look like ordinary rows of dashes
+    # otherwise, and the natural reading of a dash is "bad" rather than
+    # "never fetched".
+    no_data_note = (
+        f'<div style="font-size:11px;padding:9px 13px;border-radius:9px;'
+        f'margin-bottom:12px;background:#FAEEDA;color:#633806;'
+        f'border:0.5px solid #f0dfc0">⚠ <b>{no_data_count}</b> of {len(rows)} '
+        f'tickers have no quote from any scan — the data source returns '
+        f'nothing for these symbols (usually delisted, acquired or renamed). '
+        f'They are shown as “no data” rather than rated, and are excluded '
+        f'from the Screener. Use the <b>No data</b> tab to review or unstar '
+        f'them.</div>') if no_data_count else ""
+
     controls = f"""
+    {no_data_note}
+    <dialog id="etf-modal">
+      <div class="modal-body" style="min-width:440px;max-width:560px">
+        <h3 id="etf-modal-title"></h3>
+        <div id="etf-modal-body"></div>
+        <div class="modal-actions">
+          <button class="btn secondary" onclick="closeModal('etf-modal')">Close</button>
+        </div>
+      </div>
+    </dialog>
     <div id="action-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px">
       <input id="rsearch" placeholder="Filter by ticker or sector…" style="min-width:220px"
@@ -1163,6 +1387,14 @@ def research_page() -> tuple[str, str]:
         <option value="table">Table view</option>
         <option value="grouped">Grouped by sector</option>
       </select>
+      <span style="display:inline-flex;align-items:center;gap:6px">
+        <select id="rpreset" onchange="applyResearchPreset(this.value)"
+                title="Filter this table by one of the Screener's preset screens">
+          <option value="">Screen: none</option>
+          {preset_opts}
+        </select>
+        <span id="rpreset-info" style="font-size:11px;color:#898781"></span>
+      </span>
       <form style="display:contents" onsubmit="submitJob(event, this, null); return false;">
         <input type="hidden" name="action" value="research_session">
         <input type="hidden" name="session" value="premarket">
@@ -1174,6 +1406,11 @@ def research_page() -> tuple[str, str]:
         <input type="hidden" name="session" value="postmarket">
         <button class="btn secondary" style="font-size:11px"
                 title="Refresh every research page in the library against post-close quotes">🌙 Post-market scan</button>
+      </form>
+      <form style="display:contents" onsubmit="submitJob(event, this, null); return false;">
+        <input type="hidden" name="action" value="etf_profiles">
+        <button class="btn secondary" style="font-size:11px"
+                title="Re-fetch theme, holdings, expense ratio and AUM for every ETF in the library">🧺 Refresh ETF data</button>
       </form>
       <button type="button" class="btn secondary" style="font-size:11px"
               title="Download the rows and columns currently shown, in the same column order"
@@ -1241,6 +1478,9 @@ def research_page() -> tuple[str, str]:
 
     js = f"""
     const RESEARCH_ROWS = {rows_json};
+    // Seeded from data/etf_allocations.json so the book you entered is still
+    // there after a reload.
+    const ETF_ALLOC = {etf_alloc_json};
     const WATCHLISTS = {json.dumps(watchlists)};
     let sortKey = 'ticker', sortDir = 1;
     let actionFilter = '';
@@ -1299,9 +1539,15 @@ def research_page() -> tuple[str, str]:
       ['eps_growth', 'EPS Gr%', r => r.eps_growth != null
         ? `<span style="color:${{r.eps_growth > 0 ? '#0F6E56' : '#A32D2D'}}">${{r.eps_growth > 0 ? '+' : ''}}${{r.eps_growth}}%</span>` : '—'],
       ['forward_pe', 'Fwd P/E', r => r.forward_pe ?? '—'],
-      ['category', 'Category', r => r.category || '—'],
-      ['conv_action', 'Action', r => `<span style="color:${{actionColor(r.conv_action)}};font-weight:600">${{r.conv_action || '—'}}</span>`],
-      ['conv_stars', 'Conv ★', r => r.conv_stars != null
+      ['category', 'Category', r => r.no_data
+        ? '<span style="color:#898781">no data</span>' : (r.category || '—')],
+      // A husk row (failed fetch) carries Avoid/AVOID/1★ from the entry
+      // gate, not from analysis. Showing that verdict would assert we looked
+      // at the company and rejected it, so these render as unknown instead.
+      ['conv_action', 'Action', r => r.no_data
+        ? '<span style="color:#898781" title="No scan ever obtained a quote for this ticker — it is not rated">no data</span>'
+        : `<span style="color:${{actionColor(r.conv_action)}};font-weight:600">${{r.conv_action || '—'}}</span>`],
+      ['conv_stars', 'Conv ★', r => (r.conv_stars != null && !r.no_data)
         ? `<span style="color:#c9a227;letter-spacing:1px">${{'★'.repeat(r.conv_stars)}}<span style="color:#d9d7ce">${{'☆'.repeat(Math.max(0, 5 - r.conv_stars))}}</span></span>` : '—'],
       ['swing_score', 'Swing', r => fmtScore(r.swing_score)],
       ['daytrade_score', 'Day', r => fmtScore(r.daytrade_score)],
@@ -1490,9 +1736,14 @@ def research_page() -> tuple[str, str]:
     function actionColor(a) {{ return a === 'READY' ? '#0F6E56' : a === 'WATCH' ? '#8a6d1a' : a === 'AVOID' ? '#A32D2D' : '#898781'; }}
     function setActionFilter(a) {{ actionFilter = a; renderResearch(); }}
     function renderActionTabs() {{
-      const tabs = [['', 'All'], ['READY', 'Ready'], ['WATCH', 'Watch'], ['AVOID', 'Avoid']];
+      const tabs = [['', 'All'], ['READY', 'Ready'], ['WATCH', 'Watch'], ['AVOID', 'Avoid'],
+                    ['ETF', 'ETFs'], ['NODATA', 'No data']];
       document.getElementById('action-tabs').innerHTML = tabs.map(([val, label]) => {{
-        const count = val ? RESEARCH_ROWS.filter(r => r.conv_action === val).length : RESEARCH_ROWS.length;
+        const count = val === 'NODATA' ? RESEARCH_ROWS.filter(r => r.no_data).length
+          : val === 'ETF' ? RESEARCH_ROWS.filter(r => r.is_etf).length
+          : val ? RESEARCH_ROWS.filter(r => r.conv_action === val).length
+          : RESEARCH_ROWS.length;
+        if ((val === 'NODATA' || val === 'ETF') && !count) return '';
         const active = actionFilter === val;
         const color = val ? actionColor(val) : '#52514e';
         return `<button onclick="setActionFilter('${{val}}')"
@@ -1522,6 +1773,356 @@ def research_page() -> tuple[str, str]:
     }}
     // Search + watchlist + action-tab filtering, shared by the table render
     // and the CSV export so a download can never drift from what's on screen.
+    // ── ETF view ───────────────────────────────────────────────────────────
+    function fmtEtfPct(v, nd) {{
+      return v == null ? '—' : Number(v).toFixed(nd == null ? 2 : nd) + '%';
+    }}
+    // Signed, coloured, and carrying the timestamp of the quote it came
+    // from: this is the change as of the last ETF refresh, not a live tick,
+    // and an unqualified "+1.83%" would imply otherwise.
+    function fmtEtfChange(pct, abs, at) {{
+      if (pct == null) return '—';
+      const c = pct > 0 ? '#0F6E56' : pct < 0 ? '#A32D2D' : '#898781';
+      const sign = pct > 0 ? '+' : '';
+      const tip = (abs != null ? `${{sign}}${{Number(abs).toFixed(2)}} ` : '') +
+                  (at ? `as of ${{at}}` : '');
+      return `<span style="color:${{c}};font-weight:600" title="${{tip}}">` +
+             `${{sign}}${{Number(pct).toFixed(2)}}%</span>`;
+    }}
+    // ── theme naming ───────────────────────────────────────────────────────
+    // The provider's category is too broad to be useful on a thematic fund —
+    // SMH and IGV are both "Technology" — so the label is editable and the
+    // user's wording is stored separately from the fetched category, which
+    // is what lets it survive every ETF refresh.
+    function etfThemeCell(r) {{
+      const name = r.etf_theme_name || r.etf_category || '—';
+      const custom = r.etf_theme_custom;
+      return `<span id="theme-${{r.ticker}}" onclick="editEtfTheme('${{r.ticker}}')"
+        title="${{custom ? 'Your label — click to edit (blank resets to “' +
+          (r.etf_category || 'provider category') + '”)' : 'Click to name this theme'}}"
+        style="cursor:pointer;border-bottom:1px dotted #b9b7ae;${{
+          custom ? 'font-weight:600' : 'color:#898781'}}">${{name}}</span>`;
+    }}
+    function editEtfTheme(ticker) {{
+      const r = RESEARCH_ROWS.find(x => x.ticker === ticker);
+      if (!r) return;
+      const cell = document.getElementById('theme-' + ticker);
+      if (!cell || cell.dataset.editing) return;
+      cell.dataset.editing = '1';
+      const current = r.etf_theme_custom ? (r.etf_theme_name || '') : '';
+      cell.outerHTML = `<input id="theme-input-${{ticker}}" value="${{current}}"
+        placeholder="${{r.etf_category || 'theme'}}" maxlength="60"
+        style="width:130px;font-size:11px;padding:2px 6px"
+        onkeydown="if(event.key==='Enter'){{saveEtfTheme('${{ticker}}')}}
+                   else if(event.key==='Escape'){{renderResearch()}}"
+        onblur="saveEtfTheme('${{ticker}}')">`;
+      const input = document.getElementById('theme-input-' + ticker);
+      if (input) {{ input.focus(); input.select(); }}
+    }}
+    let _themeSaving = false;
+    async function saveEtfTheme(ticker) {{
+      // blur fires again when the input is torn down by the re-render
+      if (_themeSaving) return;
+      const input = document.getElementById('theme-input-' + ticker);
+      if (!input) return;
+      _themeSaving = true;
+      try {{
+        const res = await fetch('/api/etf/theme', {{
+          method: 'POST',
+          body: new URLSearchParams({{ ticker, theme: input.value }}),
+        }});
+        const data = await res.json();
+        if (data.ok) {{
+          const r = RESEARCH_ROWS.find(x => x.ticker === ticker);
+          if (r) {{ r.etf_theme_name = data.theme; r.etf_theme_custom = data.custom; }}
+          toast(data.message, 'ok');
+        }} else {{ toast(data.message || 'Could not save theme', 'err'); }}
+      }} catch (e) {{ toast('Could not save theme: ' + e, 'err'); }}
+      _themeSaving = false;
+      renderResearch();
+    }}
+
+    // How much of the fund the published holdings actually account for, and
+    // over how many names. The provider publishes ten for most funds but
+    // only five for some (DRAM), so a fixed "Top 10" label would assert a
+    // completeness the data doesn't have — and understate concentration risk
+    // by implying the rest is diversified rather than simply undisclosed.
+    function etfDisclosedCell(r) {{
+      const w = r.etf_top10_weight, n = r.etf_holdings_count;
+      if (w == null || !n) return '—';
+      const mix = r.etf_asset_mix || {{}};
+      const partial = n < 10;
+      let tip = `Top ${{n}} published holdings = ${{w.toFixed(1)}}% of the fund; ` +
+                `${{(100 - w).toFixed(1)}}% is not disclosed here.`;
+      if (partial) tip += ` The provider publishes only ${{n}} holdings for this fund.`;
+      if (mix.other) tip += ` ${{mix.other}}% of assets sit in "other" ` +
+        `(often swap exposure, which never appears in a holdings list).`;
+      return `<span title="${{tip}}" style="${{partial ? 'color:#8a6d1a;font-weight:600' : ''}}">
+        ${{w.toFixed(1)}}% <span style="font-size:9px;color:#898781">/${{n}}${{
+          partial ? ' ⚠' : ''}}</span></span>`;
+    }}
+
+    // Spells out what the list does and doesn't cover, so a name being
+    // absent is read as "not published" rather than "not held".
+    function etfCoverageNote(r) {{
+      const w = r.etf_top10_weight, n = r.etf_holdings_count || 0;
+      if (!n) return '';
+      const mix = r.etf_asset_mix || {{}};
+      const rest = w == null ? null : (100 - w);
+      let msg = `These are the <b>${{n}}</b> holdings the fund's data provider ` +
+        `publishes` + (w != null ? `, together <b>${{w.toFixed(1)}}%</b> of the fund` : '') +
+        `. ` + (rest != null ? `The remaining <b>${{rest.toFixed(1)}}%</b> is not
+        disclosed here, so a company absent from this list may still be held. ` : '');
+      if (n < 10) msg += `Note this provider publishes only ${{n}} holdings for
+        this fund, fewer than the usual ten. `;
+      if (mix.other) msg += `<b>${{mix.other}}%</b> of assets are classified
+        "other" — typically swap or derivative exposure, which never shows up
+        as a holding even when the underlying company is part of the strategy. `;
+      if (mix.stock != null) msg += `Asset mix: ${{mix.stock}}% stock` +
+        (mix.cash ? `, ${{mix.cash}}% cash` : '') +
+        (mix.other ? `, ${{mix.other}}% other` : '') + '.';
+      return `<div style="margin-top:12px;font-size:11px;line-height:1.55;
+        background:#FAEEDA;color:#633806;border-radius:8px;padding:9px 12px">${{msg}}</div>`;
+    }}
+
+    // ── ETF sorting ────────────────────────────────────────────────────────
+    let etfSortKey = 'ticker', etfSortDir = 1;
+    function setEtfSort(key) {{
+      // Clicking the active column flips direction; a new column starts
+      // descending for numbers (biggest first is what you want from AUM or
+      // today's move) and ascending for text.
+      if (etfSortKey === key) {{ etfSortDir = -etfSortDir; }}
+      else {{ etfSortKey = key; etfSortDir = (key === 'ticker' ||
+             key === 'etf_theme_name' || key === 'etf_family') ? 1 : -1; }}
+      renderResearch();
+    }}
+    function sortEtfRows(rows) {{
+      const key = etfSortKey;
+      return [...rows].sort((a, b) => {{
+        const av = a[key], bv = b[key];
+        // Missing values sort last under either direction — a fund with no
+        // expense ratio isn't the cheapest one.
+        const an = av === null || av === undefined, bn = bv === null || bv === undefined;
+        if (an && bn) return 0;
+        if (an) return 1;
+        if (bn) return -1;
+        if (typeof av === 'number' && typeof bv === 'number') {{
+          return (av - bv) * etfSortDir;
+        }}
+        return String(av).localeCompare(String(bv)) * etfSortDir;
+      }});
+    }}
+
+    // ── portfolio look-through ─────────────────────────────────────────────
+    // Weights are entered in the table's last column; this bar totals them
+    // and runs core.etf_portfolio over the result. The analysis is
+    // server-side because the sector blending and the alert thresholds are
+    // the kind of thing that must have one implementation, not two.
+    function allocTotal() {{
+      return Object.values(ETF_ALLOC).reduce((a, b) => a + (Number(b) || 0), 0);
+    }}
+    function onAllocInput(ticker, value) {{
+      const v = parseFloat(value);
+      if (!value || isNaN(v) || v <= 0) delete ETF_ALLOC[ticker];
+      else ETF_ALLOC[ticker] = v;
+      const el = document.getElementById('alloc-total');
+      if (el) {{
+        const t = allocTotal();
+        el.textContent = t.toFixed(1) + '%';
+        // Not an error: analyze() normalises, so 95% still works — but the
+        // number should be visible rather than silently rescaled.
+        el.style.color = Math.abs(t - 100) < 0.05 ? '#0F6E56' : '#8a6d1a';
+      }}
+    }}
+    function etfPortfolioBar() {{
+      const t = allocTotal();
+      return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+        background:white;border:0.5px solid #e1e0d9;border-radius:10px;
+        padding:10px 13px;margin-bottom:12px">
+        <b style="font-size:12px">Portfolio look-through</b>
+        <span style="font-size:11px;color:#898781">Enter weights in the
+          <b>Weight %</b> column, then analyse. Totals are normalised, so 95%
+          works.</span>
+        <span style="margin-left:auto;font-size:11px;color:#898781">Total
+          <b id="alloc-total" style="color:${{Math.abs(t - 100) < 0.05 ?
+            '#0F6E56' : '#8a6d1a'}}">${{t.toFixed(1)}}%</b></span>
+        <button class="btn" style="font-size:11px" onclick="runEtfPortfolio()">
+          Analyse portfolio</button>
+        <button class="btn secondary" style="font-size:11px"
+          onclick="clearEtfPortfolio()">Clear</button></div>`;
+    }}
+    function clearEtfPortfolio() {{
+      for (const k of Object.keys(ETF_ALLOC)) delete ETF_ALLOC[k];
+      fetch('/api/etf/portfolio', {{method: 'POST',
+        body: JSON.stringify({{allocations: {{}}, save: true}})}});
+      renderResearch();
+    }}
+    async function runEtfPortfolio() {{
+      const box = document.getElementById('etf-report');
+      if (!Object.keys(ETF_ALLOC).length) {{
+        toast('Enter at least one weight first', 'err'); return;
+      }}
+      box.innerHTML = '<div style="font-size:11px;color:#898781;padding:8px">Analysing…</div>';
+      let d;
+      try {{
+        const res = await fetch('/api/etf/portfolio', {{
+          method: 'POST', body: JSON.stringify({{allocations: ETF_ALLOC, save: true}})}});
+        d = await res.json();
+      }} catch (e) {{ box.innerHTML = ''; toast('Analysis failed: ' + e, 'err'); return; }}
+      if (!d.ok) {{ box.innerHTML = ''; toast(d.message || 'Analysis failed', 'err'); return; }}
+      box.innerHTML = renderEtfReport(d);
+    }}
+    function bar(pct, color) {{
+      const w = Math.max(0, Math.min(100, pct));
+      return `<span style="display:inline-block;width:150px;height:9px;
+        background:#f1efea;border-radius:5px;overflow:hidden;vertical-align:middle">
+        <span style="display:block;width:${{w}}%;height:100%;background:${{color}}"></span></span>`;
+    }}
+    function renderEtfReport(d) {{
+      const alertColor = {{red: '#791F1F', amber: '#8a6d1a', green: '#0F6E56'}};
+      const alertBg = {{red: '#FCEBEB', amber: '#FAEEDA', green: '#E1F5EE'}};
+      const alerts = d.alerts.map(a => `
+        <div style="background:${{alertBg[a.level]}};color:${{alertColor[a.level]}};
+          border-radius:8px;padding:7px 11px;font-size:11.5px;margin-bottom:5px">
+          ${{a.level === 'red' ? '🔴' : a.level === 'amber' ? '🟠' : '🟢'}}
+          <b>${{a.text}}</b>${{a.detail ? ` — ${{a.detail}}` : ''}}</div>`).join('');
+      const sectors = d.sectors.map(s => `
+        <div style="display:flex;gap:9px;align-items:center;font-size:11.5px;margin-bottom:3px">
+          <span style="width:150px">${{s.sector}}</span>
+          ${{bar(s.pct, s.sector === 'Technology' && s.pct > 30 ? '#A32D2D' : '#185FA5')}}
+          <b>${{s.pct.toFixed(1)}}%</b></div>`).join('');
+      const roles = d.roles.map(r => `
+        <div style="display:flex;gap:9px;align-items:center;font-size:11.5px;margin-bottom:3px">
+          <span style="width:110px">${{r.role}}</span>
+          ${{bar(r.pct, '#0F6E56')}}
+          <b>${{r.pct.toFixed(1)}}%</b>
+          <span style="color:#898781;font-size:10px">${{r.tickers.join(' ')}}</span></div>`).join('');
+      const stocks = d.stocks.slice(0, 8).map(s => `
+        <tr><td><b>${{s.ticker}}</b></td>
+          <td style="font-size:11px">${{s.name || ''}}</td>
+          <td style="text-align:right;font-weight:600">≥${{s.pct.toFixed(2)}}%</td>
+          <td style="font-size:10px;color:#898781">${{s.via.join(', ')}}</td></tr>`).join('');
+      // The floor caveat travels with the number, every time it is shown.
+      const coverage = `<div style="font-size:11px;color:#633806;background:#FAEEDA;
+        border-radius:8px;padding:8px 11px;margin-top:8px">
+        Single-company figures are a <b>floor</b>, not a measurement: only
+        <b>${{d.coverage.toFixed(1)}}%</b> of this portfolio's holdings are published
+        by the fund providers. A company held inside the undisclosed remainder
+        adds to the real number — it can never be lower.</div>`;
+      const unknown = d.unknown_pct > 0 ? `<div style="font-size:11px;color:#791F1F;
+        margin-top:6px">${{d.unknown_pct.toFixed(1)}}% of the portfolio has no sector
+        data — run <b>Refresh ETF data</b>.</div>` : '';
+      return `<div style="background:white;border:0.5px solid #e1e0d9;border-radius:10px;
+        padding:14px 16px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div><div style="font-size:11px;font-weight:700;color:#898781;
+            text-transform:uppercase;margin-bottom:7px">Sector exposure (exact)</div>
+            ${{sectors}}${{unknown}}</div>
+          <div><div style="font-size:11px;font-weight:700;color:#898781;
+            text-transform:uppercase;margin-bottom:7px">Risk checks</div>${{alerts}}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px">
+          <div><div style="font-size:11px;font-weight:700;color:#898781;
+            text-transform:uppercase;margin-bottom:7px">Portfolio role</div>${{roles}}</div>
+          <div><div style="font-size:11px;font-weight:700;color:#898781;
+            text-transform:uppercase;margin-bottom:7px">Single-company look-through</div>
+            <table><tbody>${{stocks}}</tbody></table></div>
+        </div>
+        ${{coverage}}</div>`;
+    }}
+
+    function renderEtfTable(rows, root) {{
+      if (!rows.length) {{
+        root.innerHTML = '<div style="padding:24px;text-align:center;color:#898781;' +
+          'font-size:12px">No ETFs match the current filters.</div>';
+        return;
+      }}
+      // [label, sort key] — sorting keys off the underlying value, never the
+      // rendered text, so "$130.3B" and "+1.4%" order numerically instead of
+      // alphabetically.
+      const cols = [['Ticker', 'ticker'], ['Theme', 'etf_theme_name'],
+                    ['Family', 'etf_family'], ['Price', 'price'],
+                    ['Chg today', 'etf_change_pct'],
+                    ['Expense', 'etf_expense_ratio'], ['AUM', 'etf_aum'],
+                    ['YTD', 'etf_ytd_return'], ['Yield', 'etf_yield_pct'],
+                    ['Disclosed', 'etf_top10_weight'],
+                    ['Top holdings', 'etf_holdings_count'],
+                    ['Weight %', '_alloc']];
+      rows = sortEtfRows(rows);
+      const head = cols.map(([label, key]) =>
+        `<th onclick="setEtfSort('${{key}}')" style="cursor:pointer;user-select:none"
+           title="Sort by ${{label}}">${{label}}${{
+          etfSortKey === key ? (etfSortDir > 0 ? ' ▲' : ' ▼') : ''}}</th>`).join('');
+      const body = rows.map(r => {{
+        const hs = r.etf_holdings || [];
+        // A commodity trust holds bullion, not equities — no holdings is a
+        // correct answer for GLD/SLV, not a fetch failure.
+        const holdings = hs.length
+          ? `<button class="btn secondary" style="font-size:10px;padding:3px 9px"
+               onclick="showEtfHoldings('${{r.ticker}}')">${{hs.length}} holdings</button>
+             <span style="font-size:10px;color:#898781;margin-left:6px">${{
+               hs.slice(0, 3).map(h => h.ticker + ' ' + fmtEtfPct(h.weight, 1)).join(' · ')}}</span>`
+          : '<span style="font-size:10px;color:#898781">physical / not published</span>';
+        return `<tr>
+          <td>${{r.not_scanned
+            ? `<b title="Profile only — no scan has picked this up yet, so it has no technicals">${{r.ticker}}</b>
+               <span style="font-size:9px;color:#8a6d1a"> new</span>`
+            : `<a href="/research/${{r.ticker}}.html"><b>${{r.ticker}}</b></a>`}}</td>
+          <td style="font-size:11px">${{etfThemeCell(r)}}</td>
+          <td style="font-size:11px;color:#898781">${{r.etf_family || '—'}}</td>
+          <td>${{fmtMoney(r.price)}}</td>
+          <td>${{fmtEtfChange(r.etf_change_pct, r.etf_change_abs, r.etf_quote_at)}}</td>
+          <td>${{fmtEtfPct(r.etf_expense_ratio)}}</td>
+          <td>${{fmtCap(r.etf_aum)}}</td>
+          <td style="color:${{(r.etf_ytd_return ?? 0) >= 0 ? '#0F6E56' : '#A32D2D'}}">${{
+              fmtEtfPct(r.etf_ytd_return, 1)}}</td>
+          <td>${{fmtEtfPct(r.etf_yield_pct, 2)}}</td>
+          <td>${{etfDisclosedCell(r)}}</td>
+          <td>${{holdings}}</td>
+          <td><input type="number" min="0" max="100" step="0.5"
+               id="alloc-${{r.ticker}}" value="${{ETF_ALLOC[r.ticker] ?? ''}}"
+               oninput="onAllocInput('${{r.ticker}}', this.value)"
+               style="width:62px;font-size:11px;padding:2px 5px"></td></tr>`;
+      }}).join('');
+      root.innerHTML = `
+        ${{etfPortfolioBar()}}
+        <div id="etf-report"></div>
+        <div style="font-size:11px;color:#898781;margin-bottom:8px">
+          Fund-specific fields — margins, EPS growth and moat don't exist for an
+          ETF, so the equity columns are hidden here rather than shown empty.
+          Expense ratio and AUM come from the fund profile
+          (<b>Refresh ETF data</b> to update); price and technicals come from the scan.
+          <b>Click a theme to rename it</b> — your label is kept separately from the
+          provider's category, so a refresh won't overwrite it. Blank resets it.
+        </div>
+        <table><thead><tr>${{head}}</tr></thead>
+        <tbody>${{body}}</tbody></table>`;
+    }}
+    function showEtfHoldings(ticker) {{
+      const r = RESEARCH_ROWS.find(x => x.ticker === ticker);
+      if (!r) return;
+      const hs = r.etf_holdings || [];
+      document.getElementById('etf-modal-title').textContent =
+        `${{ticker}} — top ${{hs.length}} published holdings`;
+      document.getElementById('etf-modal-body').innerHTML = `
+        <div style="font-size:11px;color:#898781;margin-bottom:10px">
+          ${{r.etf_theme_name || r.etf_category || ''}}${{r.etf_family ? ' · ' + r.etf_family : ''}}
+          ${{r.etf_top10_weight != null ? ' · top 10 = ' + fmtEtfPct(r.etf_top10_weight, 1)
+             + ' of the fund' : ''}}
+        </div>
+        <table><thead><tr><th>#</th><th>Ticker</th><th>Name</th>
+          <th style="text-align:right">Weight</th></tr></thead><tbody>
+        ${{hs.map((h, i) => `<tr><td style="color:#898781">${{i + 1}}</td>
+          <td><a href="/research/${{h.ticker}}.html"><b>${{h.ticker}}</b></a></td>
+          <td style="font-size:11px">${{h.name || ''}}</td>
+          <td style="text-align:right;font-weight:600">${{fmtEtfPct(h.weight)}}</td></tr>`).join('')}}
+        </tbody></table>
+        ${{etfCoverageNote(r)}}
+        ${{r.etf_theme ? `<div style="margin-top:12px;font-size:11px;line-height:1.5;
+          color:#52514e"><b>Built on:</b> ${{r.etf_theme}}</div>` : ''}}`;
+      openModal('etf-modal');
+    }}
+
     function filteredRows() {{
       const q = document.getElementById('rsearch').value.trim().toUpperCase();
       const watchSelected = Array.from(document.getElementById('rwatch').selectedOptions).map(o => o.value);
@@ -1530,7 +2131,48 @@ def research_page() -> tuple[str, str]:
       return RESEARCH_ROWS.filter(r =>
         (!q || r.ticker.includes(q) || (r.sector || '').toUpperCase().includes(q)) &&
         (!watchTickers || watchTickers.has(r.ticker)) &&
-        (!actionFilter || r.conv_action === actionFilter));
+        (!presetTickers || presetTickers.has(r.ticker)) &&
+        (!actionFilter || (actionFilter === 'NODATA' ? r.no_data
+                           : actionFilter === 'ETF' ? r.is_etf
+                           : r.conv_action === actionFilter)));
+    }}
+
+    // ── Screener presets ───────────────────────────────────────────────────
+    // The preset is evaluated by /api/screen — the same engine the Screener
+    // page uses — and only the resulting ticker set is applied here. Doing
+    // the comparisons in JS instead would mean a second implementation of
+    // every operator and threshold, free to drift from the first.
+    let presetTickers = null;      // null = no preset filter
+    async function applyResearchPreset(key) {{
+      const label = document.getElementById('rpreset-info');
+      if (!key) {{
+        presetTickers = null;
+        label.textContent = '';
+        renderResearch();
+        return;
+      }}
+      label.textContent = 'running…';
+      try {{
+        const res = await fetch('/api/screen', {{
+          method: 'POST',
+          body: JSON.stringify({{ preset: key, limit: 5000, sort: 'match' }}),
+        }});
+        const data = await res.json();
+        if (!data.ok) {{ toast(data.message || 'Screen failed', 'err'); label.textContent = ''; return; }}
+        presetTickers = new Set(data.results.map(r => r.ticker));
+        // The Screener excludes tickers with no quote, so a preset can match
+        // names this table no longer lists; report what actually landed.
+        // This counts the screen against the whole library. The table's own
+        // count can be lower because the search, watchlist and Action
+        // filters still apply on top — saying just "14" next to a table
+        // showing 9 reads like one of them is wrong.
+        const shown = RESEARCH_ROWS.filter(r => presetTickers.has(r.ticker)).length;
+        label.textContent = `${{shown}} in library match this screen`;
+        renderResearch();
+      }} catch (e) {{
+        toast('Preset failed: ' + e, 'err');
+        label.textContent = '';
+      }}
     }}
     function renderResearch() {{
       renderActionTabs();
@@ -1538,6 +2180,11 @@ def research_page() -> tuple[str, str]:
       let rows = filteredRows();
       document.getElementById('rcount').textContent = rows.length;
       const root = document.getElementById('research-root');
+      // The ETF tab replaces the table rather than filtering it: a fund has
+      // no margins, EPS or moat, so 20 of the 24 equity columns would be
+      // dashes and the four that matter (theme, cost, size, holdings) have
+      // nowhere to go.
+      if (actionFilter === 'ETF') {{ renderEtfTable(rows, root); return; }}
       if (view === 'grouped') {{
         const bySec = {{}};
         rows.forEach(r => {{ const s = r.sector || 'Unknown'; (bySec[s] = bySec[s] || []).push(r); }});
