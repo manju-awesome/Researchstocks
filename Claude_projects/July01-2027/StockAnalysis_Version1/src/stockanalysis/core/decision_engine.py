@@ -356,7 +356,13 @@ def decide(row: dict, scores: dict | None = None,
     rr = _f(row.get("rr"))
     quality = _f(row.get("quality"))
     health = _f(row.get("health"))
-    dist8 = _f(row.get("abs_vs_8ema"))
+    # SIGNED, not absolute. abs_vs_8ema exists for "within X% of" screens
+    # and cannot tell above from below — reading it here reported WDC, which
+    # sits 11% UNDER its 8 EMA, as "11.0% above it now" and offered a
+    # pullback that had already happened. Direction is the point of this
+    # branch: extended above is a chase, far below is weakness.
+    pct8 = _f(row.get("pct_vs_8ema"))
+    dist8 = None if pct8 is None else abs(pct8)
     above200 = row.get("above_200ma")
     in_zone = row.get("in_buy_zone") is True
     breakout = _f(row.get("breakout_probability"))
@@ -421,10 +427,16 @@ def decide(row: dict, scores: dict | None = None,
         return _verdict("BUY ZONE", row, s, er)
 
     if best >= PULLBACK_SCORE and conf >= PULLBACK_CONFLUENCE:
-        if dist8 is not None and dist8 > 3:
+        if pct8 is not None and pct8 > 3:
             triggers.append(f"Pull back toward the 8/21 EMA "
-                            f"(now {dist8:.1f}% above it)")
+                            f"(now {pct8:.1f}% above it)")
             return _verdict("BUY ON PULLBACK", row, s, er, triggers=triggers)
+        if pct8 is not None and pct8 < -6:
+            # Well under the short-term average is not a pullback waiting to
+            # be bought — the trend has to turn back up first.
+            triggers.append(f"Reclaim the 8 EMA "
+                            f"(now {abs(pct8):.1f}% below it)")
+            return _verdict("WATCH", row, s, er, triggers=triggers)
         if rr is not None and rr < MIN_RR:
             triggers.append(f"R:R improves above {MIN_RR:.0f} (now {rr:.1f})")
             return _verdict("WAIT", row, s, er,
@@ -434,9 +446,10 @@ def decide(row: dict, scores: dict | None = None,
     if best >= WATCH_SCORE:
         if breakout is not None and breakout >= 70 and (rvol or 0) < 1.2:
             triggers.append("Breakout confirms on above-average volume")
-        if dist8 is not None and dist8 > 3:
-            triggers.append(f"Price returns to the 8 EMA "
-                            f"({dist8:.1f}% above it now)")
+        if pct8 is not None and abs(pct8) > 3:
+            triggers.append(
+                f"Price returns to the 8 EMA "
+                f"({abs(pct8):.1f}% {'above' if pct8 > 0 else 'below'} it now)")
         if rr is not None and rr < MIN_RR:
             triggers.append(f"R:R improves above {MIN_RR:.0f} (now {rr:.1f})")
         if not in_zone and row.get("buy_zone_label"):

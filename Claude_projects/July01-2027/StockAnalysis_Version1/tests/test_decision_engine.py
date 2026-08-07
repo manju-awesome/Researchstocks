@@ -211,7 +211,10 @@ class TestActions(unittest.TestCase):
     def test_extended_price_becomes_buy_on_pullback(self):
         # No breakout in progress — a genuine breakout IS extended, and is
         # entered on the breakout, so it must not be diverted to "pullback".
-        row = self._strong(abs_vs_8ema=9.0, in_buy_zone=False,
+        # pct_vs_8ema is what decides direction; abs_vs_8ema alone can't
+        # say whether 9% is a chase or a collapse.
+        row = self._strong(pct_vs_8ema=9.0, abs_vs_8ema=9.0,
+                           in_buy_zone=False,
                            breakout_probability=30, rvol=0.9)
         d = DE.decide(row, strategy="SWING")
         self.assertIn(d["action"], ("BUY ON PULLBACK", "WATCH"))
@@ -250,3 +253,41 @@ class TestActions(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEmaDirection(unittest.TestCase):
+    """abs_vs_8ema cannot tell above from below. Reading it in decide()
+    reported WDC — 11% UNDER its 8 EMA — as "11.0% above it now", and
+    offered a pullback that had already happened."""
+
+    def _base(self, pct8, **kw):
+        row = _row(quality=93, health=77, moat=3, eps_growth=31.0,
+                   rs_rank=20, swing_score=42, breakout_probability=30,
+                   rr=1.15, rvol=1.0, above_200ma=True, above_50ma=False,
+                   in_buy_zone=False, days_to_earnings=40)
+        row["pct_vs_8ema"] = pct8
+        row["abs_vs_8ema"] = abs(pct8)
+        row.update(kw)
+        return row
+
+    def test_below_the_ema_is_never_described_as_above(self):
+        d = DE.decide(self._base(-11.0), strategy="LONGTERM")
+        text = " ".join(d["triggers"])
+        self.assertIn("below", text)
+        self.assertNotIn("above it", text)
+
+    def test_above_the_ema_is_described_as_above(self):
+        d = DE.decide(self._base(7.0), strategy="LONGTERM")
+        self.assertTrue(any("above" in t for t in d["triggers"]))
+
+    def test_far_below_the_ema_is_not_offered_as_a_pullback_entry(self):
+        # A pullback you can buy requires being extended above it first.
+        d = DE.decide(self._base(-11.0, rr=3.0, rs_rank=85, swing_score=80),
+                      strategy="LONGTERM")
+        self.assertNotEqual(d["action"], "BUY ON PULLBACK")
+
+    def test_extended_above_still_routes_to_pullback(self):
+        d = DE.decide(self._base(7.0, rr=3.0, rs_rank=85, swing_score=80,
+                                 breakout_probability=60, above_50ma=True),
+                      strategy="LONGTERM")
+        self.assertIn(d["action"], ("BUY ON PULLBACK", "WATCH"))
