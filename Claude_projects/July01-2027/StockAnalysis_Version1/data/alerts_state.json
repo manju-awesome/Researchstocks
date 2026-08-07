@@ -3607,28 +3607,6 @@
     },
     "since": "2026-07-31T08:30:42"
   },
-  "OKTA:news:9d59009665": {
-    "alert": {
-      "dedup_key": "OKTA:news:9d59009665",
-      "category": "news",
-      "ticker": "OKTA",
-      "priority": "HIGH",
-      "headline": "M&A / Acquisition: Okta to acquire Permiso for cloud-native identity threat tools",
-      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "M&A / Acquisition",
-        "publisher": "Verdict",
-        "url": "https://finance.yahoo.com/technology/ai/articles/okta-acquire-permiso-cloud-native-072404569.html",
-        "published": "2026-07-31"
-      },
-      "created_at": "2026-07-31T08:38:50"
-    },
-    "since": "2026-07-31T08:38:50"
-  },
   "MDB:a_plus_setup": {
     "alert": {
       "dedup_key": "MDB:a_plus_setup",
@@ -5981,28 +5959,6 @@
     },
     "since": "2026-08-07T08:36:38"
   },
-  "MU:news:c5bce9412d": {
-    "alert": {
-      "dedup_key": "MU:news:c5bce9412d",
-      "category": "news",
-      "ticker": "MU",
-      "priority": "HIGH",
-      "headline": "M&A / Acquisition: AI Chips Update - AMD Advances AI Strategy With Taalas Acquisition",
-      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "M&A / Acquisition",
-        "publisher": "Simply Wall St.",
-        "url": "https://finance.yahoo.com/technology/ai/articles/ai-chips-amd-advances-ai-113923975.html",
-        "published": "2026-08-07"
-      },
-      "created_at": "2026-08-07T08:36:40"
-    },
-    "since": "2026-08-07T08:36:40"
-  },
   "NEE:news:ddae8b54fb": {
     "alert": {
       "dedup_key": "NEE:news:ddae8b54fb",
@@ -7687,13 +7643,13 @@
     },
     "since": "2026-08-07T09:55:32"
   },
-  "AMD:news:b735b82fd2": {
+  "AMD:news:bb8019f2cb": {
     "alert": {
-      "dedup_key": "AMD:news:b735b82fd2",
+      "dedup_key": "AMD:news:bb8019f2cb",
       "category": "news",
       "ticker": "AMD",
       "priority": "HIGH",
-      "headline": "M&A / Acquisition: AMD\u2019s acquisition of Toronto chip startup Taalas shows Canada needs to do more to keep companies at home",
+      "headline": "M&A / Acquisition: Nvidia Stock Jumps After AMD Acquires AI Startup Taalas",
       "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
       "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
       "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
@@ -7701,12 +7657,78 @@
       "time_sensitivity": "today",
       "supporting_data": {
         "catalyst": "M&A / Acquisition",
-        "publisher": "Financial Post",
-        "url": "https://finance.yahoo.com/news/amd-acquisition-toronto-chip-startup-134821840.html",
+        "publisher": "GuruFocus.com",
+        "url": "https://finance.yahoo.com/markets/stocks/articles/nvidia-stock-jumps-amd-acquires-164513864.html",
         "published": "2026-08-07"
       },
-      "created_at": "2026-08-07T10:39:29"
+      "created_at": "2026-08-07T11:53:17"
     },
-    "since": "2026-08-07T10:39:29"
+    "since": "2026-08-07T11:53:17"
+  },
+  "AAPL:news:4313f5a29a": {
+    "alert": {
+      "dedup_key": "AAPL:news:4313f5a29a",
+      "category": "news",
+      "ticker": "AAPL",
+      "priority": "HIGH",
+      "headline": "Legal / Regulatory: Apple (AAPL) Seeks Injunction In AI Trade Secret Lawsuit",
+      "why_it_matters": "Investigations and litigation carry open-ended financial and reputational risk.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "Legal / Regulatory",
+        "publisher": "Simply Wall St.",
+        "url": "https://finance.yahoo.com/technology/ai/articles/apple-aapl-seeks-injunction-ai-161633279.html",
+        "published": "2026-08-07"
+      },
+      "created_at": "2026-08-07T11:53:18"
+    },
+    "since": "2026-08-07T11:53:18"
+  },
+  "PANW:news:6b59dfdf73": {
+    "alert": {
+      "dedup_key": "PANW:news:6b59dfdf73",
+      "category": "news",
+      "ticker": "PANW",
+      "priority": "HIGH",
+      "headline": "Guidance Cut: Top Midday Stories: Apollo Acquires EasyJet in Deal Valued at $7.68 Billion; Honeywell Aerospace Shares Fall Following Guidance Cut",
+      "why_it_matters": "Management lowering its own forecast is a direct signal of weakening fundamentals.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "Guidance Cut",
+        "publisher": "MT Newswires",
+        "url": "https://finance.yahoo.com/markets/stocks/articles/top-midday-stories-apollo-acquires-154510891.html",
+        "published": "2026-08-06"
+      },
+      "created_at": "2026-08-07T11:53:23"
+    },
+    "since": "2026-08-07T11:53:23"
+  },
+  "MA:news:7638da92ee": {
+    "alert": {
+      "dedup_key": "MA:news:7638da92ee",
+      "category": "news",
+      "ticker": "MA",
+      "priority": "MEDIUM",
+      "headline": "New Deal / Contract: What Does Fiserv (FISV) Gain From Its New Merchant Services Partnership?",
+      "why_it_matters": "A large new contract can move the revenue outlook meaningfully for smaller names.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "New Deal / Contract",
+        "publisher": "Simply Wall St.",
+        "url": "https://finance.yahoo.com/markets/stocks/articles/does-fiserv-fisv-gain-merchant-190936503.html",
+        "published": "2026-08-07"
+      },
+      "created_at": "2026-08-07T14:27:26"
+    },
+    "since": "2026-08-07T14:27:26"
   }
 }

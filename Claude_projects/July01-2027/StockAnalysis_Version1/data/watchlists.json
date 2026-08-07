@@ -20,7 +20,8 @@
   "TSLA",
   "GOOGL",
   "HOOD",
-  "AMZN"
+  "AMZN",
+  "TSM"
  ],
  "watchlist": [
   "NVDA",
@@ -108,7 +109,10 @@
   "VTI",
   "VXUS",
   "QUAL",
-  "VTV"
+  "VTV",
+  "SPY",
+  "QQQ",
+  "DIA"
  ],
  "AI": {
   "_tickers": [
@@ -827,7 +831,10 @@
   "VTI",
   "VXUS",
   "QUAL",
-  "VTV"
+  "VTV",
+  "SPY",
+  "QQQ",
+  "DIA"
  ],
  "sp500": [
   "MMM",
@@ -1309,6 +1316,7 @@
  ],
  "ALERT_TICKERS": [
   "AAOI",
+  "AAPL",
   "ADP",
   "AFL",
   "AJG",
@@ -1363,7 +1371,6 @@
   "MSFT",
   "MSI",
   "MTCH",
-  "MU",
   "NDAQ",
   "NEE",
   "NOW",

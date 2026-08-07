@@ -1048,150 +1048,10 @@ def scanner_page() -> tuple[str, str]:
     return (
         card("Scan Pipeline", pipeline, "📡")
         + card("Run a Scan", form, "▶️")
-        + _etf_scan_card()
         + card("52-Week High / Low Screen", form_52w, "🎯")
         + card("Earnings Today Screen", form_earn, "📅")
         + card("Recent Scan Files", csv_html, "🗂")
-    ), extra_js + _ETF_SCAN_SORT_JS
-
-
-def _etf_scan_card() -> str:
-    """The fund side of the scanner: what's in the ETF universe, what each
-    one is built on, and what it costs — the equity scan's own columns say
-    nothing useful about a fund, so this reads from the ETF profiles.
-
-    Rendered server-side rather than as another JS table because it is a
-    read-only list of a dozen rows with no filtering or sorting on it.
-    """
-    from stockanalysis.core import etf_profile
-    idx = _read_json(OUTPUT_DIR / "research_index.json") or {}
-    try:
-        profiles = etf_profile.load_profiles(OUTPUT_DIR)
-    except Exception:
-        profiles = {}
-    tickers = etf_profile.etf_tickers(idx.values())
-    refresh = (
-        '<form style="display:inline" onsubmit="submitJob(event, this, null); return false;">'
-        '<input type="hidden" name="action" value="etf_profiles">'
-        '<button class="btn secondary" style="font-size:11px">🧺 Refresh ETF data</button>'
-        '</form>')
-    if not tickers:
-        return card("ETF Universe", empty(
-            "No ETFs in the library yet — add funds to a watchlist and run a "
-            "scan."), "🧺", right=refresh)
-
-    def _pct(v, nd=2):
-        return "—" if v is None else f"{float(v):.{nd}f}%"
-
-    def _chg(p) -> str:
-        """Today's move as of the last profile refresh — timestamped in the
-        tooltip so it isn't mistaken for a live quote."""
-        v = p.get("change_pct")
-        if v is None:
-            return "—"
-        v = float(v)
-        tone = "#0F6E56" if v > 0 else "#A32D2D" if v < 0 else "#898781"
-        abs_v = p.get("change_abs")
-        tip = (f"{'+' if (abs_v or 0) >= 0 else ''}{float(abs_v):.2f} "
-               if abs_v is not None else "")
-        tip += f"as of {p.get('quote_at') or p.get('updated_at') or 'last refresh'}"
-        return (f'<span style="color:{tone};font-weight:600" title="{esc(tip)}">'
-                f'{"+" if v > 0 else ""}{v:.2f}%</span>')
-
-    def _sv(v) -> str:
-        """data-v carries the raw value for the sorter. Rendered text can't
-        be sorted on — "$130.3B" and "$2.3B" compare alphabetically, and
-        "—" would outrank real numbers."""
-        return "" if v is None else str(v)
-
-    rows = []
-    for t in tickers:
-        p = profiles.get(t) or {}
-        holds = p.get("holdings") or []
-        top = " · ".join(f'{h["ticker"]} {_pct(h.get("weight"), 1)}'
-                         for h in holds[:3]) or "—"
-        ytd = p.get("ytd_return")
-        tone = "#0F6E56" if (ytd or 0) >= 0 else "#A32D2D"
-        theme = etf_profile.display_theme(p) or "—"
-        rows.append(
-            f'<tr>'
-            f'<td data-v="{esc(t)}"><a href="/research/{esc(t)}.html">'
-            f'<b>{esc(t)}</b></a></td>'
-            f'<td data-v="{esc(theme)}" style="font-size:11px">{esc(theme)}</td>'
-            f'<td data-v="{esc(p.get("family") or "")}" '
-            f'style="font-size:11px;color:#898781">{esc(p.get("family") or "—")}</td>'
-            f'<td data-v="{_sv(p.get("price"))}">{fmt_money(p.get("price"))}</td>'
-            f'<td data-v="{_sv(p.get("change_pct"))}">{_chg(p)}</td>'
-            f'<td data-v="{_sv(p.get("expense_ratio"))}">'
-            f'{_pct(p.get("expense_ratio"))}</td>'
-            f'<td data-v="{_sv(p.get("aum"))}">{_fmt_aum(p.get("aum"))}</td>'
-            f'<td data-v="{_sv(ytd)}" style="color:{tone}">{_pct(ytd, 1)}</td>'
-            f'<td data-v="{_sv(p.get("holdings_count"))}" '
-            f'style="font-size:10px;color:#898781">{esc(top)}</td></tr>')
-
-    missing = [t for t in tickers if t not in profiles]
-    note = (f'<div style="font-size:11px;color:#633806;background:#FAEEDA;'
-            f'border-radius:8px;padding:8px 11px;margin-bottom:9px">'
-            f'{len(missing)} fund(s) have no profile yet '
-            f'({", ".join(missing[:8])}) — run <b>Refresh ETF data</b>.</div>'
-            ) if missing else ""
-
-    body = (note +
-            '<div style="font-size:11px;color:#898781;margin-bottom:8px">'
-            'Funds are scanned for price and technicals like any other ticker, '
-            'but they have no margins, EPS or moat — so the fundamental grades '
-            'and the Buy Zone score do not apply to them.</div>'
-            '<table id="etf-scan-table"><thead><tr>'
-            + "".join(
-                f'<th onclick="sortEtfScanTable({i})" '
-                f'style="cursor:pointer;user-select:none" '
-                f'title="Sort by {esc(label)}">{esc(label)}</th>'
-                for i, label in enumerate(
-                    ("Ticker", "Theme", "Family", "Price", "Chg today",
-                     "Expense", "AUM", "YTD", "Top holdings")))
-            + '</tr></thead><tbody>'
-            + "".join(rows) + '</tbody></table>')
-    return card(f"ETF Universe ({len(tickers)})", body, "🧺", right=refresh)
-
-
-# Sorts the server-rendered ETF table in place. Kept tiny and local rather
-# than reusing the Research page's sorter, which is bound to RESEARCH_ROWS.
-_ETF_SCAN_SORT_JS = """
-let _etfScanCol = -1, _etfScanDir = 1;
-function sortEtfScanTable(col) {
-  const table = document.getElementById('etf-scan-table');
-  if (!table) return;
-  if (_etfScanCol === col) { _etfScanDir = -_etfScanDir; }
-  else { _etfScanCol = col; _etfScanDir = col <= 2 ? 1 : -1; }
-  const body = table.tBodies[0];
-  const rows = [...body.rows];
-  rows.sort((a, b) => {
-    const av = a.cells[col].dataset.v ?? '', bv = b.cells[col].dataset.v ?? '';
-    // Blank means no data — it sorts last whichever way the column is going.
-    if (av === '' && bv === '') return 0;
-    if (av === '') return 1;
-    if (bv === '') return -1;
-    const an = parseFloat(av), bn = parseFloat(bv);
-    const numeric = !isNaN(an) && !isNaN(bn) && av.trim() !== '' && bv.trim() !== '';
-    return (numeric ? an - bn : String(av).localeCompare(String(bv))) * _etfScanDir;
-  });
-  rows.forEach(r => body.appendChild(r));
-  [...table.tHead.rows[0].cells].forEach((th, i) => {
-    th.textContent = th.textContent.replace(/ [▲▼]$/, '')
-      + (i === col ? (_etfScanDir > 0 ? ' ▲' : ' ▼') : '');
-  });
-}
-"""
-
-
-def _fmt_aum(v) -> str:
-    if v is None:
-        return "—"
-    v = float(v)
-    for cut, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M")):
-        if abs(v) >= cut:
-            return f"${v / cut:,.1f}{suffix}"
-    return f"${v:,.0f}"
+    ), extra_js
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1312,8 +1172,26 @@ def research_page() -> tuple[str, str]:
         etf_alloc_json = json.dumps(load_etf_allocations())
     except Exception:
         etf_alloc_json = "{}"
+    # "Held" = on the user's ETF watchlist. Benchmarks were given profiles
+    # but deliberately not added to that list, which is what separates a
+    # reference index from a position — and lets IWM/VTI be both.
+    try:
+        etf_held = set(watchlists.get("Sector: ETF") or [])
+    except Exception:
+        etf_held = set()
+    # Leadership read over the benchmark ETFs — which part of the market is
+    # carrying it, which the single regime score can't express.
+    from stockanalysis.core.market_regime import benchmark_leadership
+    try:
+        leadership_json = json.dumps(
+            benchmark_leadership(etf_profile.load_profiles(OUTPUT_DIR)))
+    except Exception as e:
+        print(f"[Research page] leadership unavailable ({e})")
+        leadership_json = "null"
     for r in rows:
         r["is_etf"] = etf_profile.is_etf_row(r)
+        r["is_benchmark"] = etf_profile.is_benchmark(r.get("ticker"))
+        r["is_holding"] = r.get("ticker") in etf_held
     rows_json = json.dumps(rows)
     from stockanalysis.reporting.research import SUBLIST_SEP as _SEP
     watch_names = sorted(set(list(watchlists.keys()) or []) |
@@ -1407,11 +1285,6 @@ def research_page() -> tuple[str, str]:
         <button class="btn secondary" style="font-size:11px"
                 title="Refresh every research page in the library against post-close quotes">🌙 Post-market scan</button>
       </form>
-      <form style="display:contents" onsubmit="submitJob(event, this, null); return false;">
-        <input type="hidden" name="action" value="etf_profiles">
-        <button class="btn secondary" style="font-size:11px"
-                title="Re-fetch theme, holdings, expense ratio and AUM for every ETF in the library">🧺 Refresh ETF data</button>
-      </form>
       <button type="button" class="btn secondary" style="font-size:11px"
               title="Download the rows and columns currently shown, in the same column order"
               onclick="downloadResearchCsv('visible')">⬇ CSV</button>
@@ -1481,6 +1354,7 @@ def research_page() -> tuple[str, str]:
     // Seeded from data/etf_allocations.json so the book you entered is still
     // there after a reload.
     const ETF_ALLOC = {etf_alloc_json};
+    const ETF_LEADERSHIP = {leadership_json};
     const WATCHLISTS = {json.dumps(watchlists)};
     let sortKey = 'ticker', sortDir = 1;
     let actionFilter = '';
@@ -1885,6 +1759,55 @@ def research_page() -> tuple[str, str]:
         background:#FAEEDA;color:#633806;border-radius:8px;padding:9px 12px">${{msg}}</div>`;
     }}
 
+    // ── ETF column order ───────────────────────────────────────────────────
+    // Its own order list — the equity table's visibleCols is a different set
+    // of columns entirely. Widths are shared (colWidths, keyed by column
+    // key) because the keys don't overlap and one resize store is simpler
+    // than two that behave identically.
+    const ETFCOLS_LS_KEY = 'etf_col_order_v1';
+    let etfColOrder = (() => {{
+      try {{
+        const raw = JSON.parse(localStorage.getItem(ETFCOLS_LS_KEY) || '[]');
+        return Array.isArray(raw) ? raw.filter(k => typeof k === 'string') : [];
+      }} catch (e) {{ return []; }}
+    }})();
+    function saveEtfColOrder() {{
+      try {{ localStorage.setItem(ETFCOLS_LS_KEY, JSON.stringify(etfColOrder)); }}
+      catch (e) {{ /* private mode — the order just won't persist */ }}
+    }}
+    let _dragEtfColKey = null;
+    function onEtfColDragStart(e, key) {{
+      _dragEtfColKey = key;
+      e.dataTransfer.effectAllowed = 'move';
+      e.target.style.opacity = '0.4';
+    }}
+    function onEtfColDrop(e, targetKey) {{
+      e.preventDefault();
+      e.currentTarget.style.borderLeft = '';
+      const dragged = _dragEtfColKey;
+      _dragEtfColKey = null;
+      if (!dragged || dragged === targetKey) return;
+      const from = etfColOrder.indexOf(dragged);
+      const to = etfColOrder.indexOf(targetKey);
+      if (from === -1 || to === -1) return;
+      etfColOrder.splice(from, 1);
+      etfColOrder.splice(to, 0, dragged);
+      saveEtfColOrder();
+      renderResearch();
+    }}
+    function resetEtfCols() {{
+      etfColOrder = [];
+      saveEtfColOrder();
+      // Clear widths for ETF columns only — the equity table shares this
+      // store and its columns must keep whatever the user set there.
+      Object.keys(colWidths).forEach(k => {{
+        if (k === 'ticker' || k === 'price' || k === '_alloc' || k.startsWith('etf_'))
+          delete colWidths[k];
+      }});
+      saveColWidths();
+      renderResearch();
+    }}
+
     // ── ETF sorting ────────────────────────────────────────────────────────
     let etfSortKey = 'ticker', etfSortDir = 1;
     function setEtfSort(key) {{
@@ -1949,7 +1872,18 @@ def research_page() -> tuple[str, str]:
         <button class="btn" style="font-size:11px" onclick="runEtfPortfolio()">
           Analyse portfolio</button>
         <button class="btn secondary" style="font-size:11px"
-          onclick="clearEtfPortfolio()">Clear</button></div>`;
+          onclick="clearEtfPortfolio()">Clear</button>
+        <form style="display:inline" onsubmit="submitJob(event, this, null); return false;">
+          <input type="hidden" name="action" value="etf_profiles">
+          <button class="btn secondary" style="font-size:11px"
+            title="Re-fetch theme, holdings, expense ratio, AUM, price levels and today's change for every ETF">🧺 Refresh ETFs</button>
+        </form>
+        <button class="btn secondary" style="font-size:11px" onclick="resetEtfCols()"
+          title="Restore the default ETF column order and widths">↺ Columns</button>
+        </div>
+        <div style="font-size:10px;color:#898781;margin:-6px 0 10px 2px">
+          Drag a column header to reorder it · drag its right edge to resize ·
+          click it to sort</div>`;
     }}
     function clearEtfPortfolio() {{
       for (const k of Object.keys(ETF_ALLOC)) delete ETF_ALLOC[k];
@@ -2011,7 +1945,7 @@ def research_page() -> tuple[str, str]:
         adds to the real number — it can never be lower.</div>`;
       const unknown = d.unknown_pct > 0 ? `<div style="font-size:11px;color:#791F1F;
         margin-top:6px">${{d.unknown_pct.toFixed(1)}}% of the portfolio has no sector
-        data — run <b>Refresh ETF data</b>.</div>` : '';
+        data — use <b>Refresh ETFs</b>.</div>` : '';
       return `<div style="background:white;border:0.5px solid #e1e0d9;border-radius:10px;
         padding:14px 16px;margin-bottom:14px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -2031,67 +1965,178 @@ def research_page() -> tuple[str, str]:
         ${{coverage}}</div>`;
     }}
 
+    // Level plus the signed distance from it — "$451.59" alone makes you do
+    // the arithmetic against price; "+28.4%" is the thing you were after.
+    // Green above / red below reads directly for the moving averages; for
+    // the 52-week high a negative distance is normal, so it stays neutral.
+    function etfLevel(level, dist) {{
+      if (level == null) return '—';
+      const px = '$' + Number(level).toFixed(2);
+      if (dist == null) return px;
+      const c = dist > 0 ? '#0F6E56' : dist < 0 ? '#A32D2D' : '#898781';
+      return `${{px}}<br><span style="font-size:9.5px;color:${{c}}">${{
+        dist > 0 ? '+' : ''}}${{Number(dist).toFixed(1)}}%</span>`;
+    }}
+
+    // Benchmarks in the order given, so the reference strip reads
+    // large-cap → tech → industrials → small → mid → total-market rather
+    // than alphabetically.
+    const ETF_BENCH_ORDER = ['SPY', 'VOO', 'QQQ', 'QQQM', 'DIA', 'MDY', 'IWM', 'VTI'];
+
+    // Trend is measured against the 200-day, not today's close — see
+    // core/market_regime.benchmark_leadership for why.
+    function etfLeadershipBanner() {{
+      const L = ETF_LEADERSHIP;
+      if (!L) return '';
+      const tone = {{good: ['#E1F5EE', '#085041'], watch: ['#FAEEDA', '#633806'],
+                     bad: ['#FCEBEB', '#791F1F'], muted: ['#f1efea', '#52514e']}};
+      const [bg, fg] = tone[L.tone] || tone.muted;
+      const legs = (L.legs || []).map(l =>
+        `<span style="margin-right:12px">${{l.ticker}}
+          <b style="color:${{l.above_200ma ? '#0F6E56' : '#A32D2D'}}">${{
+            l.above_200ma ? '↑' : '↓'}} ${{l.dist_ma200 > 0 ? '+' : ''}}${{
+            l.dist_ma200.toFixed(1)}}%</b></span>`).join('');
+      const missing = (L.missing || []).length
+        ? `<div style="margin-top:4px;font-size:10px">No 200-day data for
+           ${{L.missing.join(', ')}} — this read is based on the rest.</div>` : '';
+      return `<div style="background:${{bg}};color:${{fg}};border-radius:9px;
+        padding:9px 12px;margin-bottom:9px;font-size:11.5px">
+        <b>${{L.verdict}}</b> — ${{L.detail}}
+        <div style="margin-top:5px;font-size:10.5px;opacity:.85">${{legs}}
+          <span style="opacity:.7">vs 200-day</span></div>${{missing}}</div>`;
+    }}
+
+    function renderEtfBenchmarks(rows) {{
+      if (!rows || !rows.length) return '';
+      const cell = r => {{
+        const chg = r.etf_change_pct;
+        const c = chg > 0 ? '#0F6E56' : chg < 0 ? '#A32D2D' : '#898781';
+        const held = r.is_holding
+          ? ' <span style="font-size:9px;color:#8a6d1a" title="Also one of your positions">held</span>' : '';
+        return `<div style="flex:0 0 auto;min-width:118px;background:#faf9f5;
+          border:0.5px solid #e1e0d9;border-radius:9px;padding:8px 11px">
+          <div style="font-size:12px;font-weight:700">${{r.ticker}}${{held}}</div>
+          <div style="font-size:14px;font-weight:600;margin:1px 0">${{fmtMoney(r.price)}}</div>
+          <div style="font-size:11px;font-weight:600;color:${{c}}">${{
+            chg == null ? '—' : (chg > 0 ? '+' : '') + chg.toFixed(2) + '%'}}</div>
+          <div style="font-size:9.5px;color:#898781;margin-top:2px">
+            YTD ${{r.etf_ytd_return == null ? '—' : r.etf_ytd_return.toFixed(1) + '%'}}
+            · vs200 ${{r.etf_dist_ma200 == null ? '—' :
+              (r.etf_dist_ma200 > 0 ? '+' : '') + r.etf_dist_ma200.toFixed(1) + '%'}}</div>
+        </div>`;
+      }};
+      return `<div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:#898781;
+          text-transform:uppercase;letter-spacing:.3px;margin-bottom:7px">
+          Benchmarks — reference only, not positions</div>
+        ${{etfLeadershipBanner()}}
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${{rows.map(cell).join('')}}</div>
+      </div>`;
+    }}
+
     function renderEtfTable(rows, root) {{
       if (!rows.length) {{
         root.innerHTML = '<div style="padding:24px;text-align:center;color:#898781;' +
           'font-size:12px">No ETFs match the current filters.</div>';
         return;
       }}
-      // [label, sort key] — sorting keys off the underlying value, never the
-      // rendered text, so "$130.3B" and "+1.4%" order numerically instead of
-      // alphabetically.
-      const cols = [['Ticker', 'ticker'], ['Theme', 'etf_theme_name'],
-                    ['Family', 'etf_family'], ['Price', 'price'],
-                    ['Chg today', 'etf_change_pct'],
-                    ['Expense', 'etf_expense_ratio'], ['AUM', 'etf_aum'],
-                    ['YTD', 'etf_ytd_return'], ['Yield', 'etf_yield_pct'],
-                    ['Disclosed', 'etf_top10_weight'],
-                    ['Top holdings', 'etf_holdings_count'],
-                    ['Weight %', '_alloc']];
+      // Column definitions keyed rather than positional, so drag-to-reorder
+      // can emit them in any order. `cell` returns the <td> contents; the
+      // width/resize plumbing is shared with the equity table above (keys
+      // are distinct, so colWidths can hold both without collision).
+      const ETF_COLS = [
+        ['ticker', 'Ticker', r => r.not_scanned
+          ? `<b title="Profile only — no scan has picked this up yet, so it has no technicals">${{r.ticker}}</b>
+             <span style="font-size:9px;color:#8a6d1a"> new</span>`
+          : `<a href="/research/${{r.ticker}}.html"><b>${{r.ticker}}</b></a>`],
+        ['etf_theme_name', 'Theme', r => etfThemeCell(r)],
+        ['etf_family', 'Family', r =>
+          `<span style="color:#898781">${{r.etf_family || '—'}}</span>`],
+        ['price', 'Price', r => fmtMoney(r.price)],
+        ['etf_change_pct', 'Chg today', r =>
+          fmtEtfChange(r.etf_change_pct, r.etf_change_abs, r.etf_quote_at)],
+        ['etf_expense_ratio', 'Expense', r => fmtEtfPct(r.etf_expense_ratio)],
+        ['etf_aum', 'AUM', r => fmtCap(r.etf_aum)],
+        ['etf_ytd_return', 'YTD', r =>
+          `<span style="color:${{(r.etf_ytd_return ?? 0) >= 0 ? '#0F6E56' : '#A32D2D'}}">${{
+            fmtEtfPct(r.etf_ytd_return, 1)}}</span>`],
+        ['etf_yield_pct', 'Yield', r => fmtEtfPct(r.etf_yield_pct, 2)],
+        ['etf_ema8', '8 EMA', r => etfLevel(r.etf_ema8, r.etf_dist_ema8)],
+        ['etf_ma50', '50 MA', r => etfLevel(r.etf_ma50, r.etf_dist_ma50)],
+        ['etf_ma200', '200 MA', r => etfLevel(r.etf_ma200, r.etf_dist_ma200)],
+        ['etf_week52_high', '52W high', r =>
+          etfLevel(r.etf_week52_high, r.etf_dist_52w_high)],
+        ['etf_week52_low', '52W low', r =>
+          etfLevel(r.etf_week52_low, r.etf_dist_52w_low)],
+        ['etf_top10_weight', 'Disclosed', r => etfDisclosedCell(r)],
+        ['etf_holdings_count', 'Top holdings', r => {{
+          const hs = r.etf_holdings || [];
+          // A commodity trust holds bullion, not equities — no holdings is a
+          // correct answer for GLD/SLV, not a fetch failure.
+          return hs.length
+            ? `<button class="btn secondary" style="font-size:10px;padding:3px 9px"
+                 onclick="showEtfHoldings('${{r.ticker}}')">${{hs.length}} holdings</button>
+               <span style="font-size:10px;color:#898781;margin-left:6px">${{
+                 hs.slice(0, 3).map(h => h.ticker + ' ' + fmtEtfPct(h.weight, 1)).join(' · ')}}</span>`
+            : '<span style="font-size:10px;color:#898781">physical / not published</span>';
+        }}],
+        ['_alloc', 'Weight %', r =>
+          `<input type="number" min="0" max="100" step="0.5"
+             id="alloc-${{r.ticker}}" value="${{ETF_ALLOC[r.ticker] ?? ''}}"
+             oninput="onAllocInput('${{r.ticker}}', this.value)"
+             style="width:62px;font-size:11px;padding:2px 5px">`],
+      ];
+      const ETF_COL_BY_KEY = {{}};
+      ETF_COLS.forEach(c => {{ ETF_COL_BY_KEY[c[0]] = c; }});
+      // Drop keys that no longer exist and append ones added since the order
+      // was saved, so a stored order never hides a new column.
+      etfColOrder = etfColOrder.filter(k => ETF_COL_BY_KEY[k]);
+      ETF_COLS.forEach(c => {{ if (!etfColOrder.includes(c[0])) etfColOrder.push(c[0]); }});
+
+      // Benchmarks render as a reference strip above the holdings table.
+      // IWM and VTI stay in BOTH: they are genuinely a holding and an index,
+      // and dropping either from the holdings table would hide a real
+      // position just because it doubles as a yardstick.
+      const benchRows = ETF_BENCH_ORDER
+        .map(t => rows.find(r => r.ticker === t)).filter(Boolean);
+      rows = rows.filter(r => r.is_holding);
+
       rows = sortEtfRows(rows);
-      const head = cols.map(([label, key]) =>
-        `<th onclick="setEtfSort('${{key}}')" style="cursor:pointer;user-select:none"
-           title="Sort by ${{label}}">${{label}}${{
-          etfSortKey === key ? (etfSortDir > 0 ? ' ▲' : ' ▼') : ''}}</th>`).join('');
-      const body = rows.map(r => {{
-        const hs = r.etf_holdings || [];
-        // A commodity trust holds bullion, not equities — no holdings is a
-        // correct answer for GLD/SLV, not a fetch failure.
-        const holdings = hs.length
-          ? `<button class="btn secondary" style="font-size:10px;padding:3px 9px"
-               onclick="showEtfHoldings('${{r.ticker}}')">${{hs.length}} holdings</button>
-             <span style="font-size:10px;color:#898781;margin-left:6px">${{
-               hs.slice(0, 3).map(h => h.ticker + ' ' + fmtEtfPct(h.weight, 1)).join(' · ')}}</span>`
-          : '<span style="font-size:10px;color:#898781">physical / not published</span>';
-        return `<tr>
-          <td>${{r.not_scanned
-            ? `<b title="Profile only — no scan has picked this up yet, so it has no technicals">${{r.ticker}}</b>
-               <span style="font-size:9px;color:#8a6d1a"> new</span>`
-            : `<a href="/research/${{r.ticker}}.html"><b>${{r.ticker}}</b></a>`}}</td>
-          <td style="font-size:11px">${{etfThemeCell(r)}}</td>
-          <td style="font-size:11px;color:#898781">${{r.etf_family || '—'}}</td>
-          <td>${{fmtMoney(r.price)}}</td>
-          <td>${{fmtEtfChange(r.etf_change_pct, r.etf_change_abs, r.etf_quote_at)}}</td>
-          <td>${{fmtEtfPct(r.etf_expense_ratio)}}</td>
-          <td>${{fmtCap(r.etf_aum)}}</td>
-          <td style="color:${{(r.etf_ytd_return ?? 0) >= 0 ? '#0F6E56' : '#A32D2D'}}">${{
-              fmtEtfPct(r.etf_ytd_return, 1)}}</td>
-          <td>${{fmtEtfPct(r.etf_yield_pct, 2)}}</td>
-          <td>${{etfDisclosedCell(r)}}</td>
-          <td>${{holdings}}</td>
-          <td><input type="number" min="0" max="100" step="0.5"
-               id="alloc-${{r.ticker}}" value="${{ETF_ALLOC[r.ticker] ?? ''}}"
-               oninput="onAllocInput('${{r.ticker}}', this.value)"
-               style="width:62px;font-size:11px;padding:2px 5px"></td></tr>`;
+      const head = etfColOrder.map(key => {{
+        const [, label] = ETF_COL_BY_KEY[key];
+        const w = colW(key, label);
+        const sizing = colWidths[key] != null
+          ? `width:${{w}}px;max-width:${{w}}px` : `max-width:${{w}}px`;
+        const arrow = etfSortKey === key ? (etfSortDir > 0 ? ' ▲' : ' ▼') : '';
+        return `<th draggable="true" style="cursor:grab;white-space:nowrap;position:relative"
+          title="Click to sort · drag to reorder · drag right edge to resize"
+          onclick="setEtfSort('${{key}}')"
+          ondragstart="onEtfColDragStart(event,'${{key}}')" ondragend="onColDragEnd(event)"
+          ondragover="onColDragOver(event)" ondragenter="onColDragEnter(event)"
+          ondragleave="onColDragLeave(event)" ondrop="onEtfColDrop(event,'${{key}}')"
+          ><span style="display:inline-block;${{sizing}};overflow:hidden;
+            text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${{label}}${{arrow}}</span>
+          <span class="col-resizer" draggable="false"
+            onmousedown="onColResizeStart(event,'${{key}}')"
+            onclick="event.stopPropagation()"></span></th>`;
       }}).join('');
+      const body = rows.map(r => '<tr>' + etfColOrder.map(key => {{
+        const [, label, cell] = ETF_COL_BY_KEY[key];
+        const w = colW(key, label);
+        const sizing = colWidths[key] != null
+          ? `width:${{w}}px;max-width:${{w}}px` : `max-width:${{w}}px`;
+        return `<td><span style="display:inline-block;${{sizing}};overflow:hidden;
+          text-overflow:ellipsis;vertical-align:bottom">${{cell(r)}}</span></td>`;
+      }}).join('') + '</tr>').join('');
       root.innerHTML = `
         ${{etfPortfolioBar()}}
         <div id="etf-report"></div>
+        ${{renderEtfBenchmarks(benchRows)}}
         <div style="font-size:11px;color:#898781;margin-bottom:8px">
           Fund-specific fields — margins, EPS growth and moat don't exist for an
           ETF, so the equity columns are hidden here rather than shown empty.
           Expense ratio and AUM come from the fund profile
-          (<b>Refresh ETF data</b> to update); price and technicals come from the scan.
+          (<b>Refresh ETFs</b> to update), including the price levels — those are fetched per fund, so a newly added ETF has them before any scan runs.
           <b>Click a theme to rename it</b> — your label is kept separately from the
           provider's category, so a refresh won't overwrite it. Blank resets it.
         </div>
@@ -2387,11 +2432,14 @@ def research_page() -> tuple[str, str]:
       if (t) {{
         document.getElementById('rsearch').value = t;
       }} else {{
-        // default view = the "watchlist" category, not all 562 tickers —
-        // skipped for deep links (the target may not be in the watchlist)
+        // Default view = every ticker, no category filter. This used to
+        // preselect the "watchlist" category, which quietly hid most of the
+        // library — including ETFs that aren't on that list, so the ETF tab
+        // showed 12 of 16. Browsers also restore <select> state across a
+        // reload, so the selection is cleared explicitly rather than just
+        // left unset.
         const wsel = document.getElementById('rwatch');
-        const opt = Array.from(wsel.options).find(o => o.value === 'watchlist');
-        if (opt) opt.selected = true;
+        if (wsel) wsel.selectedIndex = -1;
       }}
       renderResearch();
     }});

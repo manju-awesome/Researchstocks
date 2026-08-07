@@ -1,5 +1,100 @@
 [
   {
+    "dedup_key": "MA:news:7638da92ee",
+    "category": "news",
+    "ticker": "MA",
+    "priority": "MEDIUM",
+    "headline": "New Deal / Contract: What Does Fiserv (FISV) Gain From Its New Merchant Services Partnership?",
+    "why_it_matters": "A large new contract can move the revenue outlook meaningfully for smaller names.",
+    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+    "confidence": 60,
+    "time_sensitivity": "today",
+    "supporting_data": {
+      "catalyst": "New Deal / Contract",
+      "publisher": "Simply Wall St.",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/does-fiserv-fisv-gain-merchant-190936503.html",
+      "published": "2026-08-07"
+    },
+    "created_at": "2026-08-07T14:27:26"
+  },
+  {
+    "dedup_key": "NVDA:news:bb8019f2cb",
+    "category": "news",
+    "ticker": "NVDA",
+    "priority": "HIGH",
+    "headline": "M&A / Acquisition: Nvidia Stock Jumps After AMD Acquires AI Startup Taalas",
+    "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
+    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+    "confidence": 60,
+    "time_sensitivity": "today",
+    "supporting_data": {
+      "catalyst": "M&A / Acquisition",
+      "publisher": "GuruFocus.com",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/nvidia-stock-jumps-amd-acquires-164513864.html",
+      "published": "2026-08-07"
+    },
+    "created_at": "2026-08-07T11:53:17"
+  },
+  {
+    "dedup_key": "AMD:news:bb8019f2cb",
+    "category": "news",
+    "ticker": "AMD",
+    "priority": "HIGH",
+    "headline": "M&A / Acquisition: Nvidia Stock Jumps After AMD Acquires AI Startup Taalas",
+    "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
+    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+    "confidence": 60,
+    "time_sensitivity": "today",
+    "supporting_data": {
+      "catalyst": "M&A / Acquisition",
+      "publisher": "GuruFocus.com",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/nvidia-stock-jumps-amd-acquires-164513864.html",
+      "published": "2026-08-07"
+    },
+    "created_at": "2026-08-07T11:53:17"
+  },
+  {
+    "dedup_key": "AAPL:news:4313f5a29a",
+    "category": "news",
+    "ticker": "AAPL",
+    "priority": "HIGH",
+    "headline": "Legal / Regulatory: Apple (AAPL) Seeks Injunction In AI Trade Secret Lawsuit",
+    "why_it_matters": "Investigations and litigation carry open-ended financial and reputational risk.",
+    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+    "confidence": 60,
+    "time_sensitivity": "today",
+    "supporting_data": {
+      "catalyst": "Legal / Regulatory",
+      "publisher": "Simply Wall St.",
+      "url": "https://finance.yahoo.com/technology/ai/articles/apple-aapl-seeks-injunction-ai-161633279.html",
+      "published": "2026-08-07"
+    },
+    "created_at": "2026-08-07T11:53:18"
+  },
+  {
+    "dedup_key": "PANW:news:6b59dfdf73",
+    "category": "news",
+    "ticker": "PANW",
+    "priority": "HIGH",
+    "headline": "Guidance Cut: Top Midday Stories: Apollo Acquires EasyJet in Deal Valued at $7.68 Billion; Honeywell Aerospace Shares Fall Following Guidance Cut",
+    "why_it_matters": "Management lowering its own forecast is a direct signal of weakening fundamentals.",
+    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+    "confidence": 60,
+    "time_sensitivity": "today",
+    "supporting_data": {
+      "catalyst": "Guidance Cut",
+      "publisher": "MT Newswires",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/top-midday-stories-apollo-acquires-154510891.html",
+      "published": "2026-08-06"
+    },
+    "created_at": "2026-08-07T11:53:23"
+  },
+  {
     "dedup_key": "AMD:news:b735b82fd2",
     "category": "news",
     "ticker": "AMD",
@@ -10103,100 +10198,5 @@
       "price": 414.68
     },
     "created_at": "2026-08-03T09:02:37"
-  },
-  {
-    "dedup_key": "PLTR:news:7a3b2b1870",
-    "category": "news",
-    "ticker": "PLTR",
-    "priority": "MEDIUM",
-    "headline": "New Deal / Contract: PLTR, MRCY Stocks Gain After Announcing Partnership To Automate US Defense Manufacturing",
-    "why_it_matters": "A large new contract can move the revenue outlook meaningfully for smaller names.",
-    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-    "confidence": 60,
-    "time_sensitivity": "today",
-    "supporting_data": {
-      "catalyst": "New Deal / Contract",
-      "publisher": "Stocktwits",
-      "url": "https://finance.yahoo.com/markets/stocks/articles/pltr-mrcy-stocks-gain-announcing-133737836.html",
-      "published": "2026-08-03"
-    },
-    "created_at": "2026-08-03T08:55:16"
-  },
-  {
-    "dedup_key": "V:news:799248d51a",
-    "category": "news",
-    "ticker": "V",
-    "priority": "HIGH",
-    "headline": "M&A / Acquisition: Visa Acquires BioCatch For $2.4B \u2013 President Andrew Torre Says It Will Help Clients Stop Fraud Before It Reaches The Point Of Payment",
-    "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-    "confidence": 60,
-    "time_sensitivity": "today",
-    "supporting_data": {
-      "catalyst": "M&A / Acquisition",
-      "publisher": "Stocktwits",
-      "url": "https://finance.yahoo.com/technology/ai/articles/visa-acquires-biocatch-2-4b-134053996.html",
-      "published": "2026-08-03"
-    },
-    "created_at": "2026-08-03T08:55:21"
-  },
-  {
-    "dedup_key": "AVGO:news:638a270648",
-    "category": "news",
-    "ticker": "AVGO",
-    "priority": "HIGH",
-    "headline": "M&A / Acquisition: This Week In AI Chips - Palomino's Strategic Acquisition Boosts AI Interconnect Market Expansion",
-    "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-    "confidence": 60,
-    "time_sensitivity": "today",
-    "supporting_data": {
-      "catalyst": "M&A / Acquisition",
-      "publisher": "Simply Wall St.",
-      "url": "https://finance.yahoo.com/technology/ai/articles/week-ai-chips-palominos-strategic-113741943.html",
-      "published": "2026-08-03"
-    },
-    "created_at": "2026-08-03T08:34:38"
-  },
-  {
-    "dedup_key": "QCOM:news:9b3fc4026e",
-    "category": "news",
-    "ticker": "QCOM",
-    "priority": "MEDIUM",
-    "headline": "Guidance Raised: Rivian Sinks 8% Despite Q2 Beat and Raised Guidance; Lucid Falls 6%",
-    "why_it_matters": "Management raising its own forecast is a direct signal of strengthening fundamentals.",
-    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-    "confidence": 60,
-    "time_sensitivity": "today",
-    "supporting_data": {
-      "catalyst": "Guidance Raised",
-      "publisher": "24/7 Wall St.",
-      "url": "https://finance.yahoo.com/markets/stocks/articles/rivian-sinks-8-despite-q2-151429091.html",
-      "published": "2026-07-31"
-    },
-    "created_at": "2026-08-03T08:34:39"
-  },
-  {
-    "dedup_key": "MU:news:638a270648",
-    "category": "news",
-    "ticker": "MU",
-    "priority": "HIGH",
-    "headline": "M&A / Acquisition: This Week In AI Chips - Palomino's Strategic Acquisition Boosts AI Interconnect Market Expansion",
-    "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-    "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-    "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-    "confidence": 60,
-    "time_sensitivity": "today",
-    "supporting_data": {
-      "catalyst": "M&A / Acquisition",
-      "publisher": "Simply Wall St.",
-      "url": "https://finance.yahoo.com/technology/ai/articles/week-ai-chips-palominos-strategic-113741943.html",
-      "published": "2026-08-03"
-    },
-    "created_at": "2026-08-03T08:34:40"
   }
 ]

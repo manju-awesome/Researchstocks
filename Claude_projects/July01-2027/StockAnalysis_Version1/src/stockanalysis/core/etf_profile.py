@@ -145,6 +145,17 @@ def fetch_profile(ticker: str) -> dict:
     for k in ("nav", "price", "prev_close", "aum", "ytd_return", "beta_3y"):
         out[k] = _num(out.get(k))
 
+    # Price levels. Sourced here rather than read off the scan row so that
+    # every fund has them — VTI/VXUS/QUAL/VTV were added after the last
+    # scan and have no scan row at all, and a technicals column that is
+    # blank for the newest holdings is the one you most want filled.
+    out["week52_high"] = _num(info.get("fiftyTwoWeekHigh"))
+    out["week52_low"] = _num(info.get("fiftyTwoWeekLow"))
+    out["ma50"] = _num(info.get("fiftyDayAverage"))
+    out["ma200"] = _num(info.get("twoHundredDayAverage"))
+    out["ema8"] = _fetch_ema8(t)
+    _attach_distances(out)
+
     out["holdings"] = _fetch_holdings(t)
     if out["holdings"]:
         out["top10_weight"] = round(
@@ -178,6 +189,38 @@ def _fetch_sectors(ticker_obj) -> dict:
         if v:                                   # drop the many exact zeros
             out[str(key)] = round(v * 100, 2)
     return out
+
+
+def _fetch_ema8(ticker_obj) -> float | None:
+    """8-period EMA of daily closes. Not in .info — the provider publishes
+    the 50 and 200 day simple averages only, so this one is computed."""
+    try:
+        hist = ticker_obj.history(period="3mo", interval="1d")
+    except Exception:
+        return None
+    try:
+        closes = hist["Close"].dropna()
+        if len(closes) < 8:
+            return None
+        return round(float(closes.ewm(span=8, adjust=False).mean().iloc[-1]), 4)
+    except Exception:
+        return None
+
+
+def _attach_distances(out: dict) -> None:
+    """Percent from each level, which is what the table actually shows —
+    "$580 vs a $671 high" needs mental arithmetic, "-13.6% off high" doesn't.
+    Signed against price so above/below reads directly."""
+    price = _num(out.get("price")) or _num(out.get("nav"))
+    if price is None:
+        return
+    for key, level_key in (("dist_52w_high", "week52_high"),
+                           ("dist_52w_low", "week52_low"),
+                           ("dist_ma50", "ma50"), ("dist_ma200", "ma200"),
+                           ("dist_ema8", "ema8")):
+        level = _num(out.get(level_key))
+        if level:
+            out[key] = round((price - level) / level * 100, 2)
 
 
 def _fetch_asset_mix(ticker_obj) -> dict:
@@ -306,6 +349,18 @@ def set_theme(output_dir: str | Path, ticker: str,
                         else f"{ticker} theme reset to the provider category")}
 
 
+# Reference indices, not holdings. Shown in their own strip so a thematic
+# fund is compared against the market rather than sitting in the same list as
+# it — SMH being up 50% YTD means something different next to QQQ's number.
+# IWM and VTI appear here and in the holdings table on purpose: they are
+# genuinely both, and hiding either would misrepresent one of the two roles.
+BENCHMARKS = ("SPY", "VOO", "QQQ", "QQQM", "DIA", "MDY", "IWM", "VTI")
+
+
+def is_benchmark(ticker: str) -> bool:
+    return str(ticker or "").upper() in BENCHMARKS
+
+
 def etf_tickers(entries: Iterable[dict]) -> list[str]:
     """Every ETF in the research library, by the scan's own classification."""
     return sorted({str(e.get("ticker")) for e in entries
@@ -325,7 +380,10 @@ def attach_profiles(rows: list[dict], profiles: dict) -> list[dict]:
         for k in ("family", "category", "theme", "expense_ratio", "aum",
                   "yield_pct", "ytd_return", "beta_3y", "nav", "holdings",
                   "top10_weight", "change_pct", "change_abs", "prev_close",
-                  "quote_at", "holdings_count", "asset_mix", "sectors"):
+                  "quote_at", "holdings_count", "asset_mix", "sectors",
+                  "week52_high", "week52_low", "ma50", "ma200", "ema8",
+                  "dist_52w_high", "dist_52w_low", "dist_ma50", "dist_ma200",
+                  "dist_ema8"):
             if p.get(k) is not None:
                 r[f"etf_{k}"] = p[k]
         # Resolved label plus a flag, so the UI can show which funds you've
