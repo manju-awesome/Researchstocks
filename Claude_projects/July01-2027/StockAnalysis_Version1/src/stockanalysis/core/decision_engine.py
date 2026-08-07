@@ -400,13 +400,22 @@ def decide(row: dict, scores: dict | None = None,
                    or (health is not None and health < 45))
 
     # ── the positive ladder ──────────────────────────────────────────────
-    if er in ("HIGH", "CRITICAL") and not earnings_strategy:
-        # Downgrade, don't disqualify — the setup may be fine, the timing
-        # isn't. §14: BUY NOW becomes WAIT unless explicitly overridden.
+    # Earnings gate. This used to apply only when `best >= WATCH_SCORE`,
+    # which meant a stock scoring BELOW the watch threshold skipped it and
+    # could still reach a buy further down: MNST reported earnings the same
+    # day and came out "BUY ZONE" under Swing because its swing score of 56
+    # was too low to trip the guard. An imminent report is gap risk
+    # regardless of how the setup scores, so it now blocks every buy action
+    # rather than only the high-scoring ones.
+    earnings_blocked = er in ("HIGH", "CRITICAL") and not earnings_strategy
+    if earnings_blocked:
+        days = _f(row.get("days_to_earnings"))
+        when = ("today" if days is not None and days <= 0
+                else f"in {days:.0f} day{'s' if days != 1 else ''}"
+                if days is not None else "imminent")
         if best >= WATCH_SCORE:
             return _verdict("WAIT", row, s, er,
-                            blockers=[f"Earnings in "
-                                      f"{_f(row.get('days_to_earnings')):.0f} days"],
+                            blockers=[f"Earnings {when}"],
                             triggers=["Re-assess once the report is out"])
 
     if speculative and best >= WATCH_SCORE:
@@ -414,19 +423,23 @@ def decide(row: dict, scores: dict | None = None,
                         blockers=["Quality or balance sheet is weak — size "
                                   "this as a speculation, not a core position"])
 
-    if (swing or 0) >= buy_score and (rs or 0) >= 80 and (breakout or 0) >= 70 \
+    if not earnings_blocked \
+            and (swing or 0) >= buy_score and (rs or 0) >= 80 \
+            and (breakout or 0) >= 70 \
             and (rvol or 0) >= 1.2 and (rr or 0) >= MIN_RR:
         return _verdict("BREAKOUT ENTRY", row, s, er)
 
-    if best >= buy_score and conf >= buy_conf and (rr or 0) >= MIN_RR \
+    if not earnings_blocked and best >= buy_score and conf >= buy_conf \
+            and (rr or 0) >= MIN_RR \
             and (in_zone or (dist8 is not None and dist8 <= 3)):
         return _verdict("BUY NOW", row, s, er)
 
-    if in_zone and (inv or 0) >= PULLBACK_SCORE and (quality or 0) >= 70 \
-            and (health or 0) >= 60:
+    if not earnings_blocked and in_zone and best >= PULLBACK_SCORE \
+            and (quality or 0) >= 70 and (health or 0) >= 60:
         return _verdict("BUY ZONE", row, s, er)
 
-    if best >= PULLBACK_SCORE and conf >= PULLBACK_CONFLUENCE:
+    if not earnings_blocked and best >= PULLBACK_SCORE \
+            and conf >= PULLBACK_CONFLUENCE:
         if pct8 is not None and pct8 > 3:
             triggers.append(f"Pull back toward the 8/21 EMA "
                             f"(now {pct8:.1f}% above it)")

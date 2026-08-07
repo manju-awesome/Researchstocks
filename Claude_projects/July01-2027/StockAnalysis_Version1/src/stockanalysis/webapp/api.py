@@ -894,9 +894,21 @@ def screen(payload: dict) -> dict:
     for m in res.matches:
         try:
             d = DE.decide(m, regime=regime, strategy=strategy)
+            # Both verdicts, always. A single action is ambiguous without
+            # knowing which question it answered — ALL reads AVOID as an
+            # investment and BUY NOW as a trade, and showing only one of
+            # those makes the other look like a contradiction.
+            lt = (d if strategy == "LONGTERM"
+                  else DE.decide(m, regime=regime, strategy="LONGTERM"))
+            sw = (d if strategy == "SWING"
+                  else DE.decide(m, regime=regime, strategy="SWING"))
         except Exception as e:                              # pragma: no cover
             print(f"[Screener] decision failed for {m.get('ticker')}: {e}")
             continue
+        m["action_longterm"] = lt["action"]
+        m["action_longterm_icon"] = lt["icon"]
+        m["action_swing"] = sw["action"]
+        m["action_swing_icon"] = sw["icon"]
         m["action"] = d["action"]
         m["action_icon"] = d["icon"]
         m["inv_score"] = d["investment"]
@@ -970,6 +982,8 @@ _SCREEN_KEYS = (
     "match_score", "composite", "why", "matched_fields",
     # decision layer (core/decision_engine.py)
     "action", "action_icon", "inv_score", "swing_dec", "confluence",
+    "action_longterm", "action_longterm_icon",
+    "action_swing", "action_swing_icon",
     "decision_triggers", "decision_risks", "earnings_risk", "decision_reliable",
 )
 

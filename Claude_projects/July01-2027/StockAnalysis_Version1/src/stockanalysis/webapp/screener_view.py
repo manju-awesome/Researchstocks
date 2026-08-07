@@ -1005,15 +1005,32 @@ const SCR_ACTION_TONE = {
   'AVOID':           ['#FCEBEB', '#791F1F'],
 };
 
+// Both verdicts, labelled. "AVOID" alone is ambiguous — avoid owning it, or
+// avoid trading it? They are frequently different answers about the same
+// stock, and that difference is the useful part.
+function scrOneBadge(label, action, icon, active, thin) {
+  if (!action) return '';
+  const [bg, fg] = SCR_ACTION_TONE[action] || ['#f1efea', '#52514e'];
+  return `<span title="${label} verdict${active ? ' — the strategy in use' : ''}"
+    style="background:${bg};color:${fg};font-size:10.5px;font-weight:700;
+    padding:3px 9px;border-radius:20px;${active ? '' : 'opacity:.62;'}
+    ${active ? 'box-shadow:0 0 0 1.5px ' + fg + '33;' : ''}">
+    <span style="font-weight:600;opacity:.8">${label}</span>
+    ${icon || ''} ${scrEsc(action)}${thin}</span>`;
+}
+
 function scrActionBadge(r) {
   if (!r.action) return '';
-  const [bg, fg] = SCR_ACTION_TONE[r.action] || ['#f1efea', '#52514e'];
   // An action resting on thin data is marked, not hidden — the engine
   // already refuses to issue a buy in that case, but the caveat travels.
   const thin = r.decision_reliable === false
     ? ' <span title="Some scoring inputs are missing for this ticker">·⚠</span>' : '';
-  return `<span style="background:${bg};color:${fg};font-size:11px;font-weight:700;
-    padding:3px 10px;border-radius:20px">${r.action_icon || ''} ${scrEsc(r.action)}${thin}</span>`;
+  const active = (LAST && LAST.strategy) || 'LONGTERM';
+  return `<span style="display:inline-flex;gap:5px;align-items:center">` +
+    scrOneBadge('Long-term', r.action_longterm, r.action_longterm_icon,
+                active === 'LONGTERM', thin) +
+    scrOneBadge('Swing', r.action_swing, r.action_swing_icon,
+                active === 'SWING', thin) + `</span>`;
 }
 
 function scrDecisionRow(r) {

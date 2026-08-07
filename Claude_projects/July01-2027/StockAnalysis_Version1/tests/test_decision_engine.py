@@ -291,3 +291,47 @@ class TestEmaDirection(unittest.TestCase):
                                  breakout_probability=60, above_50ma=True),
                       strategy="LONGTERM")
         self.assertIn(d["action"], ("BUY ON PULLBACK", "WATCH"))
+
+
+class TestEarningsGateAppliesToEveryBuy(unittest.TestCase):
+    """The gate used to fire only when the score already cleared WATCH, so a
+    low-scoring stock skipped it and reached a buy further down the ladder.
+    MNST reported earnings the same day and still came out BUY ZONE under
+    Swing, because its swing score of 56 was too low to trip the guard."""
+
+    def _row_in_zone(self, **kw):
+        row = _row(quality=93, health=100, moat=3, eps_growth=25.0,
+                   rs_rank=85, swing_score=56, breakout_probability=40,
+                   rr=1.5, rvol=1.0, abs_vs_8ema=1.0, pct_vs_8ema=-1.0,
+                   in_buy_zone=True, days_to_earnings=0)
+        row.update(kw)
+        return row
+
+    def test_a_low_scoring_stock_cannot_buy_through_the_gate(self):
+        d = DE.decide(self._row_in_zone(), strategy="SWING")
+        self.assertNotIn(d["action"],
+                         ("BUY NOW", "BUY ZONE", "BUY ON PULLBACK",
+                          "BREAKOUT ENTRY"))
+
+    def test_a_high_scoring_stock_is_downgraded_to_wait(self):
+        d = DE.decide(self._row_in_zone(), strategy="LONGTERM")
+        self.assertEqual(d["action"], "WAIT")
+        self.assertTrue(any("Earnings" in r for r in d["risks"]))
+
+    def test_reporting_today_reads_as_today_not_in_0_days(self):
+        d = DE.decide(self._row_in_zone(), strategy="LONGTERM")
+        self.assertTrue(any("today" in r for r in d["risks"]))
+
+    def test_the_opt_in_still_allows_an_earnings_trade(self):
+        d = DE.decide(self._row_in_zone(), strategy="LONGTERM",
+                      earnings_strategy=True)
+        self.assertIn(d["action"], ("BUY ZONE", "BUY ON PULLBACK", "BUY NOW"))
+
+    def test_buy_zone_respects_the_selected_strategy(self):
+        # It tested the investment score whatever the strategy, so a swing
+        # screen could return BUY ZONE on a setup scoring 56.
+        row = self._row_in_zone(days_to_earnings=40)
+        self.assertEqual(DE.decide(row, strategy="LONGTERM")["action"],
+                         "BUY ZONE")
+        self.assertNotEqual(DE.decide(row, strategy="SWING")["action"],
+                            "BUY ZONE")
