@@ -800,3 +800,105 @@ class TestTouchAttribution(unittest.TestCase):
         wdc = _row(**{"Current Price": 438.40, "S1": 420.26, "R1": 454.48,
                       "Touches": 329, "Volume_Confirmation": True})
         self.assertFalse(T.compute_buy_zone_level(wdc)["actual_support"])
+
+
+class TestLongTermScreening(unittest.TestCase):
+    """core.longterm.screen — rules over the engine's own columns."""
+
+    def setUp(self):
+        from stockanalysis.core.longterm import screen as LS
+        self.LS = LS
+        self.results = [
+            E.evaluate(_row(Ticker="ELITE")),
+            E.evaluate(_row(Ticker="WEAK", FCF_Positive=False,
+                            DebtToEquity=400.0, CurrentRatio=0.6,
+                            **{"Revenue": -5.0, "EPS_Growth%": -20.0,
+                               "ReturnOnEquity%": 2.0, "OperatingMargin%": 1.0,
+                               "GrossMargin%": 8.0, "FCF_Margin%": -5.0})),
+        ]
+
+    def test_it_reuses_the_screener_engine_not_a_second_one(self):
+        from stockanalysis.core import screener as S
+        # Resolvable by the shared rule engine...
+        self.assertIn("lquality", S.FIELD_BY_KEY)
+        # ...but absent from the /screener picker, whose universe has no
+        # values for these fields — every rule would read "no data".
+        self.assertNotIn("lquality", {f.key for f in S.FIELDS})
+
+    def test_flatten_turns_a_nested_verdict_into_scalars(self):
+        flat = self.LS.flatten(self.results[0])
+        for key in ("lquality", "lq_tier", "valuation_band", "trend_state",
+                    "stage", "s1_price", "r1_price", "readiness", "action"):
+            self.assertIn(key, flat)
+        self.assertNotIsInstance(flat["lquality"], dict)
+        self.assertIs(flat["_result"], self.results[0])
+
+    def test_every_declared_field_is_produced_by_flatten(self):
+        # A field in the picker that flatten never writes would read
+        # "no data" for every row — an option that cannot match anything.
+        flat = self.LS.flatten(self.results[0])
+        for spec in self.LS.LONGTERM_FIELDS:
+            self.assertIn(spec.src, flat, f"{spec.key} has no value")
+
+    def test_a_numeric_rule_filters(self):
+        kept, conds, _ = self.LS.apply_rules(self.results, ["lquality:gte:85"])
+        self.assertEqual([r["ticker"] for r in kept], ["ELITE"])
+        self.assertEqual(len(conds), 1)
+
+    def test_rules_combine_with_and(self):
+        kept, _, _ = self.LS.apply_rules(
+            self.results, ["lquality:gte:85", "lq_tier:eq:Elite"])
+        self.assertEqual([r["ticker"] for r in kept], ["ELITE"])
+
+    def test_rules_combine_with_or(self):
+        kept, _, _ = self.LS.apply_rules(
+            self.results, ["lquality:gte:85", "lquality:lt:0"], op="OR")
+        self.assertEqual([r["ticker"] for r in kept], ["ELITE"])
+
+    def test_an_unparseable_rule_drops_itself(self):
+        # A pasted URL with one bad rule must not error the page.
+        for bad in ("nosuchfield:gte:5", "lquality:nosuchop:5",
+                    "lquality:gte:notanumber", "garbage", ""):
+            kept, conds, _ = self.LS.apply_rules(self.results, [bad])
+            self.assertEqual(conds, [], bad)
+            self.assertEqual(len(kept), len(self.results), bad)
+
+    def test_a_bool_rule_reads_true_and_false(self):
+        self.assertIs(self.LS.parse_rule("s1_tested:eq:true").value, True)
+        self.assertIs(self.LS.parse_rule("s1_tested:eq:false").value, False)
+
+    def test_between_needs_both_bounds(self):
+        self.assertIsNone(self.LS.parse_rule("lquality:between:90"))
+        cond = self.LS.parse_rule("lquality:between:90,100")
+        self.assertEqual((cond.value, cond.value2), (90.0, 100.0))
+
+    def test_a_rule_round_trips_through_its_url_text(self):
+        from stockanalysis.webapp import longterm_view as V
+        for text in ("lquality:gte:85", "lq_tier:eq:Elite",
+                     "s1_tested:eq:true", "lquality:between:90,100"):
+            cond = self.LS.parse_rule(text)
+            self.assertEqual(V._rule_text(cond), text)
+
+    def test_stats_name_the_binding_constraint(self):
+        _, _, stats = self.LS.apply_rules(
+            self.results, ["lquality:gte:85", "lq_tier:eq:Elite"])
+        self.assertEqual(len(stats), 2)
+        for st in stats:
+            for key in ("alone", "missing", "without", "label"):
+                self.assertIn(key, st)
+
+    def test_headroom_is_none_when_the_levels_do_not_straddle(self):
+        # Support above the price, or resistance below it, would invert the
+        # ratio's meaning rather than merely making it large.
+        flat = self.LS.flatten(E.evaluate(
+            _row(**{"Current Price": 100.0, "S1": 120.0, "R1": 130.0,
+                    "8EMA": 121.0, "21EMA": 122.0, "50MA": 123.0,
+                    "200MA": 124.0, "Prior_Breakout_Level": None})))
+        self.assertIsNone(flat["headroom_ratio"])
+
+    def test_headroom_is_the_ratio_when_they_do_straddle(self):
+        flat = self.LS.flatten(E.evaluate(
+            _row(**{"Current Price": 100.0, "S1": 90.0, "R1": 120.0,
+                    "Prior_Breakout_Level": None})))
+        # 20% of headroom against 10% of give-back.
+        self.assertAlmostEqual(flat["headroom_ratio"], 2.0, places=1)

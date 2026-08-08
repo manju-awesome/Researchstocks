@@ -344,6 +344,88 @@ _TH = ('padding:7px 8px;font-size:10px;text-transform:uppercase;'
 #
 # Order and sort survive reloads in localStorage, since a layout you have to
 # rebuild after every filter click is not a layout you would use.
+_RULE_JS = r"""
+(function () {
+  // The operator list and the value widget both depend on the field's kind,
+  // so the form has to rebuild them when the field changes. Everything else
+  // on this page is a link; this is the one control that cannot be.
+  var meta = window.LT_FIELDS || {};
+  var field = document.getElementById('lt-rule-field');
+  var opSel = document.getElementById('lt-rule-op');
+  var wrap = document.getElementById('lt-rule-valuewrap');
+  var hint = document.getElementById('lt-rule-hint');
+  if (!field || !opSel || !wrap) return;
+
+  var OP_LABEL = { gte: 'at least', gt: 'more than', lte: 'at most',
+                   lt: 'less than', eq: 'is', ne: 'is not',
+                   between: 'between', within: 'within', in: 'is one of' };
+  var INPUT = 'padding:7px 9px;font-size:12px;border:0.5px solid #e1e0d9;' +
+              'border-radius:7px;width:110px';
+
+  function rebuild() {
+    var spec = meta[field.value];
+    if (!spec) return;
+    opSel.innerHTML = (spec.ops || []).map(function (o) {
+      return '<option value="' + o + '">' + (OP_LABEL[o] || o) + '</option>';
+    }).join('');
+    hint.textContent = spec.hint || '';
+    drawValue();
+  }
+
+  function drawValue() {
+    var spec = meta[field.value];
+    if (!spec) return;
+    var op = opSel.value;
+    if (spec.kind === 'bool') {
+      wrap.innerHTML = '<select name="_value" style="' + INPUT + '">' +
+        '<option value="true">Yes</option><option value="false">No</option></select>';
+    } else if (spec.kind === 'enum') {
+      wrap.innerHTML = '<select name="_value" style="' + INPUT + ';width:auto">' +
+        (spec.values || []).map(function (v) {
+          return '<option value="' + v + '">' + v + '</option>';
+        }).join('') + '</select>';
+    } else if (op === 'between') {
+      wrap.innerHTML =
+        '<input name="_value" type="number" step="any" placeholder="from" style="' + INPUT + ';width:78px">' +
+        ' <input name="_value2" type="number" step="any" placeholder="to" style="' + INPUT + ';width:78px">';
+    } else {
+      wrap.innerHTML = '<input name="_value" type="number" step="any" ' +
+        'placeholder="' + (spec.unit || 'value') + '" style="' + INPUT + '">';
+    }
+  }
+
+  field.addEventListener('change', rebuild);
+  opSel.addEventListener('change', drawValue);
+  rebuild();
+
+  // Assemble the three inputs into one `rule` param on submit, so the URL
+  // carries "lquality:gte:85" rather than three loose fields the server
+  // would have to recombine.
+  field.form.addEventListener('submit', function (e) {
+    var spec = meta[field.value];
+    if (!spec) return;
+    var v = wrap.querySelector('[name=_value]');
+    var v2 = wrap.querySelector('[name=_value2]');
+    var value = v ? v.value : '';
+    if (value === '' || value === null) { e.preventDefault(); return; }
+    if (opSel.value === 'between') {
+      if (!v2 || v2.value === '') { e.preventDefault(); return; }
+      value = value + ',' + v2.value;
+    }
+    var hiddenRule = document.createElement('input');
+    hiddenRule.type = 'hidden';
+    hiddenRule.name = 'rule';
+    hiddenRule.value = field.value + ':' + opSel.value + ':' + value;
+    field.form.appendChild(hiddenRule);
+    // The three builder inputs are for the human, not the URL.
+    field.removeAttribute('name');
+    opSel.removeAttribute('name');
+    if (v) v.removeAttribute('name');
+    if (v2) v2.removeAttribute('name');
+  });
+})();
+"""
+
 _TABLE_JS = r"""
 (function () {
   var table = document.getElementById('lt-table');
@@ -797,6 +879,154 @@ _BUY_ACTIONS = ("BUY NOW", "BUY ON CONFIRMATION", "BUY ON 8/21 EMA",
 DEFAULT_LIMIT = 60
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# RULE BUILDER — screener rules over the engine's own columns
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _rule_pills(conds, link):
+    """Active rules, each removable. Rules live in the URL, so a filtered
+    view is a link and the back button undoes one rule at a time."""
+    from stockanalysis.core.longterm import screen as LS
+    if not conds:
+        return ""
+    out = []
+    for i, c in enumerate(conds):
+        rest = [_rule_text(x) for j, x in enumerate(conds) if j != i]
+        out.append(
+            f'<span style="display:inline-flex;align-items:center;gap:6px;'
+            f'background:#E6F1FB;color:#0C447C;font-size:11px;font-weight:600;'
+            f'padding:4px 8px;border-radius:6px">{esc(LS.describe(c))}'
+            f'<a href="{esc(link(rule=rest))}" style="color:#0C447C;'
+            f'text-decoration:none;font-weight:700" title="Remove">×</a></span>')
+    return "".join(out)
+
+
+def _num_text(v):
+    """85.0 -> "85". Values arrive as floats from the parser and go back into
+    the URL on every re-render, so without this a rule picks up a trailing
+    ".0" the moment it round-trips through a pill."""
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v)
+
+
+def _rule_text(cond) -> str:
+    if isinstance(cond.value, bool):
+        value = "true" if cond.value else "false"
+    elif cond.op == "between":
+        value = f"{_num_text(cond.value)},{_num_text(cond.value2)}"
+    else:
+        value = _num_text(cond.value)
+    return f"{cond.field}:{cond.op}:{value}"
+
+
+def _rule_builder(conds, rule_op, link, stats, n_matched, n_total,
+                  search_q=""):
+    """Field -> operator -> value, as a plain GET form.
+
+    The operator list and the value widget both depend on the field's kind,
+    which is the only reason there is any JavaScript here: everything else on
+    this page is a link.
+    """
+    import json as _json
+    from stockanalysis.core.longterm import screen as LS
+
+    from stockanalysis.core.screener import OPS_FOR_KIND
+
+    meta = {f.key: {"kind": f.kind, "ops": list(OPS_FOR_KIND.get(f.kind, ())),
+                    "values": list(f.values), "unit": f.unit,
+                    "hint": f.hint, "label": f.label}
+            for f in LS.LONGTERM_FIELDS}
+
+    options = []
+    for group in LS.FIELD_GROUPS:
+        items = [f for f in LS.LONGTERM_FIELDS if f.group == group]
+        if not items:
+            continue
+        options.append(f'<optgroup label="{esc(group)}">' + "".join(
+            f'<option value="{esc(f.key)}">{esc(f.label)}</option>'
+            for f in items) + '</optgroup>')
+
+    hidden = "".join(
+        f'<input type="hidden" name="rule" value="{esc(_rule_text(c))}">'
+        for c in conds)
+
+    # Per-rule diagnosis. "0 matches" is a dead end; "0 matches, and 431 rows
+    # had no data for this rule" is an answer.
+    # Per-rule diagnosis. "0 matches" is a dead end; naming which rule is
+    # binding, and what dropping it would return, is an answer. `alone` and
+    # `without` differ usefully: a rule can look permissive on its own and
+    # still be the one killing the screen, through how it overlaps the rest.
+    diag = ""
+    if conds and stats:
+        # Exactly one rule gets the marker. Flagging every rule whose
+        # removal helps marks all of them on a tight screen, which is the
+        # same as marking none.
+        loosest = None
+        if len(conds) > 1:
+            ranked = [st for st in stats if st.get("without") is not None]
+            if ranked:
+                top = max(ranked, key=lambda st: st["without"])
+                if top["without"] > max(n_matched * 2, n_matched + 5):
+                    loosest = top.get("index")
+
+        lines = []
+        for st in stats:
+            label = st.get("label") or st.get("field")
+            without = st.get("without")
+            binding = loosest is not None and st.get("index") == loosest
+            lines.append(
+                f'<li style="margin:2px 0">'
+                f'{"<strong>" if binding else ""}{esc(str(label))}'
+                f'{"</strong>" if binding else ""} — '
+                f'{st.get("alone", 0)} on its own'
+                + (f', {st["missing"]} with no data' if st.get("missing")
+                   else "")
+                + (f' · drop it and {without} match' if len(conds) > 1
+                   and without is not None else "")
+                + (' ← the binding one' if binding else "") + '</li>')
+        diag = (f'<div style="font-size:11px;color:#898781;margin-top:8px">'
+                f'<strong>{n_matched}</strong> of {n_total} match'
+                f'<ul style="margin:4px 0 0;padding-left:16px;list-style:none">'
+                f'{"".join(lines)}</ul></div>')
+
+    toggle = ""
+    if len(conds) > 1:
+        other = "OR" if rule_op == "AND" else "AND"
+        toggle = (f'<a href="{esc(link(rule_op=other))}" '
+                  f'style="font-size:11px;color:#185FA5;margin-left:6px">'
+                  f'match {esc(other.lower())} instead</a>')
+
+    return f"""
+<div style="background:white;border:0.5px solid #e1e0d9;border-radius:12px;
+            padding:12px 14px;margin-bottom:14px">
+  <form method="get" action="/longterm"
+        style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    {hidden}
+    <input type="hidden" name="q" value="{esc(search_q or '')}">
+    <input type="hidden" name="rule_op" value="{esc(rule_op)}">
+    <span style="font-size:11px;color:#898781;text-transform:uppercase;
+                 letter-spacing:.06em">Add rule</span>
+    <select name="_field" id="lt-rule-field"
+            style="padding:7px 9px;font-size:12px;border:0.5px solid #e1e0d9;
+                   border-radius:7px">{"".join(options)}</select>
+    <select name="_op" id="lt-rule-op"
+            style="padding:7px 9px;font-size:12px;border:0.5px solid #e1e0d9;
+                   border-radius:7px"></select>
+    <span id="lt-rule-valuewrap"></span>
+    <button type="submit" class="btn" style="padding:7px 14px">Add</button>
+    <span id="lt-rule-hint" style="font-size:11px;color:#898781"></span>
+  </form>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;
+              margin-top:{'10px' if conds else '0'}">
+    {_rule_pills(conds, link)}{toggle}
+    {f'<a href="{esc(link(rule=[]))}" style="font-size:11px;color:#185FA5;margin-left:auto">Clear rules</a>' if conds else ''}
+  </div>
+  {diag}
+</div>
+<script>window.LT_FIELDS = {_json.dumps(meta)};</script>"""
+
+
 def longterm_page(query: dict | None = None) -> tuple[str, str]:
     from . import api
 
@@ -804,6 +1034,9 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     action_filter = (query.get("action") or [""])[0].strip()
     regime_override = (query.get("regime") or [""])[0].strip() or None
     raw_query = (query.get("q") or [""])[0]
+    rule_texts = [r for r in (query.get("rule") or []) if r.strip()]
+    rule_op = ((query.get("rule_op") or ["AND"])[0].strip().upper()
+               or "AND")
     wanted = parse_tickers(raw_query)
     try:
         limit = max(10, min(500, int((query.get("limit") or ["0"])[0] or 0)))
@@ -817,12 +1050,17 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     def link(**params):
         """A URL carrying the page's whole state, so no control silently
         discards another's — clicking a chip while a search is active used
-        to drop the search."""
+        to drop the search, and now must not drop the rules either."""
         state = {"q": raw_query.strip(), "action": action_filter,
-                 "regime": regime_override or ""}
-        state.update({k: ("" if v is None else str(v)) for k, v in params.items()})
+                 "regime": regime_override or "",
+                 "rule": list(rule_texts),
+                 "rule_op": "" if rule_op == "AND" else rule_op}
+        for key, value in params.items():
+            state[key] = value if isinstance(value, list) else (
+                "" if value is None else str(value))
         kept = {k: v for k, v in state.items() if v}
-        return "/longterm" + (f"?{urlencode(kept)}" if kept else "")
+        # doseq: `rule` repeats once per condition.
+        return "/longterm" + (f"?{urlencode(kept, doseq=True)}" if kept else "")
 
     # ── ticker search ───────────────────────────────────────────────────────
     # Narrows the universe before anything else looks at it, so the chips
@@ -841,6 +1079,12 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
         base = found
     else:
         base = rows
+
+    # Rules run after the ticker search and before the action chips, so the
+    # chip counts describe what the rules actually left.
+    from stockanalysis.core.longterm import screen as LS
+    before_rules = len(base)
+    base, rule_conds, rule_stats = LS.apply_rules(base, rule_texts, rule_op)
 
     counts = {}
     for r in base:
@@ -988,6 +1232,8 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
 {warn}
 {search}
 {notfound}
+{_rule_builder(rule_conds, rule_op, link, rule_stats, len(base),
+               before_rules, raw_query)}
 
 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;
             margin-bottom:14px">
@@ -1020,4 +1266,4 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
   proxies, marked ⚠ where the evidence is thinner than the weight.
 </div>
 """
-    return body, _TABLE_JS
+    return body, _TABLE_JS + _RULE_JS
