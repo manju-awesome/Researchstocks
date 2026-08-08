@@ -710,3 +710,66 @@ class TestColumnsAndGrouping(unittest.TestCase):
             self.assertNotIn('data-group="1"', off)
         finally:
             api.longterm = real
+
+
+class TestConfluenceBandsAreOnTheCount(unittest.TestCase):
+    """The label describes the count, because the count is what gates a buy.
+
+    Scored bands put 448 of 545 library rows in "Weak" and could not have
+    described the count anyway: the score ranges for adjacent counts overlap
+    (3 levels spans 35-70, 4 spans 60-75), since which levels agree matters
+    as much as how many.
+    """
+
+    def _conf(self, **kw):
+        return T.compute_support_confluence(_row(**kw))
+
+    def test_the_band_boundary_is_the_buy_gate(self):
+        # "Adequate" starts exactly where the engine starts issuing buys.
+        floors = {name: floor for floor, name in T.CONFLUENCE_BANDS}
+        self.assertEqual(floors["🟡 Adequate"], E.MIN_CONFLUENCE_HITS)
+
+    def test_label_follows_the_count_not_the_score(self):
+        # Two hits worth 50 points (50 MA + 200 MA) and two worth 25
+        # (8/21 EMA + key level) must carry the SAME label.
+        # ATR 3% -> tolerance 4.5%, wide enough for both MAs to count.
+        heavy = self._conf(**{"Current Price": 100.0, "8EMA": 120.0,
+                              "21EMA": 121.0, "50MA": 99.0, "200MA": 98.0,
+                              "S1": None, "Prior_Breakout_Level": None,
+                              "ATR_Pct": 3.0})
+        light = self._conf(**{"Current Price": 100.0, "8EMA": 99.5,
+                              "21EMA": 99.0, "50MA": 60.0, "200MA": 50.0,
+                              "S1": 99.4, "Volume_Confirmation": None,
+                              "Prior_Breakout_Level": None, "ATR_Pct": 3.0})
+        self.assertEqual(heavy["agreeing"], 2)
+        self.assertEqual(light["agreeing"], 2)
+        self.assertEqual(heavy["label"], light["label"])
+        # ...while the score still separates them for ranking.
+        self.assertGreater(heavy["score"], light["score"])
+
+    def test_every_band_is_reachable(self):
+        seen = set()
+        for n in range(0, 6):
+            label = next(name for floor, name in T.CONFLUENCE_BANDS
+                         if n >= floor)
+            seen.add(label)
+        self.assertEqual(seen, {name for _f, name in T.CONFLUENCE_BANDS})
+
+    def test_the_cell_leads_with_the_count(self):
+        from stockanalysis.webapp import longterm_view as V
+        conf = self._conf()
+        html, sort_value = V._support_confluence_cell(conf)
+        n = conf["agreeing"]
+        # The count appears before the score in the rendered cell.
+        self.assertLess(html.index(f'{n} of '), html.index(f'{conf["score"]}/100'))
+        # ...and sorting follows count first, score as tiebreak.
+        self.assertEqual(sort_value, n * 1000 + conf["score"])
+
+    def test_sorting_orders_by_count_before_score(self):
+        from stockanalysis.webapp import longterm_view as V
+        three_light = {"score": 35, "hits": [{"name": "a"}] * 3,
+                       "agreeing": 3, "possible": 6, "label": "x"}
+        two_heavy = {"score": 45, "hits": [{"name": "a"}] * 2,
+                     "agreeing": 2, "possible": 6, "label": "x"}
+        self.assertGreater(V._support_confluence_cell(three_light)[1],
+                           V._support_confluence_cell(two_heavy)[1])

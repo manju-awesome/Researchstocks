@@ -121,8 +121,25 @@ def classify_stage(row: dict, zone: str, extended: bool) -> str:
         return "STAGE1_EMA" if price and ma50 and price >= ma50 else "STAGE3_DEEP"
     return "AT_HIGHS"
 
-CONFLUENCE_BANDS = ((80, "🔥 Strong support"), (65, "🟢 Good"),
-                    (50, "🟡 Watch"), (0, "🔴 Weak"))
+# Bands are set on the COUNT of levels agreeing, not on the weighted score.
+#
+# Two reasons. First, the count is what actually gates a buy
+# (engine.MIN_CONFLUENCE_HITS), so a label drawn from the score described one
+# thing while the decision used another — and the boundary between "adequate"
+# and "weak" now falls exactly where the engine stops issuing buys.
+#
+# Second, the score cannot carry a label at all: measured across the 545-row
+# library, the score ranges for adjacent counts OVERLAP (3 levels spans 35-70,
+# 4 levels spans 60-75), because which levels agree matters as much as how
+# many. A 50 MA plus 200 MA agreement scores 50 on two hits; the 8/21 EMA plus
+# a key level scores 25 on the same two. The old score bands (80/65/50) put
+# 448 of 545 rows in "Weak" and 14 above "Good" — a label four-fifths of the
+# page shares is not telling you anything.
+#
+# Distribution on the live library: 4+ levels 11.7%, 3 levels 27.3%,
+# 2 levels 23.5%, 0-1 levels 37.4%.
+CONFLUENCE_BANDS = ((4, "🔥 Strong"), (3, "🟢 Good"),
+                    (2, "🟡 Adequate"), (0, "🔴 Weak"))
 
 # The support ladder, shallowest first: (row field, zone, display name).
 # Ordered by lookback rather than by price, so S1..S4 name the same average
@@ -681,8 +698,14 @@ def compute_support_confluence(row: dict) -> dict:
           f"{f' ({touches:.0f} touches)' if touches else ''}"
           if oks1 and ma_near_s1 else "no independent level agrees here")
 
-    label = next(name for floor, name in CONFLUENCE_BANDS if score >= floor)
-    return {"score": score, "label": label, "hits": hits, "misses": misses}
+    n_hits = len(hits)
+    label = next(name for floor, name in CONFLUENCE_BANDS if n_hits >= floor)
+    return {"score": score, "label": label, "hits": hits, "misses": misses,
+            # The headline number. `score` is kept because WHICH levels agree
+            # still matters — a 50 MA plus 200 MA agreement is worth more than
+            # the 8/21 EMA plus a key level, and both are two hits — but it
+            # ranks within a count rather than replacing it.
+            "agreeing": n_hits, "possible": len(CONFLUENCE_POINTS)}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

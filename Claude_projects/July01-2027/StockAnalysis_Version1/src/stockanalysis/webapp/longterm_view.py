@@ -509,6 +509,31 @@ _TABLE_JS = r"""
 _TD = 'padding:8px;border-bottom:0.5px solid #f1efea;font-size:12px;vertical-align:top'
 
 
+def _support_confluence_cell(conf):
+    """Levels agreeing, with the weighted score demoted to context.
+
+    The count leads because the count is what the engine actually gates on
+    (MIN_CONFLUENCE_HITS), and because the score cannot carry the label —
+    its ranges overlap between adjacent counts, so 60/100 might be three
+    levels or four. Showing the score first described one thing while the
+    decision used another.
+
+    Sorts on count first, score as the tiebreak, so ordering by this column
+    matches what the label says while still separating a 50 MA + 200 MA
+    agreement from an 8/21 EMA + key-level one.
+    """
+    n, possible = conf.get("agreeing", len(conf["hits"])), conf.get("possible", 6)
+    score = conf["score"]
+    colour = ("#0F6E56" if n >= 4 else "#0b0b0b" if n >= 3
+              else "#8a6d1a" if n >= 2 else "#A32D2D")
+    names = ", ".join(h["name"] for h in conf["hits"]) or "nothing holding here"
+    return (f'<span style="color:{colour};font-weight:700" '
+            f'title="{esc(names)}">{n} of {possible}</span>'
+            f'<div style="font-size:10px;color:#898781;white-space:nowrap">'
+            f'{esc(conf["label"])} · {score}/100</div>',
+            n * 1000 + score)
+
+
 def _buyzone_cell(pullback):
     """The price to work an order at — and whether anyone has ever defended it.
 
@@ -578,7 +603,7 @@ _COLUMNS = (
     ("trend", "Trend", "center", "num"),
     ("pullback", "Pullback", "left", "num"),
     ("buyzone", "Buy Zone", "right", "num"),
-    ("support", "Support", "left", "num"),
+    ("support", "Support", "left", "num"),   # levels agreeing, score as tiebreak
     ("s1", "8 EMA", "right", "num"),
     ("s2", "21 EMA", "right", "num"),
     ("s3", "50 MA", "right", "num"),
@@ -642,9 +667,7 @@ def _cells(r):
         "price": (f'<strong>${r["price"]:,.2f}</strong>' if r.get("price")
                   else '<span style="color:#898781">—</span>', r.get("price")),
         "buyzone": _buyzone_cell(p),
-        "support": (f'{conf["score"]}'
-                    f'<div style="font-size:10px;color:#898781">'
-                    f'{len(conf["hits"])} agree</div>', conf["score"]),
+        "support": _support_confluence_cell(conf),
         "rs": (rs_mark, rs["score"]),
         "market": (market, r["regime"]),
         "lt": (f'<strong>{r["lt_score"] if r["lt_score"] is not None else "—"}</strong>',
