@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import inspect
 import sys
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -65,8 +66,23 @@ ROUTES = {
     "/daytrade":    ("daytrade",  "Day Trade", spy_pages.daytrade_page),
     "/daytrade/proposals": ("daytrade", "Day Trade · Proposals",
                             spy_pages.daytrade_proposals_page),
+    "/longterm":    ("longterm",  "Long-Term Buy Engine", pages.longterm_page),
     "/automation":  ("automation","Automation",pages.automation_page),
 }
+
+
+def _wants_query(fn) -> bool:
+    """Whether a page function should be handed the parsed query string.
+
+    Pages take no arguments by default. One whose state lives in the URL —
+    filters, an overridden market regime — declares a single parameter and
+    gets the parse_qs dict. Detected from the signature rather than listed in
+    ROUTES so adding such a page means touching one file instead of two.
+    """
+    try:
+        return bool(inspect.signature(fn).parameters)
+    except (TypeError, ValueError):
+        return False
 
 
 class WorkstationHandler(SimpleHTTPRequestHandler):
@@ -85,7 +101,8 @@ class WorkstationHandler(SimpleHTTPRequestHandler):
         if path in ROUTES:
             nav_key, title, page_fn = ROUTES[path]
             try:
-                body, extra_js = page_fn()
+                body, extra_js = (page_fn(query) if _wants_query(page_fn)
+                                  else page_fn())
             except Exception as e:
                 import traceback
                 traceback.print_exc()

@@ -1344,3 +1344,154 @@ def journal_delete(trade_id: str) -> dict:
         return {"ok": False, "message": "no trade_id given"}
     ok = journal.delete_trade(trade_id)
     return {"ok": ok, "message": "trade removed" if ok else "trade not found"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LONG-TERM BUY ENGINE
+# ─────────────────────────────────────────────────────────────────────────────
+# The engine (core.longterm) runs over the RAW scan rows rather than the
+# flattened screener universe: it reads statement-level fields the screener
+# never surfaces (free cash flow history, share count, beta, moving-average
+# slopes), and flattening them into the screener's row shape first would
+# mean maintaining a second copy of that mapping.
+
+# core.market_regime speaks Bullish/Neutral/Defensive; the long-term engine
+# speaks the decision_engine vocabulary. Neutral maps to SELECTIVE rather
+# than FAVORABLE because §11 of the framework treats a mixed tape as a
+# raise-the-bar condition, not a normal one.
+LONGTERM_REGIME_MAP = {"Bullish": "FAVORABLE", "Neutral": "SELECTIVE",
+                       "Defensive": "DEFENSIVE"}
+
+
+def _longterm_universe() -> list[dict]:
+    """Raw scan rows for every library ticker that has a real quote, with
+    core.research_snapshot filling anything the live index is missing —
+    the same durability the Screener relies on."""
+    from stockanalysis.core import research_snapshot
+    from stockanalysis.reporting.research import load_research_index
+    index = load_research_index(OUTPUT_DIR)
+    try:
+        entries = research_snapshot.merged(
+            index, research_snapshot.load(OUTPUT_DIR))
+    except Exception as e:
+        print(f"[LongTerm] snapshot unavailable, using index alone ({e})")
+        entries = list(index.values())
+    rows = []
+    for entry in entries:
+        if not research_snapshot.has_quote(entry):
+            continue
+        raw = dict(entry.get("raw") or {})
+        if not raw.get("Ticker"):
+            raw["Ticker"] = entry.get("ticker")
+        if raw.get("Ticker"):
+            rows.append(raw)
+    return rows
+
+
+def longterm_risk_free() -> tuple[float, str]:
+    """The 10-year Treasury yield as a decimal, for the reverse DCF's
+    discount rate.
+
+    ^TNX already quotes the yield in percent — 4.21 means 4.21%, not 42.1%
+    — so it is divided by 100 and never by 10. Falls back to the module
+    default rather than failing the page: the discount rate moves the
+    hurdle, and a page that will not render because a quote was slow is
+    worse than one built on a 4.2% assumption that says so.
+    """
+    from stockanalysis.core.longterm.valuation import DEFAULT_RISK_FREE
+    try:
+        import yfinance as yf
+        hist = yf.Ticker("^TNX").history(period="5d")
+        if not hist.empty:
+            pct = float(hist["Close"].iloc[-1])
+            if 0 < pct < 25:
+                return pct / 100.0, f"10Y Treasury {pct:.2f}% (live)"
+    except Exception as e:
+        print(f"[LongTerm] ^TNX unavailable ({e})")
+    return DEFAULT_RISK_FREE, (f"10Y Treasury unavailable — assumed "
+                               f"{DEFAULT_RISK_FREE * 100:.1f}%")
+
+
+def longterm_regime(override: str | None = None) -> tuple[str, str]:
+    """(regime, explanation). An explicit override always wins so the page
+    can ask "what would this look like in a defensive tape"."""
+    if override and str(override).upper() in LONGTERM_REGIME_MAP.values():
+        return str(override).upper(), "set manually on this page"
+    try:
+        from stockanalysis.core import regime_client
+        cached = regime_client.load_cached() or {}
+        bias = str(cached.get("primary_bias") or "").strip().title()
+        mapped = LONGTERM_REGIME_MAP.get(bias)
+        if mapped:
+            return mapped, (f"market regime {bias} as of "
+                            f"{cached.get('generated_at_et', 'unknown')[:10]}")
+    except Exception as e:
+        print(f"[LongTerm] regime unavailable ({e})")
+    # Unknown tape must not silently loosen the gates, and must not silently
+    # close them either — SELECTIVE is the honest middle.
+    return "SELECTIVE", "market regime unknown — defaulting to SELECTIVE"
+
+
+def _json_safe(obj):
+    """numpy/pandas scalars are not JSON-serialisable and reach here inside
+    scan rows (int64 distribution-day counts, float64 statement figures).
+    json.dumps() raises on them, which turns a working page into a 500."""
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, (str, bool)) or obj is None:
+        return obj
+    if isinstance(obj, int):
+        return int(obj)
+    if isinstance(obj, float):
+        return None if obj != obj else float(obj)
+    item = getattr(obj, "item", None)          # numpy scalar
+    if callable(item):
+        try:
+            return _json_safe(item())
+        except Exception:
+            pass
+    return str(obj)
+
+
+def longterm(regime_override: str | None = None) -> dict:
+    """The whole Long-Term Buy Engine run, ready for the page.
+
+    Returns {"rows", "counts", "regime", "regime_note", "risk_free_note",
+             "coverage", "universe"}. `coverage` reports how much of the
+    library carries the columns the engine needs, because a library scanned
+    before core.longterm existed will produce WATCH for everything and the
+    page has to say why rather than looking broken.
+    """
+    from stockanalysis.core.longterm import engine as E
+
+    rows = _longterm_universe()
+    regime, regime_note = longterm_regime(regime_override)
+    risk_free, risk_free_note = longterm_risk_free()
+
+    results = E.evaluate_universe(rows, regime=regime, risk_free=risk_free)
+
+    counts = {}
+    for r in results:
+        counts[r["action"]] = counts.get(r["action"], 0) + 1
+
+    total = len(rows) or 1
+    coverage = {
+        "total": len(rows),
+        "ma_slope": sum(1 for r in rows if r.get("MA200_Slope%") is not None),
+        "reversal": sum(1 for r in rows if r.get("Reversal_Candle") is not None),
+        "statements": sum(1 for r in rows if r.get("FCF_CAGR%") is not None),
+        "breakout": sum(1 for r in rows
+                        if r.get("Prior_Breakout_Level") is not None),
+    }
+    coverage["needs_rescan"] = coverage["reversal"] < total * 0.5
+
+    return _json_safe({
+        "rows": results,
+        "counts": counts,
+        "regime": regime,
+        "regime_note": regime_note,
+        "risk_free_note": risk_free_note,
+        "coverage": coverage,
+    })

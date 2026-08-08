@@ -802,6 +802,13 @@ SCAN_STEP_LABELS = [
 ]
 
 
+def longterm_page(query: dict | None = None) -> tuple[str, str]:
+    """The Long-Term Buy Engine — see webapp/longterm_view.py. Takes the
+    query string because its filters and regime override live in the URL."""
+    from . import longterm_view
+    return longterm_view.longterm_page(query)
+
+
 def screener_page() -> tuple[str, str]:
     """Screener lives in its own module — see screener_view.py. Scanner runs
     the pipeline that produces the data; Screener queries what it produced."""

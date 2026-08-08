@@ -214,6 +214,11 @@ _KEEP_AS_TEXT = frozenset({
     "Ticker", "LongName", "Sector", "Industry", "Category", "Grade",
     "EarningsDate", "52W_High_Date", "Scan_Time", "Buy_Zone_Label",
     "Trend_Strength", "Call_Strength", "ORB_Status", "SizeFlag",
+    # Long-term engine text columns. Reversal_Candle carries the literal
+    # "none" for "measured, no pattern today", which has to survive as text:
+    # the engine distinguishes it from a missing value, and that distinction
+    # is what stops an unscanned row reading as a confirmed setup.
+    "Reversal_Candle", "Fundamentals_As_Of",
 })
 
 
