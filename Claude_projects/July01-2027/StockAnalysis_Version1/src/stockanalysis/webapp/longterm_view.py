@@ -883,7 +883,8 @@ _HEADERS = tuple(c[1] for c in _COLUMNS)
 # Sort keys for columns whose display is a symbol or a label. Ranked so
 # "descending" means "better" everywhere — otherwise the first click on
 # Trend puts the broken ones on top.
-_TREND_RANK = {"CONFIRMED": 3, "PARTIAL": 2, "IMPAIRED": 1, "BROKEN": 0}
+_TREND_RANK = {"CONFIRMED": 4, "PARTIAL": 3, "RECOVERING": 2,
+               "IMPAIRED": 1, "BROKEN": 0}
 _BAND_RANK = {"UNDERVALUED": 2, "FAIR": 1, "OVERVALUED": 0}
 _ACTION_ORDER = ("BUY NOW", "BUY ON CONFIRMATION", "BUY ON 8/21 EMA",
                  "BUY ON 50 MA", "BUY ON BREAKOUT RETEST", "BUY ON 200 MA",

@@ -436,7 +436,15 @@ def evaluate(row: dict, peers: dict | None = None,
         # watchlist name whose chart has to heal, not a company to discard.
         return verdict("WATCH", "trend")
 
-    if trend["state"] == "PARTIAL":
+    if trend["state"] == "RECOVERING":
+        # Not a shortfall in measurement — a shortfall in confirmation. Price
+        # is above the long-term average and the 50 MA is climbing back
+        # toward it; what is missing is the cross, not the data.
+        blockers.append(f"{trend['icon']} Trend recovering — "
+                        f"{trend['summary']}")
+        triggers.append("C — Trend confirmation: the 50 MA crosses back above "
+                        "the 200 MA")
+    elif trend["state"] == "PARTIAL":
         # Explicitly NOT a failure. Structure holds; something is unmeasured.
         # It costs the name a BUY NOW — that requires CONFIRMED — but it must
         # not eject it from the ladder, which is what "failed on trend" did

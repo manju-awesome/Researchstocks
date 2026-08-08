@@ -1166,3 +1166,62 @@ class TestTwoVerdicts(unittest.TestCase):
                        "MA200_Slope%": -2.0, "MA50_Slope%": -2.0,
                        "Above_200MA": False})
         self.assertEqual(E.evaluate(_row(**broken))["action"], "THESIS BROKEN")
+
+
+class TestRecoveringTrend(unittest.TestCase):
+    """A 50/200 inversion means opposite things either side of the 200 MA.
+
+    Palantir: price $172.01, above its 200 MA at $152.28 and 30% above its
+    50 MA at $132.60, with the 50 MA still under the 200 MA. Nothing is
+    damaged — the 50 MA is a lagging average that has not yet climbed back
+    through the 200 after an earlier decline. That is a golden cross pending,
+    not a death cross just struck, and reporting it as "damaged" inverted the
+    reading for 49 library rows.
+    """
+
+    def _pltr(self, **kw):
+        base = {"Current Price": 172.01, "200MA": 152.28, "50MA": 132.60,
+                "21EMA": 138.21, "8EMA": 149.26, "Above_200MA": True,
+                "MA200_Slope%": None, "MA50_Slope%": None,
+                "Price_vs_50MA%": 29.7}
+        base.update(kw)
+        return _row(**base)
+
+    def test_above_the_200ma_with_a_pending_cross_is_recovering(self):
+        trend = T.compute_trend(self._pltr())
+        self.assertEqual(trend["state"], "RECOVERING")
+        self.assertEqual(trend["structural_failed"], ["50 MA above 200 MA"])
+
+    def test_recovering_does_not_eject_the_name_from_the_ladder(self):
+        # Price is above the long-term average, so this is a trend awaiting
+        # confirmation rather than one to walk away from.
+        self.assertIsNone(T.compute_trend(self._pltr())["pass"])
+
+    def test_below_the_200ma_is_still_impaired(self):
+        trend = T.compute_trend(self._pltr(**{"Current Price": 140.0,
+                                              "Above_200MA": False}))
+        self.assertEqual(trend["state"], "IMPAIRED")
+        self.assertIs(trend["pass"], False)
+
+    def test_a_falling_200ma_still_outranks_the_recovery_reading(self):
+        trend = T.compute_trend(self._pltr(**{"MA200_Slope%": -2.0}))
+        self.assertEqual(trend["state"], "BROKEN")
+
+    def test_recovering_is_only_for_the_cross_not_any_failure(self):
+        # Price below the 200 MA AND a crossed pair is not a recovery.
+        trend = T.compute_trend(self._pltr(**{"Current Price": 100.0,
+                                              "Above_200MA": False}))
+        self.assertNotEqual(trend["state"], "RECOVERING")
+
+    def test_the_ranking_places_recovering_between_partial_and_impaired(self):
+        from stockanalysis.webapp import longterm_view as V
+        rank = V._TREND_RANK
+        self.assertGreater(rank["PARTIAL"], rank["RECOVERING"])
+        self.assertGreater(rank["RECOVERING"], rank["IMPAIRED"])
+
+    def test_every_state_has_an_icon_summary_and_rank(self):
+        from stockanalysis.webapp import longterm_view as V
+        for state in T.TREND_STATES:
+            self.assertIn(state, T.TREND_ICONS)
+            self.assertIn(state, T.TREND_SUMMARY)
+            self.assertIn(state, V._TREND_RANK)

@@ -226,12 +226,14 @@ def _supports(price, level, tol_pct) -> tuple[bool, float | None]:
 # from where price sits today. Price below a RISING 200 MA is a deep
 # correction; below a FALLING one it is a breakdown, and the difference is
 # the slope nobody had measured.
-TREND_STATES = ("CONFIRMED", "PARTIAL", "IMPAIRED", "BROKEN")
-TREND_ICONS = {"CONFIRMED": "🟢", "PARTIAL": "🟡", "IMPAIRED": "🟠",
-               "BROKEN": "🔴"}
+TREND_STATES = ("CONFIRMED", "PARTIAL", "RECOVERING", "IMPAIRED", "BROKEN")
+TREND_ICONS = {"CONFIRMED": "🟢", "PARTIAL": "🟡", "RECOVERING": "🔵",
+               "IMPAIRED": "🟠", "BROKEN": "🔴"}
 TREND_SUMMARY = {
     "CONFIRMED": "long-term uptrend confirmed",
     "PARTIAL": "structure intact, some checks unmeasured",
+    "RECOVERING": "price has reclaimed the 200 MA; the 50 MA has not caught "
+                  "up yet",
     "IMPAIRED": "damaged — direction unconfirmed without the MA slopes",
     "BROKEN": "200 MA falling — long-term trend broken",
 }
@@ -342,11 +344,30 @@ def compute_trend(row: dict) -> dict:
                           if c["structural"] and c["ok"] is None]
 
     slope200_known = slope200 is not None
+    # A 50/200 inversion means opposite things depending on which side of the
+    # 200 MA price sits, and reading it as damage either way is wrong.
+    #
+    # Palantir: price $172.01, above its 200 MA at $152.28 and 30% above its
+    # 50 MA at $132.60 — with the 50 MA still below the 200 MA. Nothing is
+    # damaged; the 50 MA is a lagging average that has not yet climbed back
+    # through the 200 after an earlier decline. That is a golden cross
+    # pending, the exact opposite of a death cross just struck, and calling
+    # it "damaged" inverted the reading.
+    #
+    # Price ABOVE the 200 MA with the averages still crossed is recovery.
+    # Price BELOW it is impairment.
+    recovering = (above200 is True
+                  and structural_failed == ["50 MA above 200 MA"])
     if structural_failed:
         # Only a measurably falling 200 MA earns "broken". Everything else
         # that fails a structural check is damaged with its direction
         # unestablished, which is a different instruction to the reader.
-        state = "BROKEN" if (slope200_known and slope200 < 0) else "IMPAIRED"
+        if slope200_known and slope200 < 0:
+            state = "BROKEN"
+        elif recovering:
+            state = "RECOVERING"
+        else:
+            state = "IMPAIRED"
     elif structural_unknown:
         state = "PARTIAL"
     else:
@@ -371,7 +392,11 @@ def compute_trend(row: dict) -> dict:
         # Coarse tri-state for callers that only need pass/unknown/fail.
         # IMPAIRED maps to False: it is not a trend to buy into, whatever
         # its ultimate direction turns out to be.
-        "pass": {"CONFIRMED": True, "PARTIAL": None,
+        # RECOVERING maps to None, not False: price is above the long-term
+        # average, so this is not a trend to be ejected from the ladder — it
+        # is one whose confirmation has not arrived. Same treatment as
+        # PARTIAL, which is the other "not yet established" state.
+        "pass": {"CONFIRMED": True, "PARTIAL": None, "RECOVERING": None,
                  "IMPAIRED": False, "BROKEN": False}[state],
     }
 
