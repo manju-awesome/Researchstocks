@@ -445,9 +445,89 @@ def compute_pullback(row: dict) -> dict:
         "by_level": by_level,
         "supports": supports,
         "buy_zone": compute_buy_zone_level(row),
+        "resistance": compute_resistance_level(row),
         "range_52w": compute_52w_range(row),
         "note": note,
     }
+
+
+def _touches_belong_to(row: dict) -> str | None:
+    """Which of S1 / R1 the row's Touches and Volume_Confirmation describe.
+
+    core.key_levels writes those two columns for whichever level is NEAREST
+    the price, not for S1 — see its `nearest = s1 if (price - s1) <= (r1 -
+    price) else r1`. Attributing them to S1 unconditionally credits a support
+    shelf with a resistance level's touch count whenever resistance is
+    closer, which is a quiet way to make a level look better-tested than it
+    is.
+    """
+    price = _price(row)
+    s1, r1 = f(row.get("S1")), f(row.get("R1"))
+    if price is None:
+        return None
+    if s1 is not None and r1 is not None:
+        return "S1" if (price - s1) <= (r1 - price) else "R1"
+    if s1 is not None:
+        return "S1"
+    return "R1" if r1 is not None else None
+
+
+def compute_resistance_level(row: dict) -> dict:
+    """The first thing overhead — where a rally would meet sellers.
+
+    Mirrors compute_buy_zone_level() on the other side of the tape, with the
+    same tested-versus-derived distinction. R1 from the key-level engine is a
+    price the market has actually turned down from; a moving average or the
+    52-week high is where one happens to sit.
+
+    The fallback chain matters more here than on the support side. A stock in
+    a clean uptrend has every moving average BELOW it — Nvidia, Microsoft and
+    Gilead all do — so the only thing overhead is the 52-week high, and
+    without that rung the column would be empty for exactly the names most
+    worth owning.
+    """
+    price = _price(row)
+    out = {"price": None, "distance_pct": None, "source": None,
+           "touches": None, "actual_resistance": False, "label": None,
+           "note": "nothing overhead — price is at new highs"}
+    if price is None or price <= 0:
+        return out
+
+    def fill(level, source, label, actual, note, touches=None):
+        out.update({"price": round(level, 2),
+                    "distance_pct": round((level / price - 1) * 100.0, 1),
+                    "source": source, "label": label,
+                    "actual_resistance": actual, "note": note,
+                    "touches": touches})
+        return out
+
+    r1 = f(row.get("R1"))
+    if r1 is not None and r1 > price:
+        touches = (f(row.get("Touches"))
+                   if _touches_belong_to(row) == "R1" else None)
+        return fill(r1, "key_level",
+                    f"{touches:.0f} touches" if touches else "prior high",
+                    True,
+                    "tested resistance — price has turned down from here",
+                    touches)
+
+    above = []
+    for key, _zone, label in SUPPORT_LEVELS:
+        level = f(row.get(key))
+        if level is not None and level > price:
+            above.append((level, label))
+    if above:
+        level, label = min(above)
+        return fill(level, "moving_average", label, False,
+                    f"no tested level overhead — this is the {label}, which "
+                    f"price has fallen below rather than turned down from")
+
+    high = f(row.get("52W High"))
+    if high is not None and high > price:
+        return fill(high, "52w_high", "52W high", False,
+                    "no nearer level — the 52-week high is the next "
+                    "meaningful overhead price")
+    return out
 
 
 def compute_buy_zone_level(row: dict) -> dict:
@@ -489,8 +569,11 @@ def compute_buy_zone_level(row: dict) -> dict:
 
     s1 = f(row.get("S1"))
     if s1 is not None and 0 < s1 <= price:
-        touches = f(row.get("Touches"))
-        confirmed = b(row.get("Volume_Confirmation"))
+        # Only claim the touch count when it actually describes S1 — the scan
+        # writes it for whichever level is nearest. See _touches_belong_to().
+        owns = _touches_belong_to(row) == "S1"
+        touches = f(row.get("Touches")) if owns else None
+        confirmed = b(row.get("Volume_Confirmation")) if owns else None
         bits = []
         if touches:
             bits.append(f"{touches:.0f} touches")

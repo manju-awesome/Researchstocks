@@ -652,7 +652,7 @@ class TestBuyZoneLevel(unittest.TestCase):
         self.assertIn("buy_zone", T.compute_pullback(_row()))
 
 
-class TestColumnsAndGrouping(unittest.TestCase):
+class TestColumns(unittest.TestCase):
     def setUp(self):
         from stockanalysis.webapp import longterm_view
         self.view = longterm_view
@@ -662,64 +662,24 @@ class TestColumnsAndGrouping(unittest.TestCase):
         self.assertEqual(labels["s1"], "8 EMA")
         self.assertEqual(labels["s4"], "200 MA")
 
-    def test_price_and_buy_zone_are_columns(self):
+    def test_price_support_and_resistance_are_columns(self):
         keys = [c[0] for c in self.view._COLUMNS]
-        self.assertIn("price", keys)
-        self.assertIn("buyzone", keys)
+        for key in ("price", "buyzone", "resistance"):
+            self.assertIn(key, keys)
+        labels = {c[0]: c[1] for c in self.view._COLUMNS}
+        self.assertEqual(labels["buyzone"], "S1 \u00b7 Support")
+        self.assertEqual(labels["resistance"], "R1 \u00b7 Resistance")
+
+    def test_the_support_confluence_column_is_gone(self):
+        # The score still gates buys and still appears in the reasoning
+        # panel; it is no longer a column of its own.
+        self.assertNotIn("support", [c[0] for c in self.view._COLUMNS])
 
     def test_every_column_still_renders_a_cell(self):
         html = self.view._row(E.evaluate(_row()))
         for key, _l, _a, _t in self.view._COLUMNS:
             self.assertIn(f'data-col="{key}"', html)
         self.assertIn(f'colspan="{len(self.view._COLUMNS)}"', html)
-
-    def test_grouped_rows_carry_one_banner_per_action(self):
-        rows = [E.evaluate(_row(Ticker=t)) for t in ("AAA", "BBB", "CCC")]
-        rows[0]["action"] = rows[1]["action"] = "WATCH"
-        rows[2]["action"] = "AVOID"
-        html = self.view._grouped_rows(rows, expand=False)
-        self.assertEqual(html.count('data-group="1"'), 2)
-        # Banner order follows the engine's priority, not dict insertion.
-        banners = re.findall(r'data-group="1".*?white-space:nowrap">\s*\S+\s+'
-                             r'([A-Z][^<]*?)</span>', html, re.S)
-        self.assertEqual(banners, ["WATCH", "AVOID"])
-        self.assertEqual(html.count('data-main="1"'), 3)
-
-    def test_an_unknown_action_still_renders(self):
-        # A verdict the view has not been taught about must not vanish.
-        r = E.evaluate(_row())
-        r["action"] = "SOMETHING NEW"
-        html = self.view._grouped_rows([r], expand=False)
-        self.assertIn("SOMETHING NEW", html)
-        self.assertIn('data-main="1"', html)
-
-    def test_grouping_is_on_by_default_and_can_be_turned_off(self):
-        from stockanalysis.webapp import api
-        real = api.longterm
-        rows = [E.evaluate(_row(Ticker=t)) for t in ("AAA", "BBB")]
-        rows[1]["action"] = "AVOID"
-        api.longterm = lambda override=None: {
-            "rows": rows, "counts": {}, "regime": "FAVORABLE",
-            "regime_note": "t", "risk_free_note": "t",
-            "coverage": {"total": 2, "ma_slope": 2, "reversal": 2,
-                         "statements": 2, "breakout": 2, "needs_rescan": False}}
-        try:
-            on, _ = self.view.longterm_page({})
-            off, _ = self.view.longterm_page({"group": ["off"]})
-            self.assertIn('data-group="1"', on)
-            self.assertNotIn('data-group="1"', off)
-        finally:
-            api.longterm = real
-
-
-class TestConfluenceBandsAreOnTheCount(unittest.TestCase):
-    """The label describes the count, because the count is what gates a buy.
-
-    Scored bands put 448 of 545 library rows in "Weak" and could not have
-    described the count anyway: the score ranges for adjacent counts overlap
-    (3 levels spans 35-70, 4 spans 60-75), since which levels agree matters
-    as much as how many.
-    """
 
     def _conf(self, **kw):
         return T.compute_support_confluence(_row(**kw))
@@ -755,21 +715,88 @@ class TestConfluenceBandsAreOnTheCount(unittest.TestCase):
             seen.add(label)
         self.assertEqual(seen, {name for _f, name in T.CONFLUENCE_BANDS})
 
-    def test_the_cell_leads_with_the_count(self):
-        from stockanalysis.webapp import longterm_view as V
-        conf = self._conf()
-        html, sort_value = V._support_confluence_cell(conf)
-        n = conf["agreeing"]
-        # The count appears before the score in the rendered cell.
-        self.assertLess(html.index(f'{n} of '), html.index(f'{conf["score"]}/100'))
-        # ...and sorting follows count first, score as tiebreak.
-        self.assertEqual(sort_value, n * 1000 + conf["score"])
 
-    def test_sorting_orders_by_count_before_score(self):
-        from stockanalysis.webapp import longterm_view as V
-        three_light = {"score": 35, "hits": [{"name": "a"}] * 3,
-                       "agreeing": 3, "possible": 6, "label": "x"}
-        two_heavy = {"score": 45, "hits": [{"name": "a"}] * 2,
-                     "agreeing": 2, "possible": 6, "label": "x"}
-        self.assertGreater(V._support_confluence_cell(three_light)[1],
-                           V._support_confluence_cell(two_heavy)[1])
+
+class TestResistanceLevel(unittest.TestCase):
+    """technicals.compute_resistance_level — the first thing overhead."""
+
+    def test_a_tested_r1_wins(self):
+        rz = T.compute_resistance_level(
+            _row(**{"Current Price": 100.0, "R1": 108.0, "S1": 99.0,
+                    "Touches": 55}))
+        self.assertTrue(rz["actual_resistance"])
+        self.assertEqual(rz["price"], 108.0)
+        self.assertAlmostEqual(rz["distance_pct"], 8.0, places=1)
+
+    def test_it_falls_back_to_the_nearest_average_above_price(self):
+        rz = T.compute_resistance_level(
+            _row(**{"Current Price": 100.0, "R1": None, "8EMA": 104.0,
+                    "21EMA": 110.0, "50MA": 120.0, "200MA": 130.0,
+                    "52W High": 200.0}))
+        self.assertEqual(rz["source"], "moving_average")
+        self.assertEqual(rz["price"], 104.0)
+        self.assertFalse(rz["actual_resistance"])
+
+    def test_an_uptrend_falls_back_to_the_52_week_high(self):
+        """Every average sits BELOW a stock in a clean uptrend.
+
+        Without this rung the column is blank for exactly the names worth
+        owning — NVDA, MSFT and GILD all have nothing overhead but the high.
+        """
+        rz = T.compute_resistance_level(
+            _row(**{"Current Price": 100.0, "R1": None, "8EMA": 98.0,
+                    "21EMA": 95.0, "50MA": 90.0, "200MA": 80.0,
+                    "Prior_Breakout_Level": 85.0, "52W High": 112.0}))
+        self.assertEqual(rz["source"], "52w_high")
+        self.assertEqual(rz["price"], 112.0)
+        self.assertFalse(rz["actual_resistance"])
+
+    def test_nothing_overhead_at_new_highs(self):
+        rz = T.compute_resistance_level(
+            _row(**{"Current Price": 100.0, "R1": None, "8EMA": 98.0,
+                    "21EMA": 95.0, "50MA": 90.0, "200MA": 80.0,
+                    "Prior_Breakout_Level": None, "52W High": 100.0}))
+        self.assertIsNone(rz["price"])
+
+    def test_a_level_below_price_is_not_resistance(self):
+        rz = T.compute_resistance_level(
+            _row(**{"Current Price": 100.0, "R1": 90.0, "8EMA": 105.0,
+                    "21EMA": 106.0, "50MA": 107.0, "200MA": 108.0}))
+        self.assertEqual(rz["source"], "moving_average")
+
+    def test_it_is_attached_to_the_pullback_result(self):
+        self.assertIn("resistance", T.compute_pullback(_row()))
+
+
+class TestTouchAttribution(unittest.TestCase):
+    """Touches/Volume_Confirmation describe whichever level is NEAREST.
+
+    core.key_levels writes them for `nearest = s1 if (price - s1) <= (r1 -
+    price) else r1`. Crediting them to S1 unconditionally makes a support
+    shelf look better tested than it is whenever resistance is closer —
+    which is the real WDC case: 329 touches belong to R1 at $454.48, not to
+    the $420.26 shelf.
+    """
+
+    def test_touches_go_to_whichever_level_is_nearer(self):
+        # R1 nearer: 454.48 - 438.40 = 16.08 vs 438.40 - 420.26 = 18.14
+        wdc = _row(**{"Current Price": 438.40, "S1": 420.26, "R1": 454.48,
+                      "Touches": 329, "Volume_Confirmation": True})
+        self.assertEqual(T._touches_belong_to(wdc), "R1")
+        self.assertIsNone(T.compute_buy_zone_level(wdc)["touches"])
+        self.assertEqual(T.compute_resistance_level(wdc)["touches"], 329)
+
+    def test_support_keeps_the_touches_when_it_is_nearer(self):
+        row = _row(**{"Current Price": 100.0, "S1": 99.0, "R1": 130.0,
+                      "Touches": 42, "Volume_Confirmation": True})
+        self.assertEqual(T._touches_belong_to(row), "S1")
+        bz = T.compute_buy_zone_level(row)
+        self.assertEqual(bz["touches"], 42)
+        self.assertTrue(bz["actual_support"])
+
+    def test_an_unowned_touch_count_never_confirms_the_shelf(self):
+        # The bug this guards: a shelf reading "volume-confirmed" on the
+        # strength of a resistance level's volume.
+        wdc = _row(**{"Current Price": 438.40, "S1": 420.26, "R1": 454.48,
+                      "Touches": 329, "Volume_Confirmation": True})
+        self.assertFalse(T.compute_buy_zone_level(wdc)["actual_support"])

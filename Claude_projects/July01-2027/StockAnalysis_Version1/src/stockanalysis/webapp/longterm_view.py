@@ -371,33 +371,42 @@ _TABLE_JS = r"""
     return tr.querySelector('td[data-col="' + key + '"]');
   }
 
-  function sortBy(key, dir) {
-    // Sorting dissolves the action grouping. A ranking that restarts inside
-    // each group is not a ranking, and leaving the banner rows in place
-    // would strand them against whichever pair happened to precede them.
-    var banners = body.querySelectorAll('tr[data-group]');
-    if (banners.length) {
-      Array.prototype.forEach.call(banners, function (b) { b.remove(); });
-      var note = document.getElementById('lt-group-note');
-      if (note) note.style.display = '';
+  // Sort keys, highest priority first: [{key, dir}, ...]. Multi-column
+  // because the useful questions here are compound — "best businesses, and
+  // among those the ones I can act on" is LQuality then Action, and neither
+  // column answers it alone.
+  var sortKeys = [];
+
+  function compare(a, b, key, dir) {
+    var th = head.querySelector('th[data-col="' + key + '"]');
+    var numeric = th && th.dataset.type === 'num';
+    var ta = cellOf(a.main, key), tb2 = cellOf(b.main, key);
+    var ra = ta ? ta.dataset.sort : '', rb = tb2 ? tb2.dataset.sort : '';
+    var blankA = (ra === undefined || ra === '');
+    var blankB = (rb === undefined || rb === '');
+    var va = numeric ? parseFloat(ra) : String(ra || '').toUpperCase();
+    var vb = numeric ? parseFloat(rb) : String(rb || '').toUpperCase();
+    if (numeric) {
+      if (isNaN(va)) blankA = true;
+      if (isNaN(vb)) blankB = true;
     }
+    // Blanks last in BOTH directions: "no value" is not an extreme value.
+    if (blankA !== blankB) return blankA ? 1 : -1;
+    if (blankA) return 0;
+    if (va < vb) return dir === 'asc' ? -1 : 1;
+    if (va > vb) return dir === 'asc' ? 1 : -1;
+    return 0;
+  }
+
+  function applySort() {
+    if (!sortKeys.length) return;
     var groups = pairs();
-    var type = (head.querySelector('th[data-col="' + key + '"]') || {}).dataset;
-    var numeric = type && type.type === 'num';
-    groups.forEach(function (g, i) {
-      var td = cellOf(g.main, key);
-      var raw = td ? td.dataset.sort : '';
-      g._blank = (raw === undefined || raw === '');
-      g._v = numeric ? parseFloat(raw) : String(raw || '').toUpperCase();
-      if (numeric && isNaN(g._v)) { g._blank = true; }
-      g._i = i;                       // stable tiebreak
-    });
+    groups.forEach(function (g, i) { g._i = i; });   // stable tiebreak
     groups.sort(function (a, b) {
-      // Blanks last in BOTH directions: "no value" is not an extreme value.
-      if (a._blank !== b._blank) return a._blank ? 1 : -1;
-      if (a._blank) return a._i - b._i;
-      if (a._v < b._v) return dir === 'asc' ? -1 : 1;
-      if (a._v > b._v) return dir === 'asc' ? 1 : -1;
+      for (var i = 0; i < sortKeys.length; i++) {
+        var r = compare(a, b, sortKeys[i].key, sortKeys[i].dir);
+        if (r !== 0) return r;
+      }
       return a._i - b._i;
     });
     var frag = document.createDocumentFragment();
@@ -406,17 +415,41 @@ _TABLE_JS = r"""
       g.rest.forEach(function (r) { frag.appendChild(r); });
     });
     body.appendChild(frag);
-    markSort(key, dir);
+    markSort();
   }
 
-  function markSort(key, dir) {
+  function markSort() {
+    var multi = sortKeys.length > 1;
     Array.prototype.forEach.call(head.cells, function (th) {
       var arrow = th.querySelector('.lt-arrow');
       if (!arrow) return;
-      var on = th.dataset.col === key;
-      arrow.textContent = on ? (dir === 'asc' ? ' ▲' : ' ▼') : '';
-      th.style.color = on ? '#0b0b0b' : '#898781';
+      var at = -1;
+      for (var i = 0; i < sortKeys.length; i++) {
+        if (sortKeys[i].key === th.dataset.col) { at = i; break; }
+      }
+      if (at === -1) {
+        arrow.textContent = '';
+        th.style.color = '#898781';
+        th.dataset.dir = '';
+      } else {
+        // The priority number only appears once it means something.
+        arrow.textContent = (sortKeys[at].dir === 'asc' ? ' ▲' : ' ▼')
+          + (multi ? String(at + 1) : '');
+        th.style.color = '#0b0b0b';
+        th.dataset.dir = sortKeys[at].dir;
+      }
     });
+    var note = document.getElementById('lt-sort-note');
+    if (note) {
+      note.style.display = multi ? '' : 'none';
+      if (multi) {
+        note.textContent = 'Sorted by ' + sortKeys.map(function (k, i) {
+          var th = head.querySelector('th[data-col="' + k.key + '"]');
+          var label = th ? th.textContent.replace(/[▲▼0-9]/g, '').trim() : k.key;
+          return (i + 1) + '. ' + label + ' ' + (k.dir === 'asc' ? 'asc' : 'desc');
+        }).join(', ') + ' — shift-click a header to add another, click to reset.';
+      }
+    }
   }
 
   function moveColumn(from, to) {
@@ -475,15 +508,24 @@ _TABLE_JS = r"""
       if (dragFrom !== null) moveColumn(dragFrom, to);
       dragFrom = null;
     });
-    th.addEventListener('click', function () {
+    th.addEventListener('click', function (e) {
       var key = th.dataset.col;
-      // Numbers open on descending (best first); text opens on ascending.
+      // Numbers open on descending (best first); text opens ascending.
       var opening = th.dataset.type === 'num' ? 'desc' : 'asc';
-      var dir = th.dataset.dir === opening
-        ? (opening === 'desc' ? 'asc' : 'desc') : opening;
-      Array.prototype.forEach.call(head.cells, function (o) { o.dataset.dir = ''; });
-      th.dataset.dir = dir;
-      sortBy(key, dir);
+      var at = -1;
+      for (var i = 0; i < sortKeys.length; i++) {
+        if (sortKeys[i].key === key) { at = i; break; }
+      }
+      if (e.shiftKey) {
+        // Add as a further tiebreak, or flip it if already in the list.
+        if (at === -1) sortKeys.push({ key: key, dir: opening });
+        else sortKeys[at].dir = sortKeys[at].dir === 'asc' ? 'desc' : 'asc';
+      } else if (at === 0 && sortKeys.length === 1) {
+        sortKeys = [{ key: key, dir: sortKeys[0].dir === 'asc' ? 'desc' : 'asc' }];
+      } else {
+        sortKeys = [{ key: key, dir: opening }];
+      }
+      applySort();
     });
   });
 
@@ -507,31 +549,6 @@ _TABLE_JS = r"""
 })();
 """
 _TD = 'padding:8px;border-bottom:0.5px solid #f1efea;font-size:12px;vertical-align:top'
-
-
-def _support_confluence_cell(conf):
-    """Levels agreeing, with the weighted score demoted to context.
-
-    The count leads because the count is what the engine actually gates on
-    (MIN_CONFLUENCE_HITS), and because the score cannot carry the label —
-    its ranges overlap between adjacent counts, so 60/100 might be three
-    levels or four. Showing the score first described one thing while the
-    decision used another.
-
-    Sorts on count first, score as the tiebreak, so ordering by this column
-    matches what the label says while still separating a 50 MA + 200 MA
-    agreement from an 8/21 EMA + key-level one.
-    """
-    n, possible = conf.get("agreeing", len(conf["hits"])), conf.get("possible", 6)
-    score = conf["score"]
-    colour = ("#0F6E56" if n >= 4 else "#0b0b0b" if n >= 3
-              else "#8a6d1a" if n >= 2 else "#A32D2D")
-    names = ", ".join(h["name"] for h in conf["hits"]) or "nothing holding here"
-    return (f'<span style="color:{colour};font-weight:700" '
-            f'title="{esc(names)}">{n} of {possible}</span>'
-            f'<div style="font-size:10px;color:#898781;white-space:nowrap">'
-            f'{esc(conf["label"])} · {score}/100</div>',
-            n * 1000 + score)
 
 
 def _buyzone_cell(pullback):
@@ -570,6 +587,35 @@ def _buyzone_cell(pullback):
             f'{esc(sub)}</div>', dist)
 
 
+def _resistance_cell(pullback):
+    """The first price overhead, and whether the market has actually turned
+    down from it.
+
+    Same tested/derived split as the support side, and the 52-week high rung
+    matters: a stock in a clean uptrend has every moving average below it, so
+    without that fallback this column would be blank for precisely the names
+    worth owning. 311 of 545 rows have a tested R1, 100 fall back to a moving
+    average and 134 to the 52-week high.
+    """
+    rz = (pullback or {}).get("resistance") or {}
+    price, dist = rz.get("price"), rz.get("distance_pct")
+    if price is None:
+        return '<span style="color:#898781">—</span>', None
+    touches = rz.get("touches")
+    if rz.get("actual_resistance"):
+        style = "color:#A32D2D;font-weight:700"
+        sub = f"{touches:.0f} touches" if touches else "tested"
+    else:
+        style = "color:#898781;font-style:italic"
+        sub = f'{rz.get("label") or "level"} · derived'
+    dist_txt = (f' <span style="color:#898781">{dist:+.1f}%</span>'
+                if dist is not None else "")
+    return (f'<span style="{style};white-space:nowrap" '
+            f'title="{esc(rz.get("note") or "")}">${price:,.2f}</span>{dist_txt}'
+            f'<div style="font-size:10px;color:#898781;white-space:nowrap">'
+            f'{esc(sub)}</div>', dist)
+
+
 def _support_cell(r, key):
     """One rung of the S1..S4 ladder: how far price sits above or below that
     moving average, and whether the level is holding at all.
@@ -602,8 +648,8 @@ _COLUMNS = (
     ("valuation", "Valuation", "left", "num"),
     ("trend", "Trend", "center", "num"),
     ("pullback", "Pullback", "left", "num"),
-    ("buyzone", "Buy Zone", "right", "num"),
-    ("support", "Support", "left", "num"),   # levels agreeing, score as tiebreak
+    ("buyzone", "S1 · Support", "right", "num"),
+    ("resistance", "R1 · Resistance", "right", "num"),
     ("s1", "8 EMA", "right", "num"),
     ("s2", "21 EMA", "right", "num"),
     ("s3", "50 MA", "right", "num"),
@@ -667,7 +713,7 @@ def _cells(r):
         "price": (f'<strong>${r["price"]:,.2f}</strong>' if r.get("price")
                   else '<span style="color:#898781">—</span>', r.get("price")),
         "buyzone": _buyzone_cell(p),
-        "support": _support_confluence_cell(conf),
+        "resistance": _resistance_cell(p),
         "rs": (rs_mark, rs["score"]),
         "market": (market, r["regime"]),
         "lt": (f'<strong>{r["lt_score"] if r["lt_score"] is not None else "—"}</strong>',
@@ -682,45 +728,6 @@ def _cells(r):
     for slot, key, _name in SUPPORT_SLOTS:
         out[slot.lower()] = _support_cell(r, key)
     return out
-
-
-def _group_header(action, count):
-    """A banner row separating one action from the next.
-
-    Grouping is the default because the page's job is to answer "what should
-    I do", and 545 rows sorted by a score answers "what ranks highest" —
-    a different question. Sorting any column dissolves the groups (see the
-    table JS), since a ranking that jumps between them is not a ranking.
-    """
-    bg, fg = _ACTION_STYLE.get(action, ("#F1EFE8", "#444441"))
-    return (f'<tr data-group="1"><td colspan="{len(_COLUMNS)}" '
-            f'style="padding:12px 8px 5px">'
-            f'<div style="display:flex;align-items:center;gap:8px">'
-            f'<span style="background:{bg};color:{fg};font-size:10px;'
-            f'font-weight:700;padding:3px 9px;border-radius:5px;'
-            f'white-space:nowrap">{ACTION_ICONS.get(action, "")} '
-            f'{esc(action)}</span>'
-            f'<span style="font-size:11px;color:#898781">{count} '
-            f'{"name" if count == 1 else "names"}</span>'
-            f'<span style="flex:1;height:1px;background:#e1e0d9"></span>'
-            f'</div></td></tr>')
-
-
-def _grouped_rows(rows, expand):
-    """Rows bucketed by action, in the engine's own priority order."""
-    buckets = {}
-    for r in rows:
-        buckets.setdefault(r["action"], []).append(r)
-    ordered = [a for a in _ACTION_ORDER if a in buckets]
-    # Anything the engine gained that this view has not been taught about
-    # still renders, at the end, rather than vanishing.
-    ordered += [a for a in buckets if a not in _ACTION_ORDER]
-    out = []
-    for action in ordered:
-        group = buckets[action]
-        out.append(_group_header(action, len(group)))
-        out.extend(_row(r, open_detail=expand) for r in group)
-    return "".join(out)
 
 
 def _row(r, open_detail: bool = False, order=None):
@@ -797,7 +804,6 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     action_filter = (query.get("action") or [""])[0].strip()
     regime_override = (query.get("regime") or [""])[0].strip() or None
     raw_query = (query.get("q") or [""])[0]
-    grouped = (query.get("group") or ["action"])[0].strip().lower() != "off"
     wanted = parse_tickers(raw_query)
     try:
         limit = max(10, min(500, int((query.get("limit") or ["0"])[0] or 0)))
@@ -813,8 +819,7 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
         discards another's — clicking a chip while a search is active used
         to drop the search."""
         state = {"q": raw_query.strip(), "action": action_filter,
-                 "regime": regime_override or "",
-                 "group": "" if grouped else "off"}
+                 "regime": regime_override or ""}
         state.update({k: ("" if v is None else str(v)) for k, v in params.items()})
         kept = {k: v for k, v in state.items() if v}
         return "/longterm" + (f"?{urlencode(kept)}" if kept else "")
@@ -924,10 +929,7 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
         # One result means the reasoning IS the answer, so don't make the
         # user click again to reach it.
         expand = len(shown) == 1
-        if grouped:
-            body_rows = _grouped_rows(shown, expand)
-        else:
-            body_rows = "".join(_row(r, open_detail=expand) for r in shown)
+        body_rows = "".join(_row(r, open_detail=expand) for r in shown)
     else:
         msg = ("Nothing matches this filter."
                if not wanted else
@@ -990,26 +992,24 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;
             margin-bottom:14px">
   {"".join(chips)}
-  <a href="{esc(link(group="" if not grouped else "off"))}"
-     style="margin-left:auto;font-size:11px;color:#185FA5">
-    {"Ungroup" if grouped else "Group by action"}</a>
 </div>
 
-<div id="lt-group-note" style="display:none;font-size:11px;color:#898781;
-     margin:-4px 0 8px">
-  Sorted — action grouping dissolved.
-  <a href="javascript:location.reload()" style="color:#185FA5">restore groups</a>
-</div>
+<div id="lt-sort-note" style="display:none;font-size:11px;color:#898781;
+     margin:-4px 0 8px"></div>
 
 {card("", table, pad="6px 10px 10px")}
 
 <div style="font-size:10px;color:#898781;margin-top:-6px">
-  Click a header to sort, drag one to reorder; both persist in this browser
+  Click a header to sort; <strong>shift-click a second header</strong> to
+  sort by both — e.g. LQuality then Action. Drag a header to reorder;
+  column order persists in this browser
   (<a href="#" id="lt-reset-cols" style="color:#185FA5">reset columns</a>).
-  S1–S4 are a fixed ladder — 8 EMA, 21 EMA, 50 MA, 200 MA — showing how far
-  price sits above or below each, so a column reads down the page. Green
-  means the level is holding underfoot, red that it was lost and is now
-  overhead; bold means price is sitting on it.
+  S1 · Support is the price to work an order at and R1 · Resistance the
+  first thing overhead; both are green/red and bold when the market has
+  actually traded there, and grey italic when the figure is only the nearest
+  moving average or the 52-week high — a derived level, not one anyone has
+  defended. The four MA columns show how far price sits above or below each,
+  green when the level is holding underfoot and red when it was lost.
   <br>
   LQuality is this engine's own 100-point score and is deliberately not the
   same number as the Screener's Quality — they are calibrated for different
