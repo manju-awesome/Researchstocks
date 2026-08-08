@@ -427,9 +427,80 @@ def compute_pullback(row: dict) -> dict:
         "candidates": candidates,
         "by_level": by_level,
         "supports": supports,
+        "buy_zone": compute_buy_zone_level(row),
         "range_52w": compute_52w_range(row),
         "note": note,
     }
+
+
+def compute_buy_zone_level(row: dict) -> dict:
+    """The price to actually plan an entry around, and how much it is worth.
+
+    Two very different things can fill this slot, and conflating them is the
+    trap:
+
+      A TESTED level — the key-level engine's S1, a shelf the market has
+      traded heavily at and defended before. Western Digital's $420.26 has
+      329 touches and volume confirmation. That is a real place to work an
+      order.
+
+      A DERIVED level — a moving average that happens to be the next line
+      under the price. Nobody has defended it; it is arithmetic on the last
+      50 closes. It is still the most useful number available when no tested
+      level exists, but presenting it in the same voice would turn "here is
+      where support probably is" into "here is where support is".
+
+    So `actual_support` is returned on every result and the caller is
+    expected to render the two differently. 425 of 545 library rows have a
+    key level and 348 are volume-confirmed, so the derived case is roughly a
+    third of the page — common enough that mislabelling it would matter.
+    """
+    price = _price(row)
+    out = {"price": None, "distance_pct": None, "source": None,
+           "touches": None, "volume_confirmed": None, "actual_support": False,
+           "label": None, "note": "no level beneath the current price"}
+    if price is None or price <= 0:
+        return out
+
+    def fill(level, source, label, actual, note, touches=None, confirmed=None):
+        out.update({"price": round(level, 2),
+                    "distance_pct": round((level / price - 1) * 100.0, 1),
+                    "source": source, "label": label, "actual_support": actual,
+                    "note": note, "touches": touches,
+                    "volume_confirmed": confirmed})
+        return out
+
+    s1 = f(row.get("S1"))
+    if s1 is not None and 0 < s1 <= price:
+        touches = f(row.get("Touches"))
+        confirmed = b(row.get("Volume_Confirmation"))
+        bits = []
+        if touches:
+            bits.append(f"{touches:.0f} touches")
+        if confirmed:
+            bits.append("volume-confirmed")
+        return fill(s1, "volume_shelf",
+                    " · ".join(bits) or "prior support",
+                    bool(confirmed),
+                    ("tested support — the market has defended this price"
+                     if confirmed else
+                     "prior support, but not volume-confirmed"),
+                    touches, confirmed)
+
+    # Fall back to the nearest moving average below price. Named after the
+    # average it came from so the card can say where it came from rather
+    # than presenting a computed line as a level someone defended.
+    below = []
+    for key, _zone, label in SUPPORT_LEVELS:
+        level = f(row.get(key))
+        if level is not None and 0 < level <= price:
+            below.append((level, label))
+    if below:
+        level, label = max(below)
+        return fill(level, "moving_average", label, False,
+                    f"no tested level — this is the {label}, not support "
+                    f"anyone has defended")
+    return out
 
 
 def compute_supports(row: dict) -> dict:

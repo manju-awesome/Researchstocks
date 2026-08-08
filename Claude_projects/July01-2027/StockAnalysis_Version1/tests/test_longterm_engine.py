@@ -17,6 +17,7 @@ The invariants these defend, in the order the engine applies them:
 
 Run with: python -m unittest tests.test_longterm_engine
 """
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -599,3 +600,113 @@ class TestSortableDraggableTable(unittest.TestCase):
         # here would rank a ticker with no 200 MA as the worst 200 MA support.
         html = self.view._row(E.evaluate(_row(**{"200MA": None})))
         self.assertIn('data-col="s4" data-sort=""', html)
+
+
+class TestBuyZoneLevel(unittest.TestCase):
+    """technicals.compute_buy_zone_level — the price to work an order at."""
+
+    def test_a_volume_confirmed_shelf_is_actual_support(self):
+        bz = T.compute_buy_zone_level(
+            _row(**{"Current Price": 100.0, "S1": 96.0, "Touches": 42,
+                    "Volume_Confirmation": True}))
+        self.assertTrue(bz["actual_support"])
+        self.assertEqual(bz["source"], "volume_shelf")
+        self.assertEqual(bz["price"], 96.0)
+        self.assertAlmostEqual(bz["distance_pct"], -4.0, places=1)
+        self.assertIn("42 touches", bz["label"])
+
+    def test_an_unconfirmed_shelf_is_still_a_level_but_not_confirmed(self):
+        bz = T.compute_buy_zone_level(
+            _row(**{"Current Price": 100.0, "S1": 96.0, "Touches": 4,
+                    "Volume_Confirmation": False}))
+        self.assertEqual(bz["source"], "volume_shelf")
+        self.assertFalse(bz["actual_support"])
+
+    def test_it_falls_back_to_the_nearest_moving_average(self):
+        bz = T.compute_buy_zone_level(
+            _row(**{"Current Price": 100.0, "S1": None, "8EMA": 97.0,
+                    "21EMA": 94.0, "50MA": 90.0, "200MA": 80.0,
+                    "Prior_Breakout_Level": None}))
+        self.assertEqual(bz["source"], "moving_average")
+        self.assertEqual(bz["price"], 97.0)
+        self.assertEqual(bz["label"], "8 EMA")
+
+    def test_a_derived_level_never_claims_to_be_support(self):
+        # The distinction the column exists to preserve: roughly a third of
+        # the library has no tested level, and a moving average nobody has
+        # defended must not be presented in the same voice as one they have.
+        bz = T.compute_buy_zone_level(
+            _row(**{"Current Price": 100.0, "S1": None, "50MA": 90.0}))
+        self.assertFalse(bz["actual_support"])
+        self.assertIn("not", bz["note"].lower())
+
+    def test_a_level_above_the_price_is_not_a_buy_zone(self):
+        # Overhead resistance, not somewhere to leave a bid.
+        bz = T.compute_buy_zone_level(
+            _row(**{"Current Price": 100.0, "S1": 110.0, "8EMA": 105.0,
+                    "21EMA": 106.0, "50MA": 107.0, "200MA": 108.0,
+                    "Prior_Breakout_Level": None}))
+        self.assertIsNone(bz["price"])
+
+    def test_it_is_attached_to_the_pullback_result(self):
+        self.assertIn("buy_zone", T.compute_pullback(_row()))
+
+
+class TestColumnsAndGrouping(unittest.TestCase):
+    def setUp(self):
+        from stockanalysis.webapp import longterm_view
+        self.view = longterm_view
+
+    def test_the_support_ladder_headers_have_no_s_prefix(self):
+        labels = {c[0]: c[1] for c in self.view._COLUMNS}
+        self.assertEqual(labels["s1"], "8 EMA")
+        self.assertEqual(labels["s4"], "200 MA")
+
+    def test_price_and_buy_zone_are_columns(self):
+        keys = [c[0] for c in self.view._COLUMNS]
+        self.assertIn("price", keys)
+        self.assertIn("buyzone", keys)
+
+    def test_every_column_still_renders_a_cell(self):
+        html = self.view._row(E.evaluate(_row()))
+        for key, _l, _a, _t in self.view._COLUMNS:
+            self.assertIn(f'data-col="{key}"', html)
+        self.assertIn(f'colspan="{len(self.view._COLUMNS)}"', html)
+
+    def test_grouped_rows_carry_one_banner_per_action(self):
+        rows = [E.evaluate(_row(Ticker=t)) for t in ("AAA", "BBB", "CCC")]
+        rows[0]["action"] = rows[1]["action"] = "WATCH"
+        rows[2]["action"] = "AVOID"
+        html = self.view._grouped_rows(rows, expand=False)
+        self.assertEqual(html.count('data-group="1"'), 2)
+        # Banner order follows the engine's priority, not dict insertion.
+        banners = re.findall(r'data-group="1".*?white-space:nowrap">\s*\S+\s+'
+                             r'([A-Z][^<]*?)</span>', html, re.S)
+        self.assertEqual(banners, ["WATCH", "AVOID"])
+        self.assertEqual(html.count('data-main="1"'), 3)
+
+    def test_an_unknown_action_still_renders(self):
+        # A verdict the view has not been taught about must not vanish.
+        r = E.evaluate(_row())
+        r["action"] = "SOMETHING NEW"
+        html = self.view._grouped_rows([r], expand=False)
+        self.assertIn("SOMETHING NEW", html)
+        self.assertIn('data-main="1"', html)
+
+    def test_grouping_is_on_by_default_and_can_be_turned_off(self):
+        from stockanalysis.webapp import api
+        real = api.longterm
+        rows = [E.evaluate(_row(Ticker=t)) for t in ("AAA", "BBB")]
+        rows[1]["action"] = "AVOID"
+        api.longterm = lambda override=None: {
+            "rows": rows, "counts": {}, "regime": "FAVORABLE",
+            "regime_note": "t", "risk_free_note": "t",
+            "coverage": {"total": 2, "ma_slope": 2, "reversal": 2,
+                         "statements": 2, "breakout": 2, "needs_rescan": False}}
+        try:
+            on, _ = self.view.longterm_page({})
+            off, _ = self.view.longterm_page({"group": ["off"]})
+            self.assertIn('data-group="1"', on)
+            self.assertNotIn('data-group="1"', off)
+        finally:
+            api.longterm = real

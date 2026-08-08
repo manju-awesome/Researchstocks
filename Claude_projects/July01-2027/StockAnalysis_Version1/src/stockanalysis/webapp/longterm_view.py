@@ -29,6 +29,8 @@ from urllib.parse import urlencode
 
 from stockanalysis.core.longterm.technicals import SUPPORT_SLOTS
 
+from stockanalysis.core.longterm.engine import ACTION_ICONS
+
 from .views import badge, card, empty, esc, tv_url
 
 _ACTION_STYLE = {
@@ -370,6 +372,15 @@ _TABLE_JS = r"""
   }
 
   function sortBy(key, dir) {
+    // Sorting dissolves the action grouping. A ranking that restarts inside
+    // each group is not a ranking, and leaving the banner rows in place
+    // would strand them against whichever pair happened to precede them.
+    var banners = body.querySelectorAll('tr[data-group]');
+    if (banners.length) {
+      Array.prototype.forEach.call(banners, function (b) { b.remove(); });
+      var note = document.getElementById('lt-group-note');
+      if (note) note.style.display = '';
+    }
     var groups = pairs();
     var type = (head.querySelector('th[data-col="' + key + '"]') || {}).dataset;
     var numeric = type && type.type === 'num';
@@ -396,7 +407,6 @@ _TABLE_JS = r"""
     });
     body.appendChild(frag);
     markSort(key, dir);
-    try { localStorage.setItem(SORTKEY, JSON.stringify({ key: key, dir: dir })); } catch (e) {}
   }
 
   function markSort(key, dir) {
@@ -477,25 +487,62 @@ _TABLE_JS = r"""
     });
   });
 
-  try {
-    var s = JSON.parse(localStorage.getItem(SORTKEY) || 'null');
-    if (s && s.key) {
-      var th = head.querySelector('th[data-col="' + s.key + '"]');
-      if (th) { th.dataset.dir = s.dir; sortBy(s.key, s.dir); }
-    }
-  } catch (e) {}
+  // Column ORDER persists; the active sort deliberately does not.
+  //
+  // Restoring a saved sort on load looks helpful and is not: sorting
+  // dissolves the action grouping, so a sort remembered from a previous
+  // visit silently destroys the default view on every subsequent page load,
+  // and the grouping never comes back. Order is a layout preference worth
+  // keeping. A sort is a question you asked once.
+  try { localStorage.removeItem(SORTKEY); } catch (e) {}
 
   var reset = document.getElementById('lt-reset-cols');
   if (reset) {
     reset.addEventListener('click', function (e) {
       e.preventDefault();
-      try { localStorage.removeItem(KEY); localStorage.removeItem(SORTKEY); } catch (err) {}
+      try { localStorage.removeItem(KEY); } catch (err) {}
       location.reload();
     });
   }
 })();
 """
 _TD = 'padding:8px;border-bottom:0.5px solid #f1efea;font-size:12px;vertical-align:top'
+
+
+def _buyzone_cell(pullback):
+    """The price to work an order at — and whether anyone has ever defended it.
+
+    A tested volume shelf and a moving average that merely happens to be the
+    next line down are rendered differently on purpose. Roughly a third of
+    the library has no tested level, and showing a computed average in the
+    same voice would turn "support is probably around here" into "support is
+    here". Derived levels are muted, italic, and say which average they came
+    from.
+    """
+    bz = (pullback or {}).get("buy_zone") or {}
+    price, dist = bz.get("price"), bz.get("distance_pct")
+    if price is None:
+        return '<span style="color:#898781">—</span>', None
+    touches = bz.get("touches")
+    if bz.get("actual_support"):
+        # Green and bold: the market has defended this price before.
+        style = "color:#0F6E56;font-weight:700"
+        sub = f"{touches:.0f} touches" if touches else "tested"
+    elif bz.get("source") == "volume_shelf":
+        style = "color:#8a6d1a;font-weight:600"
+        sub = (f"{touches:.0f} touches · unconfirmed" if touches
+               else "unconfirmed")
+    else:
+        # Grey and italic: arithmetic on recent closes, not a level anyone
+        # has defended. The label names which average it came from.
+        style = "color:#898781;font-style:italic"
+        sub = f'{bz.get("label") or "MA"} · derived'
+    dist_txt = f' <span style="color:#898781">{dist:+.1f}%</span>' \
+        if dist is not None else ""
+    return (f'<span style="{style};white-space:nowrap" '
+            f'title="{esc(bz.get("note") or "")}">${price:,.2f}</span>{dist_txt}'
+            f'<div style="font-size:10px;color:#898781;white-space:nowrap">'
+            f'{esc(sub)}</div>', dist)
 
 
 def _support_cell(r, key):
@@ -525,15 +572,17 @@ def _support_cell(r, key):
 # user can drag columns and the choice persists in localStorage.
 _COLUMNS = (
     ("ticker", "Ticker", "left", "text"),
+    ("price", "Price", "right", "num"),
     ("lquality", "LQuality", "left", "num"),
     ("valuation", "Valuation", "left", "num"),
     ("trend", "Trend", "center", "num"),
-    ("pullback", "Pullback", "left", "text"),
+    ("pullback", "Pullback", "left", "num"),
+    ("buyzone", "Buy Zone", "right", "num"),
     ("support", "Support", "left", "num"),
-    ("s1", "S1 · 8 EMA", "right", "num"),
-    ("s2", "S2 · 21 EMA", "right", "num"),
-    ("s3", "S3 · 50 MA", "right", "num"),
-    ("s4", "S4 · 200 MA", "right", "num"),
+    ("s1", "8 EMA", "right", "num"),
+    ("s2", "21 EMA", "right", "num"),
+    ("s3", "50 MA", "right", "num"),
+    ("s4", "200 MA", "right", "num"),
     ("rs", "RS", "center", "num"),
     ("market", "Market", "center", "text"),
     ("lt", "LT Score", "left", "num"),
@@ -590,6 +639,9 @@ def _cells(r):
             f'{p.get("stage_icon", "")} '
             f'{esc(_STAGE_SHORT.get(p.get("stage"), _ZONE_SHORT.get(p["zone"], p["zone"])))}',
             _STAGE_RANK.get(p.get("stage"))),
+        "price": (f'<strong>${r["price"]:,.2f}</strong>' if r.get("price")
+                  else '<span style="color:#898781">—</span>', r.get("price")),
+        "buyzone": _buyzone_cell(p),
         "support": (f'{conf["score"]}'
                     f'<div style="font-size:10px;color:#898781">'
                     f'{len(conf["hits"])} agree</div>', conf["score"]),
@@ -607,6 +659,45 @@ def _cells(r):
     for slot, key, _name in SUPPORT_SLOTS:
         out[slot.lower()] = _support_cell(r, key)
     return out
+
+
+def _group_header(action, count):
+    """A banner row separating one action from the next.
+
+    Grouping is the default because the page's job is to answer "what should
+    I do", and 545 rows sorted by a score answers "what ranks highest" —
+    a different question. Sorting any column dissolves the groups (see the
+    table JS), since a ranking that jumps between them is not a ranking.
+    """
+    bg, fg = _ACTION_STYLE.get(action, ("#F1EFE8", "#444441"))
+    return (f'<tr data-group="1"><td colspan="{len(_COLUMNS)}" '
+            f'style="padding:12px 8px 5px">'
+            f'<div style="display:flex;align-items:center;gap:8px">'
+            f'<span style="background:{bg};color:{fg};font-size:10px;'
+            f'font-weight:700;padding:3px 9px;border-radius:5px;'
+            f'white-space:nowrap">{ACTION_ICONS.get(action, "")} '
+            f'{esc(action)}</span>'
+            f'<span style="font-size:11px;color:#898781">{count} '
+            f'{"name" if count == 1 else "names"}</span>'
+            f'<span style="flex:1;height:1px;background:#e1e0d9"></span>'
+            f'</div></td></tr>')
+
+
+def _grouped_rows(rows, expand):
+    """Rows bucketed by action, in the engine's own priority order."""
+    buckets = {}
+    for r in rows:
+        buckets.setdefault(r["action"], []).append(r)
+    ordered = [a for a in _ACTION_ORDER if a in buckets]
+    # Anything the engine gained that this view has not been taught about
+    # still renders, at the end, rather than vanishing.
+    ordered += [a for a in buckets if a not in _ACTION_ORDER]
+    out = []
+    for action in ordered:
+        group = buckets[action]
+        out.append(_group_header(action, len(group)))
+        out.extend(_row(r, open_detail=expand) for r in group)
+    return "".join(out)
 
 
 def _row(r, open_detail: bool = False, order=None):
@@ -683,6 +774,7 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     action_filter = (query.get("action") or [""])[0].strip()
     regime_override = (query.get("regime") or [""])[0].strip() or None
     raw_query = (query.get("q") or [""])[0]
+    grouped = (query.get("group") or ["action"])[0].strip().lower() != "off"
     wanted = parse_tickers(raw_query)
     try:
         limit = max(10, min(500, int((query.get("limit") or ["0"])[0] or 0)))
@@ -698,7 +790,8 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
         discards another's — clicking a chip while a search is active used
         to drop the search."""
         state = {"q": raw_query.strip(), "action": action_filter,
-                 "regime": regime_override or ""}
+                 "regime": regime_override or "",
+                 "group": "" if grouped else "off"}
         state.update({k: ("" if v is None else str(v)) for k, v in params.items()})
         kept = {k: v for k, v in state.items() if v}
         return "/longterm" + (f"?{urlencode(kept)}" if kept else "")
@@ -808,7 +901,10 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
         # One result means the reasoning IS the answer, so don't make the
         # user click again to reach it.
         expand = len(shown) == 1
-        body_rows = "".join(_row(r, open_detail=expand) for r in shown)
+        if grouped:
+            body_rows = _grouped_rows(shown, expand)
+        else:
+            body_rows = "".join(_row(r, open_detail=expand) for r in shown)
     else:
         msg = ("Nothing matches this filter."
                if not wanted else
@@ -868,8 +964,18 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
 {search}
 {notfound}
 
-<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;
+            margin-bottom:14px">
   {"".join(chips)}
+  <a href="{esc(link(group="" if not grouped else "off"))}"
+     style="margin-left:auto;font-size:11px;color:#185FA5">
+    {"Ungroup" if grouped else "Group by action"}</a>
+</div>
+
+<div id="lt-group-note" style="display:none;font-size:11px;color:#898781;
+     margin:-4px 0 8px">
+  Sorted — action grouping dissolved.
+  <a href="javascript:location.reload()" style="color:#185FA5">restore groups</a>
 </div>
 
 {card("", table, pad="6px 10px 10px")}
