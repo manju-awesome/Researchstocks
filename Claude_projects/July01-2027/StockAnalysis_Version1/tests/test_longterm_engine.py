@@ -983,6 +983,34 @@ class TestPresets(unittest.TestCase):
         self.assertEqual(len(conds), 3)
         self.assertNotIn("WEAK", [r["ticker"] for r in kept])
 
+    def test_no_preset_stores_a_hardcoded_count(self):
+        """Counts are computed, never written down.
+
+        A recorded count is a claim about a moving target. Splitting
+        STAGE4_BREAKDOWN into "confirmed" and "unconfirmed" silently took
+        Fallen Quality from 10 matches to 0 while its label still said 10,
+        so clicking it returned an empty table.
+        """
+        for preset in self.LS.PRESETS:
+            self.assertNotIn("note", preset, f"{preset['key']} stores a count")
+
+    def test_preset_counts_match_what_applying_the_rules_returns(self):
+        """The number on the pill is the number you get when you click it."""
+        results = [E.evaluate(_row(Ticker=f"T{i}")) for i in range(3)]
+        results[0]["quality"]["score"] = 40      # fails the quality screens
+        counts = self.LS.preset_counts(results)
+        for preset in self.LS.PRESETS:
+            kept, _, _ = self.LS.apply_rules(results, preset["rules"])
+            self.assertEqual(counts[preset["key"]], len(kept), preset["key"])
+
+    def test_presets_do_not_pin_themselves_to_a_stage_name(self):
+        """Fallen Quality asks "is price below the 200 MA", not "is the
+        stage called STAGE4_BREAKDOWN" — so redefining a stage cannot empty
+        it again."""
+        rules = self.LS.preset_rules("fallen_quality")
+        self.assertNotIn("stage", " ".join(rules))
+        self.assertIn("lt_pct_vs_200ma:lt:0", rules)
+
     def test_statement_dependent_presets_are_flagged(self):
         """The four screens that need the annual statements declare it.
 

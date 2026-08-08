@@ -400,14 +400,12 @@ PRESET_GROUPS = ("What to own", "When to buy", "What would stop me")
 PRESETS: tuple[dict, ...] = (
     # ── What to own ─────────────────────────────────────────────────────────
     {"key": "quality_at_discount", "icon": "💎", "name": "Quality at a Discount",
-     "group": "What to own", "note": "20 names",
-     "desc": "The core screen: an elite business, not overpriced, trend not "
+     "group": "What to own", "desc": "The core screen: an elite business, not overpriced, trend not "
              "broken. Everything else here is a refinement of this one.",
      "rules": ["lquality:gte:85", "valuation_band:ne:OVERVALUED",
                "trend_state:ne:BROKEN"]},
     {"key": "wide_moat_cheap", "icon": "🏰", "name": "Wide Moat, Undervalued",
-     "group": "What to own", "note": "3 names",
-     "desc": "Top-decile quality trading below what the model says it is "
+     "group": "What to own", "desc": "Top-decile quality trading below what the model says it is "
              "worth. Rare by design — if this list is long, check the "
              "valuation method before believing it.",
      "rules": ["lquality:gte:90", "valuation_band:eq:UNDERVALUED"]},
@@ -427,43 +425,36 @@ PRESETS: tuple[dict, ...] = (
      "rules": ["delivered_growth:gte:15", "growth_gap:lte:10",
                "lquality:gte:75"]},
     {"key": "sector_leaders", "icon": "🥇", "name": "Sector Leaders",
-     "group": "What to own", "note": "11 names",
-     "desc": "Top-quintile relative strength inside its OWN sector — a name "
+     "group": "What to own", "desc": "Top-quintile relative strength inside its OWN sector — a name "
              "leading its group while the group lags still leads.",
      "rules": ["lt_sector_rs:gte:80", "lquality:gte:85"]},
 
     # ── When to buy ─────────────────────────────────────────────────────────
     {"key": "ready_to_deploy", "icon": "🟢", "name": "Ready to Deploy",
-     "group": "When to buy", "note": "18 names",
-     "desc": "Entry readiness 65+ on a quality business — the level, the "
+     "group": "When to buy", "desc": "Entry readiness 65+ on a quality business — the level, the "
              "volume and the market all lining up now rather than eventually.",
      "rules": ["readiness:gte:65", "lquality:gte:85"]},
     {"key": "compounder_pullback", "icon": "🎯", "name": "Compounder Pullback",
-     "group": "When to buy", "note": "16 names",
-     "desc": "Stage 1: quality resting on the 8/21 EMA with a tested shelf "
+     "group": "When to buy", "desc": "Stage 1: quality resting on the 8/21 EMA with a tested shelf "
              "underneath. The shallow, high-momentum entry.",
      "rules": ["lquality:gte:85", "stage:eq:STAGE1_EMA", "s1_tested:eq:true"]},
     {"key": "fifty_ma_entry", "icon": "🎣", "name": "50 MA Pullback",
-     "group": "When to buy", "note": "3 names",
-     "desc": "Stage 2 — the framework's preferred core entry for a quality "
+     "group": "When to buy", "desc": "Stage 2 — the framework's preferred core entry for a quality "
              "name, and the only stage where every readiness point is "
              "reachable.",
      "rules": ["lquality:gte:85", "stage:eq:STAGE2_50MA"]},
     {"key": "deep_pullback_quality", "icon": "🪂", "name": "Deep Pullback in Quality",
-     "group": "When to buy", "note": "4 names",
-     "desc": "Elite businesses well below the 50 MA but still above the 200 "
+     "group": "When to buy", "desc": "Elite businesses well below the 50 MA but still above the 200 "
              "MA, structure intact. Not a buy — a list to work support on.",
      "rules": ["lq_tier:eq:Elite", "stage:eq:STAGE3_DEEP",
                "trend_state:ne:BROKEN"]},
     {"key": "asymmetric_entry", "icon": "⚖️", "name": "Asymmetric Entry",
-     "group": "When to buy", "note": "19 names",
-     "desc": "Twice as much headroom to the first resistance as give-back to "
+     "group": "When to buy", "desc": "Twice as much headroom to the first resistance as give-back to "
              "a TESTED support. Position sizing writes itself.",
      "rules": ["headroom_ratio:gte:2", "s1_tested:eq:true",
                "lquality:gte:85"]},
     {"key": "accumulation", "icon": "🧲", "name": "Quiet Accumulation",
-     "group": "When to buy", "note": "36 names",
-     "desc": "Pullback volume drying up while relative strength holds — the "
+     "group": "When to buy", "desc": "Pullback volume drying up while relative strength holds — the "
              "shape of institutions buying rather than retail selling.",
      "rules": ["volume_score:gte:60", "lt_rs_rank:gte:60",
                "lquality:gte:80"]},
@@ -476,26 +467,26 @@ PRESETS: tuple[dict, ...] = (
              "portfolio is a quality company.",
      "rules": ["lquality:gte:85", "implied_growth:gte:35"]},
     {"key": "fallen_quality", "icon": "🩺", "name": "Fallen Quality — Thesis Review",
-     "group": "What would stop me", "note": "10 names",
-     "desc": "Businesses that still score well while price sits below the "
+     "group": "What would stop me", "desc": "Businesses that still score well while price sits below the "
              "200 MA. Either the market knows something the fundamentals "
              "have not shown yet, or it is wrong. Worth deciding which.",
-     "rules": ["lquality:gte:85", "stage:eq:STAGE4_BREAKDOWN"]},
+     # Expressed as "price below the 200 MA" rather than as a stage. The
+     # stage split into UNCONFIRMED/BREAKDOWN when slope measurement arrived
+     # and this preset silently emptied; the underlying question — a good
+     # business trading under its long-term average — did not change.
+     "rules": ["lquality:gte:85", "lt_pct_vs_200ma:lt:0"]},
     {"key": "dry_powder", "icon": "⏳", "name": "Dry Powder Watchlist",
-     "group": "What would stop me", "note": "7 names",
-     "desc": "Worth owning, priced acceptably, and extended above the 8 EMA. "
+     "group": "What would stop me", "desc": "Worth owning, priced acceptably, and extended above the 8 EMA. "
              "Nothing to do but wait for the pullback — which is the point.",
      "rules": ["lquality:gte:85", "valuation_band:ne:OVERVALUED",
                "extended:eq:true"]},
     {"key": "insider_aligned", "icon": "🤝", "name": "Insiders Buying",
-     "group": "What would stop me", "note": "31 names",
-     "desc": "Quality where the people who know it best are net buyers. A "
+     "group": "What would stop me", "desc": "Quality where the people who know it best are net buyers. A "
              "tiebreaker, never a thesis — it sits outside LQuality for "
              "exactly that reason.",
      "rules": ["lquality:gte:85", "insider:eq:Net buying"]},
     {"key": "earnings_clear", "icon": "📅", "name": "Clear of Earnings",
-     "group": "What would stop me", "note": "57 names",
-     "desc": "Quality names with no report inside two weeks — the gap risk "
+     "group": "What would stop me", "desc": "Quality names with no report inside two weeks — the gap risk "
              "that no amount of setup quality offsets.",
      "rules": ["lquality:gte:85", "lt_days_to_earnings:gte:14"]},
 )
@@ -506,3 +497,28 @@ PRESET_BY_KEY = {p["key"]: p for p in PRESETS}
 def preset_rules(key: str) -> list[str]:
     preset = PRESET_BY_KEY.get(str(key or ""))
     return list(preset["rules"]) if preset else []
+
+
+def preset_counts(results) -> dict:
+    """How many rows each preset currently matches, computed live.
+
+    The counts used to be recorded in each preset as a measured note. That
+    was wrong in a way that took one engine change to expose: when
+    STAGE4_BREAKDOWN was split into "confirmed breakdown" and "unconfirmed",
+    Fallen Quality went from 10 matches to 0 while still advertising 10, and
+    Quality at a Discount went from 20 to 31. A number written down beside a
+    rule is a claim about a moving target.
+
+    Flattens the universe ONCE and reuses it across every preset — 16 groups
+    over one row set rather than 16 passes of flatten().
+    """
+    rows = [flatten(r) for r in results]
+    out = {}
+    for preset in PRESETS:
+        conds = [c for c in (parse_rule(t) for t in preset["rules"]) if c]
+        if not conds:
+            out[preset["key"]] = None
+            continue
+        group = S.Group(op="AND", items=conds)
+        out[preset["key"]] = sum(1 for row in rows if S.eval_group(row, group))
+    return out

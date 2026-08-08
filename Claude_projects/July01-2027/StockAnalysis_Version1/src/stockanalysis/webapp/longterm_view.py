@@ -1026,7 +1026,7 @@ DEFAULT_LIMIT = 60
 # RULE BUILDER — screener rules over the engine's own columns
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _preset_bar(link, active_rules, needs_rescan):
+def _preset_bar(link, active_rules, needs_rescan, counts):
     """The screens a manager actually runs, grouped by the question asked.
 
     Ordered "what to own" -> "when to buy" -> "what would stop me" because
@@ -1052,7 +1052,13 @@ def _preset_bar(link, active_rules, needs_rescan):
             note = ("needs a scan for statement data — "
                     "the reverse DCF has no inputs yet" if stale
                     else preset["desc"])
-            count = preset.get("note", "")
+            # Counted live against the universe now on screen, never stored
+            # on the preset. A recorded count is a claim about a moving
+            # target: splitting one pullback stage in two silently took
+            # Fallen Quality from 10 matches to 0 while it still advertised
+            # 10, and clicking it returned an empty table.
+            n = counts.get(preset["key"])
+            count = "" if n is None else f"{n}"
             pills.append(
                 f'<a href="{esc(link(rule=[] if on else list(preset["rules"]), action=""))}" '
                 f'title="{esc(note)}" style="background:{bg};color:{fg};'
@@ -1061,7 +1067,7 @@ def _preset_bar(link, active_rules, needs_rescan):
                 f'display:inline-flex;gap:5px;align-items:center">'
                 f'{preset["icon"]} {esc(preset["name"])}'
                 + (f'<span style="font-weight:400;opacity:.65">'
-                   f'{esc(count if not stale else "needs scan")}</span>'
+                   f'{esc("needs scan" if stale else count)}</span>'
                    if (count or stale) else "")
                 + '</a>')
         sections.append(
@@ -1275,6 +1281,9 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     # Rules run after the ticker search and before the action chips, so the
     # chip counts describe what the rules actually left.
     from stockanalysis.core.longterm import screen as LS
+    # Counted over the search-narrowed universe, which is what clicking a
+    # preset will actually screen — presets replace the rules but keep `q`.
+    preset_counts = LS.preset_counts(base)
     before_rules = len(base)
     base, rule_conds, rule_stats = LS.apply_rules(base, rule_texts, rule_op)
 
@@ -1424,7 +1433,7 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
 {warn}
 {search}
 {notfound}
-{_preset_bar(link, rule_texts, cov["needs_rescan"])}
+{_preset_bar(link, rule_texts, cov["needs_rescan"], preset_counts)}
 {_rule_builder(rule_conds, rule_op, link, rule_stats, len(base),
                before_rules, raw_query)}
 
