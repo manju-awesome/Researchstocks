@@ -3,3 +3,17 @@
 
 # Separate git repo — has its own history, don't embed it here
 Trading_with_claude/
+
+# Separate git repo — has its own history, don't embed it here
+Claude_projects/SPY_DayTrader/
+
+# Unrelated hobby project; the bulk of it is a 64MB venv of compiled
+# SDL/harfbuzz dylibs, which is a build artifact rather than source
+Claude_projects/pygame/
+
+# Pages saved out of the workstation UI by the browser — regenerated on
+# demand, and they carry a point-in-time copy of the research library
+Claude_projects/*.html
+
+# Editor workspace file, local to one machine
+Documents.code-workspace
