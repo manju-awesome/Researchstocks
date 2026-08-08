@@ -96,9 +96,13 @@ class TestHierarchyIsStructural(unittest.TestCase):
     def test_broken_trend_watches_rather_than_avoids(self):
         # The business still passed gate 1, so this is a watchlist name whose
         # chart has to heal — not a company to discard.
+        # BOTH averages must point down for a breakdown — leaving the
+        # fixture's default rising 50 MA in place describes a recovery.
         r = E.evaluate(_row(Above_200MA=False,
-                            **{"MA200_Slope%": -2.0, "200MA": 120.0,
-                               "50MA": 110.0, "Price_vs_50MA%": -9.0}))
+                            **{"MA200_Slope%": -2.0, "MA50_Slope%": -2.0,
+                               "200MA": 120.0, "50MA": 110.0,
+                               "Price_vs_50MA%": -9.0}))
+        self.assertEqual(r["trend"]["state"], "BROKEN")
         self.assertEqual(r["action"], "WATCH")
         self.assertEqual(r["gate"], "trend")
 
@@ -1072,7 +1076,10 @@ class TestBelow200MASplitsByMeasuredSlope(unittest.TestCase):
                                                "Above_200MA": False}))
         self.assertEqual(trend["state"], "IMPAIRED")
         self.assertIs(trend["pass"], False)   # still not a trend to buy into
-        self.assertIn("unconfirmed", trend["summary"])
+        # The summary names what failed AND that the slope is unread, rather
+        # than asserting the slopes are missing on every impaired row.
+        self.assertIn("unmeasured", trend["summary"])
+        self.assertIn("200 MA", trend["summary"])
 
     def test_trend_is_broken_once_the_slope_confirms_it(self):
         trend = T.compute_trend(self._below(**{"MA200_Slope%": -2.0,
@@ -1225,3 +1232,74 @@ class TestRecoveringTrend(unittest.TestCase):
             self.assertIn(state, T.TREND_ICONS)
             self.assertIn(state, T.TREND_SUMMARY)
             self.assertIn(state, V._TREND_RANK)
+
+
+class TestTrendSlopeSemantics(unittest.TestCase):
+    """What the two slopes are allowed to decide.
+
+    Nvidia drove both fixes here: freshly scanned, with a rising 200 MA and
+    a cooling 50 MA, it was reported as a damaged trend AND told that its
+    moving-average slopes were unmeasured — while carrying both of them.
+    """
+
+    def _nvda(self, **kw):
+        base = {"Current Price": 223.96, "200MA": 193.80, "50MA": 206.05,
+                "21EMA": 207.73, "8EMA": 212.82, "Above_200MA": True,
+                "Price_vs_50MA%": 8.7,
+                "MA200_Slope%": 1.22, "MA50_Slope%": -1.45}
+        base.update(kw)
+        return _row(**base)
+
+    def test_a_cooling_50ma_cannot_break_a_rising_200ma(self):
+        # An intermediate average rolling over inside a rising long-term one
+        # is the ordinary shape of a buyable pullback.
+        trend = T.compute_trend(self._nvda())
+        self.assertEqual(trend["state"], "CONFIRMED")
+
+    def test_but_it_still_costs_the_score(self):
+        cooling = T.compute_trend(self._nvda())
+        rising = T.compute_trend(self._nvda(**{"MA50_Slope%": 2.0}))
+        self.assertLess(cooling["score"], rising["score"])
+        self.assertIn("50 MA rising", cooling["failed"])
+
+    def test_the_50ma_slope_is_not_structural(self):
+        structural = {name for name, _w, s in T._TREND_CHECKS if s}
+        self.assertIn("200 MA rising", structural)
+        self.assertNotIn("50 MA rising", structural)
+
+    def test_the_summary_never_claims_unmeasured_slopes_it_has(self):
+        trend = T.compute_trend(self._nvda(**{"Above_200MA": False,
+                                              "Current Price": 150.0,
+                                              "MA200_Slope%": 1.0,
+                                              "MA50_Slope%": -1.0}))
+        self.assertEqual(trend["state"], "IMPAIRED")
+        self.assertNotIn("unmeasured", trend["summary"])
+        self.assertNotIn("without", trend["summary"])
+
+    def test_a_breakdown_needs_both_averages_pointing_down(self):
+        """Microsoft: 200 MA -2.01%, 50 MA +0.91%.
+
+        A falling long-term average with the intermediate one already
+        turning up is how every recovery begins; reading only the slower
+        average calls it a breakdown.
+        """
+        recovering = T.compute_trend(self._nvda(**{"MA200_Slope%": -2.01,
+                                                   "MA50_Slope%": 0.91}))
+        self.assertEqual(recovering["state"], "RECOVERING")
+        self.assertIn("50 MA is rising", recovering["summary"])
+
+        broken = T.compute_trend(self._nvda(**{"MA200_Slope%": -1.75,
+                                               "MA50_Slope%": -0.08}))
+        self.assertEqual(broken["state"], "BROKEN")
+
+    def test_recovering_covers_both_shapes_of_repair(self):
+        # (a) price back above the 200 MA, averages still crossed
+        crossed = T.compute_trend(
+            _row(**{"Current Price": 172.01, "200MA": 152.28, "50MA": 132.60,
+                    "21EMA": 138.21, "8EMA": 149.26, "Above_200MA": True,
+                    "MA200_Slope%": None, "MA50_Slope%": None}))
+        self.assertEqual(crossed["state"], "RECOVERING")
+        # (b) the 50 MA turning up under a still-falling 200 MA
+        turning = T.compute_trend(self._nvda(**{"MA200_Slope%": -3.84,
+                                                "MA50_Slope%": 9.81}))
+        self.assertEqual(turning["state"], "RECOVERING")

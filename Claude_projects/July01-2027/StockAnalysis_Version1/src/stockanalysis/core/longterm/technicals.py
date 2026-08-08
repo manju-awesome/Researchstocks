@@ -232,24 +232,50 @@ TREND_ICONS = {"CONFIRMED": "🟢", "PARTIAL": "🟡", "RECOVERING": "🔵",
 TREND_SUMMARY = {
     "CONFIRMED": "long-term uptrend confirmed",
     "PARTIAL": "structure intact, some checks unmeasured",
-    "RECOVERING": "price has reclaimed the 200 MA; the 50 MA has not caught "
-                  "up yet",
-    "IMPAIRED": "damaged — direction unconfirmed without the MA slopes",
+    "RECOVERING": "structure repairing — the intermediate trend is ahead of "
+                  "the long-term one",
+    # Overridden per row by _impaired_summary() — the fixed wording claimed
+    # the slopes were unmeasured even when they were.
+    "IMPAIRED": "damaged — long-term structure has failed a check",
     "BROKEN": "200 MA falling — long-term trend broken",
 }
 
 # (name, weight, structural). STRUCTURAL checks answer "was this a healthy
 # long-term uptrend"; the rest answer "where is price inside it right now".
 # Only structural checks can break the trend — see the docstring.
+# STRUCTURAL means "can break the long-term trend". The 50 MA's direction
+# deliberately cannot.
+#
+# Nvidia is why: 200 MA rising +1.22%, 50 MA above it, price above all four
+# averages and 8.7% clear of the 50 — with the 50 MA cooling -1.45%. Scored
+# as structural that single reading marked the whole long-term trend
+# damaged. A 50-day average rolling over inside a rising 200-day is an
+# intermediate pause, which is the ordinary shape of the pullback this
+# engine exists to buy. It still costs 15 points; it no longer overrides
+# the 200 MA.
 _TREND_CHECKS = (
     ("Price above 200 MA", 20, True),
     ("50 MA above 200 MA", 20, True),
     ("200 MA rising", 20, True),
-    ("50 MA rising", 15, True),
+    ("50 MA rising", 15, False),
     ("Price above 50 MA", 15, False),
     ("Price above 21 EMA", 5, False),
     ("Price above 8 EMA", 5, False),
 )
+
+
+def _impaired_summary(failed, slope_unknown: bool) -> str:
+    """Why the trend is impaired, in terms of what was actually checked.
+
+    A fixed string here told every impaired row that its moving-average
+    slopes were unmeasured. Nvidia's were measured — the summary simply
+    was not reading them, so a freshly scanned ticker was told to re-scan.
+    """
+    named = ", ".join(failed) if failed else "a structural check"
+    if slope_unknown:
+        return (f"{named} failed, and the 200 MA slope is unmeasured — "
+                f"direction cannot be established")
+    return f"{named} failed with the 200 MA slope measured"
 
 
 def compute_trend(row: dict) -> dict:
@@ -356,15 +382,27 @@ def compute_trend(row: dict) -> dict:
     #
     # Price ABOVE the 200 MA with the averages still crossed is recovery.
     # Price BELOW it is impairment.
-    recovering = (above200 is True
-                  and structural_failed == ["50 MA above 200 MA"])
+    # Two different shapes of repair, both meaning "the structure is mending
+    # rather than failing":
+    #
+    #   price back above the 200 MA with the averages still crossed —
+    #   a golden cross pending (Palantir before its slopes were scanned)
+    #
+    #   the 50 MA turning UP while the 200 MA still falls — the intermediate
+    #   trend leading the long-term one, which is how every recovery starts
+    #   (Microsoft at -2.01% / +0.91%, Robinhood at -3.84% / +9.81%)
+    repairing = (above200 is True
+                 and structural_failed == ["50 MA above 200 MA"])
+    turning_up = (slope200 is not None and slope200 < 0
+                  and slope50 is not None and slope50 > 0)
+
     if structural_failed:
-        # Only a measurably falling 200 MA earns "broken". Everything else
-        # that fails a structural check is damaged with its direction
-        # unestablished, which is a different instruction to the reader.
-        if slope200_known and slope200 < 0:
+        # A breakdown is BOTH averages pointing down. A falling 200 MA with
+        # the 50 MA already turning up is a recovery in progress, and
+        # calling it broken reads the slower average as the whole story.
+        if slope200_known and slope200 < 0 and not turning_up:
             state = "BROKEN"
-        elif recovering:
+        elif repairing or turning_up:
             state = "RECOVERING"
         else:
             state = "IMPAIRED"
@@ -372,6 +410,15 @@ def compute_trend(row: dict) -> dict:
         state = "PARTIAL"
     else:
         state = "CONFIRMED"
+
+    summary = TREND_SUMMARY[state]
+    if state == "IMPAIRED":
+        summary = _impaired_summary(structural_failed, slope200 is None)
+    elif state == "RECOVERING":
+        summary = ("the 50 MA is rising while the 200 MA still falls"
+                   if turning_up else
+                   "price has reclaimed the 200 MA; the 50 MA has not caught "
+                   "up yet")
 
     return {
         "state": state,
@@ -388,7 +435,7 @@ def compute_trend(row: dict) -> dict:
         "unknown": unknown,
         "structural_failed": structural_failed,
         "required_failed": structural_failed,     # legacy alias
-        "summary": TREND_SUMMARY[state],
+        "summary": summary,
         # Coarse tri-state for callers that only need pass/unknown/fail.
         # IMPAIRED maps to False: it is not a trend to buy into, whatever
         # its ultimate direction turns out to be.
