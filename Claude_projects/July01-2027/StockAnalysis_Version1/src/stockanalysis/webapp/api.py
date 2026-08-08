@@ -1455,6 +1455,23 @@ def _json_safe(obj):
     return str(obj)
 
 
+def longterm_lists() -> dict:
+    """{name: [tickers]} for the /longterm list picker.
+
+    The same watchlists the Scanner runs against, so "daytrade" and
+    "watchlist" mean the same set of names on both pages rather than the
+    long-term engine keeping a second copy that drifts.
+    """
+    from stockanalysis.reporting.research import load_watchlists
+    try:
+        lists = load_watchlists()
+    except Exception as e:
+        print(f"[LongTerm] watchlists unavailable ({e})")
+        return {}
+    return {name: [str(t).upper() for t in (tickers or [])]
+            for name, tickers in lists.items() if tickers}
+
+
 def longterm(regime_override: str | None = None) -> dict:
     """The whole Long-Term Buy Engine run, ready for the page.
 

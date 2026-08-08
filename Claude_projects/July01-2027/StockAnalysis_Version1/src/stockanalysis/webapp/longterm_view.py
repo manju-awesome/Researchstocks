@@ -1027,6 +1027,26 @@ DEFAULT_LIMIT = 60
 # RULE BUILDER — screener rules over the engine's own columns
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _list_options(active: str) -> str:
+    """The saved watchlists, most-used first.
+
+    Ordered by hand rather than alphabetically because "daytrade" and
+    "watchlist" are the two anyone reaches for, and burying them between
+    "AI: Optics" and "Dividend" makes the picker a scrolling exercise.
+    """
+    from . import api
+    lists = api.longterm_lists()
+    preferred = [n for n in ("watchlist", "daytrade", "Longterm", "AI",
+                             "Dividend") if n in lists]
+    rest = sorted(n for n in lists if n not in preferred)
+    out = ['<option value="">All tickers</option>']
+    for name in preferred + rest:
+        sel = " selected" if name == active else ""
+        out.append(f'<option value="{esc(name)}"{sel}>{esc(name)} '
+                   f'({len(lists[name])})</option>')
+    return "".join(out)
+
+
 def _preset_bar(link, active_rules, needs_rescan, counts):
     """The screens a manager actually runs, grouped by the question asked.
 
@@ -1233,15 +1253,20 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     action_filter = (query.get("action") or [""])[0].strip()
     regime_override = (query.get("regime") or [""])[0].strip() or None
     raw_query = (query.get("q") or [""])[0]
+    list_name = (query.get("list") or [""])[0].strip()
     rule_texts = [r for r in (query.get("rule") or []) if r.strip()]
     rule_op = ((query.get("rule_op") or ["AND"])[0].strip().upper()
                or "AND")
     wanted = parse_tickers(raw_query)
+    # Default FIRST, clamp second. Clamping an absent value ran
+    # max(10, min(500, 0)) -> 10, so `or DEFAULT_LIMIT` could never fire and
+    # the page quietly showed ten rows instead of sixty.
+    raw_limit = (query.get("limit") or [""])[0].strip()
     try:
-        limit = max(10, min(500, int((query.get("limit") or ["0"])[0] or 0)))
+        limit = int(raw_limit) if raw_limit else DEFAULT_LIMIT
     except ValueError:
         limit = DEFAULT_LIMIT
-    limit = limit or DEFAULT_LIMIT
+    limit = max(10, min(500, limit))
 
     data = api.longterm(regime_override)
     rows, cov = data["rows"], data["coverage"]
@@ -1250,7 +1275,8 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
         """A URL carrying the page's whole state, so no control silently
         discards another's — clicking a chip while a search is active used
         to drop the search, and now must not drop the rules either."""
-        state = {"q": raw_query.strip(), "action": action_filter,
+        state = {"q": raw_query.strip(), "list": list_name,
+                 "action": action_filter,
                  "regime": regime_override or "",
                  "rule": list(rule_texts),
                  "rule_op": "" if rule_op == "AND" else rule_op}
@@ -1267,6 +1293,19 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     # Counting globally would offer "Avoid 347" next to three searched
     # tickers and return an empty table when clicked.
     by_ticker = {r["ticker"]: r for r in rows}
+
+    # A saved list narrows the universe before anything else looks at it.
+    # Tickers on the list that no scan has covered are NAMED rather than
+    # quietly dropped — the same rule the ticker search follows, and the
+    # reason a 25-name list showing 19 rows is legible instead of alarming.
+    lists = api.longterm_lists()
+    list_missing = []
+    if list_name and list_name in lists:
+        members = lists[list_name]
+        rows = [by_ticker[t] for t in members if t in by_ticker]
+        list_missing = [t for t in members if t not in by_ticker]
+        by_ticker = {r["ticker"]: r for r in rows}
+
     missing = []
     if wanted:
         found = []
@@ -1326,12 +1365,26 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
                 font-size:13px;border:0.5px solid #e1e0d9;border-radius:8px">
   {f'<input type="hidden" name="regime" value="{esc(regime_override)}">'
    if regime_override else ''}
+  <select name="list" style="padding:9px 10px;font-size:12px;
+          border:0.5px solid #e1e0d9;border-radius:8px;max-width:220px">
+    {_list_options(list_name)}
+  </select>
   <button type="submit" class="btn" style="padding:9px 16px">Search</button>
   {f'<a href="{esc(link(q="", action="", limit=""))}" '
    f'style="font-size:12px;color:#185FA5">Clear</a>' if wanted else ''}
 </form>"""
 
     notfound = ""
+    if list_missing:
+        shown = ", ".join(list_missing[:12])
+        notfound += (
+            f'<div style="background:#F1EFE8;border-radius:8px;padding:9px 12px;'
+            f'margin-bottom:12px;font-size:12px;color:#444441">'
+            f'<strong>{esc(list_name)}</strong> — {len(list_missing)} of its '
+            f'tickers have no research page yet: {esc(shown)}'
+            + ("…" if len(list_missing) > 12 else "")
+            + f'. Scan them from the '
+              f'<a href="/scanner" style="color:#185FA5">Scanner</a> page.</div>')
     if missing:
         notfound = (
             f'<div style="background:#F1EFE8;border-radius:8px;padding:9px 12px;'
@@ -1367,9 +1420,10 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     elif action_filter:
         shown = [r for r in base if r["action"] == action_filter]
     total_matching = len(shown)
-    # An explicit search is never truncated — asking for eight tickers and
-    # being shown the first six silently would be worse than a long page.
-    shown = shown if wanted else shown[:limit]
+    # An explicit search or a chosen list is never truncated — asking for
+    # eight tickers, or for "daytrade", and being shown the first six
+    # silently would be worse than a long page.
+    shown = shown if (wanted or list_name) else shown[:limit]
 
     if shown:
         # One result means the reasoning IS the answer, so don't make the

@@ -1303,3 +1303,106 @@ class TestTrendSlopeSemantics(unittest.TestCase):
         turning = T.compute_trend(self._nvda(**{"MA200_Slope%": -3.84,
                                                 "MA50_Slope%": 9.81}))
         self.assertEqual(turning["state"], "RECOVERING")
+
+
+class TestListFilter(unittest.TestCase):
+    """Watchlist / daytrade selection on the /longterm page."""
+
+    def setUp(self):
+        from stockanalysis.webapp import api, longterm_view
+        self.view = longterm_view
+        self.api = api
+        self._real_lt = api.longterm
+        self._real_lists = api.longterm_lists
+        rows = [E.evaluate(_row(Ticker=t))
+                for t in ("NVDA", "META", "AMD", "KO")]
+        api.longterm = lambda override=None: {
+            "rows": rows, "counts": {}, "regime": "FAVORABLE",
+            "regime_note": "t", "risk_free_note": "t",
+            "coverage": {"total": 4, "ma_slope": 4, "reversal": 4,
+                         "statements": 4, "breakout": 4,
+                         "needs_rescan": False}}
+        api.longterm_lists = lambda: {
+            "daytrade": ["NVDA", "META", "AMD", "ZZZZ"],
+            "Longterm": ["KO"]}
+
+    def tearDown(self):
+        self.api.longterm = self._real_lt
+        self.api.longterm_lists = self._real_lists
+
+    def test_a_list_narrows_the_universe(self):
+        body, _ = self.view.longterm_page({"list": ["daytrade"]})
+        self.assertEqual(body.count('data-main="1"'), 3)
+        self.assertNotIn(">KO<", body)
+
+    def test_list_members_with_no_research_page_are_named(self):
+        # Same rule as the ticker search: a 4-name list showing 3 rows must
+        # say why, or it reads as data loss.
+        body, _ = self.view.longterm_page({"list": ["daytrade"]})
+        self.assertIn("no research page yet", body)
+        self.assertIn("ZZZZ", body)
+
+    def test_a_list_and_a_ticker_search_intersect(self):
+        body, _ = self.view.longterm_page({"list": ["daytrade"],
+                                           "q": ["NVDA, KO"]})
+        # KO is not on the list, so it cannot survive the intersection.
+        self.assertEqual(body.count('data-main="1"'), 1)
+        self.assertIn(">NVDA<", body)
+
+    def test_an_unknown_list_leaves_the_universe_alone(self):
+        body, _ = self.view.longterm_page({"list": ["no-such-list"]})
+        self.assertEqual(body.count('data-main="1"'), 4)
+
+    def test_a_chosen_list_is_never_truncated(self):
+        # Asking for "daytrade" and being shown the first few silently is
+        # worse than a long page.
+        body, _ = self.view.longterm_page({"list": ["daytrade"],
+                                           "limit": ["1"]})
+        self.assertEqual(body.count('data-main="1"'), 3)
+
+    def test_the_list_survives_a_chip_or_preset_click(self):
+        body, _ = self.view.longterm_page({"list": ["daytrade"]})
+        self.assertIn("list=daytrade", body)
+
+    def test_the_picker_offers_every_non_empty_list(self):
+        body, _ = self.view.longterm_page({})
+        for name in ("daytrade", "Longterm"):
+            self.assertIn(f'<option value="{name}"', body)
+        self.assertIn('<option value="">All tickers</option>', body)
+
+
+class TestRowLimit(unittest.TestCase):
+    def setUp(self):
+        from stockanalysis.webapp import api, longterm_view
+        self.view = longterm_view
+        self.api = api
+        self._real = api.longterm
+        rows = [E.evaluate(_row(Ticker=f"T{i:03d}")) for i in range(120)]
+        api.longterm = lambda override=None: {
+            "rows": rows, "counts": {}, "regime": "FAVORABLE",
+            "regime_note": "t", "risk_free_note": "t",
+            "coverage": {"total": 120, "ma_slope": 120, "reversal": 120,
+                         "statements": 120, "breakout": 120,
+                         "needs_rescan": False}}
+
+    def tearDown(self):
+        self.api.longterm = self._real
+
+    def test_the_default_limit_is_actually_the_default(self):
+        """Clamping before defaulting made this ten for weeks.
+
+        max(10, min(500, 0)) is 10, so `limit or DEFAULT_LIMIT` could never
+        fire and the page showed ten rows while claiming a default of sixty.
+        """
+        body, _ = self.view.longterm_page({})
+        self.assertEqual(body.count('data-main="1"'),
+                         self.view.DEFAULT_LIMIT)
+
+    def test_an_explicit_limit_is_honoured(self):
+        body, _ = self.view.longterm_page({"limit": ["25"]})
+        self.assertEqual(body.count('data-main="1"'), 25)
+
+    def test_a_junk_limit_falls_back_rather_than_erroring(self):
+        body, _ = self.view.longterm_page({"limit": ["banana"]})
+        self.assertEqual(body.count('data-main="1"'),
+                         self.view.DEFAULT_LIMIT)
