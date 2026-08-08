@@ -77,18 +77,19 @@ ZONE_LABELS = {
 # long-term trend". That is a specific, nameable state, and one of the more
 # interesting ones a quality-on-pullback strategy can find.
 STAGES = ("AT_HIGHS", "STAGE1_EMA", "STAGE2_50MA", "STAGE3_DEEP",
-          "STAGE4_BREAKDOWN", "EXTENDED")
+          "STAGE4_UNCONFIRMED", "STAGE4_BREAKDOWN", "EXTENDED")
 STAGE_LABELS = {
     "AT_HIGHS": "At highs — no pullback",
     "STAGE1_EMA": "Stage 1 — 8/21 EMA pullback",
     "STAGE2_50MA": "Stage 2 — 50 MA pullback",
     "STAGE3_DEEP": "Stage 3 — deep pullback, 200 MA approach",
-    "STAGE4_BREAKDOWN": "Stage 4 — trend breakdown",
+    "STAGE4_UNCONFIRMED": "Below the 200 MA — long-term trend unconfirmed",
+    "STAGE4_BREAKDOWN": "Stage 4 — confirmed trend breakdown",
     "EXTENDED": "Extended above the 8 EMA",
 }
 STAGE_ICONS = {"AT_HIGHS": "⚪", "STAGE1_EMA": "🟢", "STAGE2_50MA": "🟢",
-               "STAGE3_DEEP": "🟡", "STAGE4_BREAKDOWN": "🔴",
-               "EXTENDED": "🟠"}
+               "STAGE3_DEEP": "🟡", "STAGE4_UNCONFIRMED": "🟠",
+               "STAGE4_BREAKDOWN": "🔴", "EXTENDED": "🟠"}
 
 
 def classify_stage(row: dict, zone: str, extended: bool) -> str:
@@ -104,7 +105,22 @@ def classify_stage(row: dict, zone: str, extended: bool) -> str:
     ma50, ma200 = f(row.get("50MA")), f(row.get("200MA"))
 
     if price is not None and ma200 is not None and price < ma200:
-        return "STAGE4_BREAKDOWN"
+        # Below the 200 MA splits three ways, and collapsing them into one
+        # "breakdown" asserts something that was never measured. A breakdown
+        # is price below a FALLING long-term average; price below a RISING
+        # one is a deep pullback, and the two call for opposite actions.
+        #
+        # Meta is the case that exposed it: below its 200 MA with both
+        # slopes unscanned, called a confirmed trend breakdown on the
+        # strength of a single inequality.
+        slope200, slope50 = f(row.get("MA200_Slope%")), f(row.get("MA50_Slope%"))
+        if slope200 is None:
+            return "STAGE4_UNCONFIRMED"
+        if slope200 < 0 and (slope50 is None or slope50 < 0):
+            return "STAGE4_BREAKDOWN"
+        # Long-term average still rising underneath a price that has dipped
+        # below it — a deep correction, not a broken trend.
+        return "STAGE3_DEEP"
     if zone == "EMA":
         return "STAGE1_EMA"
     if zone == "50MA":
@@ -196,8 +212,29 @@ def _supports(price, level, tol_pct) -> tuple[bool, float | None]:
 # TREND — §3. The precondition for everything else.
 # ─────────────────────────────────────────────────────────────────────────────
 
-TREND_STATES = ("CONFIRMED", "PARTIAL", "BROKEN")
-TREND_ICONS = {"CONFIRMED": "🟢", "PARTIAL": "🟡", "BROKEN": "🔴"}
+# Four states, because "damaged" and "broken" are different claims and only
+# one of them can be made without the moving-average slopes.
+#
+#   CONFIRMED  every structural check known and holding
+#   PARTIAL    structure holds; something was not measured
+#   IMPAIRED   a structural check has FAILED, but the 200 MA slope is
+#              unknown — the trend is damaged, its direction unconfirmed
+#   BROKEN     the 200 MA is measurably falling
+#
+# Meta forced the split. Below its 200 MA with a death cross but both slopes
+# unscanned, it read BROKEN — a verdict on the long-term trend drawn entirely
+# from where price sits today. Price below a RISING 200 MA is a deep
+# correction; below a FALLING one it is a breakdown, and the difference is
+# the slope nobody had measured.
+TREND_STATES = ("CONFIRMED", "PARTIAL", "IMPAIRED", "BROKEN")
+TREND_ICONS = {"CONFIRMED": "🟢", "PARTIAL": "🟡", "IMPAIRED": "🟠",
+               "BROKEN": "🔴"}
+TREND_SUMMARY = {
+    "CONFIRMED": "long-term uptrend confirmed",
+    "PARTIAL": "structure intact, some checks unmeasured",
+    "IMPAIRED": "damaged — direction unconfirmed without the MA slopes",
+    "BROKEN": "200 MA falling — long-term trend broken",
+}
 
 # (name, weight, structural). STRUCTURAL checks answer "was this a healthy
 # long-term uptrend"; the rest answer "where is price inside it right now".
@@ -304,8 +341,12 @@ def compute_trend(row: dict) -> dict:
     structural_unknown = [c["name"] for c in checks
                           if c["structural"] and c["ok"] is None]
 
+    slope200_known = slope200 is not None
     if structural_failed:
-        state = "BROKEN"
+        # Only a measurably falling 200 MA earns "broken". Everything else
+        # that fails a structural check is damaged with its direction
+        # unestablished, which is a different instruction to the reader.
+        state = "BROKEN" if (slope200_known and slope200 < 0) else "IMPAIRED"
     elif structural_unknown:
         state = "PARTIAL"
     else:
@@ -326,7 +367,12 @@ def compute_trend(row: dict) -> dict:
         "unknown": unknown,
         "structural_failed": structural_failed,
         "required_failed": structural_failed,     # legacy alias
-        "pass": {"CONFIRMED": True, "PARTIAL": None, "BROKEN": False}[state],
+        "summary": TREND_SUMMARY[state],
+        # Coarse tri-state for callers that only need pass/unknown/fail.
+        # IMPAIRED maps to False: it is not a trend to buy into, whatever
+        # its ultimate direction turns out to be.
+        "pass": {"CONFIRMED": True, "PARTIAL": None,
+                 "IMPAIRED": False, "BROKEN": False}[state],
     }
 
 
@@ -415,6 +461,14 @@ def compute_pullback(row: dict) -> dict:
                    if vs200 is not None else "")
                 + (f". Nearest support ${near['price']:,.2f} "
                    f"({near['distance_pct']:+.1f}% away)" if near else ""))
+    elif stage == "STAGE4_UNCONFIRMED":
+        ma200 = f(row.get("200MA"))
+        vs200 = ((price / ma200 - 1) * 100.0
+                 if price and ma200 else f(row.get("Price_vs_200MA%")))
+        note = ("Below the 200 MA"
+                + (f" ({vs200:+.1f}%)" if vs200 is not None else "")
+                + " — whether the long-term trend is broken cannot be said "
+                  "until the moving-average slopes are measured")
     elif stage == "STAGE4_BREAKDOWN":
         # Derived from the same price and level the stage decision used, not
         # read from Price_vs_200MA%. Where the scan column disagrees with the
@@ -446,6 +500,7 @@ def compute_pullback(row: dict) -> dict:
         "supports": supports,
         "buy_zone": compute_buy_zone_level(row),
         "resistance": compute_resistance_level(row),
+        "ma_cluster": compute_ma_cluster(row),
         "range_52w": compute_52w_range(row),
         "note": note,
     }
@@ -470,6 +525,65 @@ def _touches_belong_to(row: dict) -> str | None:
     if s1 is not None:
         return "S1"
     return "R1" if r1 is not None else None
+
+
+# How close a level has to sit to count as part of a cluster. Fixed rather
+# than ATR-scaled, unlike _tolerance(): a cluster is a statement about the
+# averages compressing around each other, and letting a volatile name call a
+# 12% spread "tight" would make the metric meaningless exactly where
+# compression matters most.
+CLUSTER_PCT = 2.0
+CLUSTER_BANDS = ((3, "🟢 Strong cluster"), (2, "🟡 Moderate cluster"),
+                 (1, "🔴 Single level"), (0, "⚪ No level nearby"))
+
+
+def compute_ma_cluster(row: dict) -> dict:
+    """How many levels are compressed around the current price.
+
+    Deliberately NOT the same question as support confluence, and
+    deliberately not direction-aware. Confluence asks "how much is holding
+    price UP", so it only counts levels price sits above. A cluster asks
+    "how tightly are the averages wound around here", which is true whether
+    price is a hair over them or a hair under.
+
+    Meta is why the distinction earns its place: at $592.10 its 8 EMA, 21
+    EMA, 50 MA, S1 and R1 all sit within 1.3%, which is a genuine
+    decision point — and its support confluence is 25/100, because price is
+    below most of them. Both readings are correct. Reporting only the second
+    describes a tight coil as an absence.
+
+    A cluster is not bullish on its own. It says a move is likely to be
+    resolved here, not which way.
+    """
+    price = _price(row)
+    out = {"count": 0, "label": CLUSTER_BANDS[-1][1], "levels": [],
+           "span_pct": None, "within_pct": CLUSTER_PCT}
+    if price is None or price <= 0:
+        return out
+
+    checked = [(label, f(row.get(key)))
+               for key, _zone, label in SUPPORT_LEVELS]
+    checked += [("S1 support", f(row.get("S1"))),
+                ("R1 resistance", f(row.get("R1")))]
+
+    near = []
+    for label, level in checked:
+        if level is None or level <= 0:
+            continue
+        dist = (level / price - 1) * 100.0
+        if abs(dist) <= CLUSTER_PCT:
+            near.append({"name": label, "price": round(level, 2),
+                         "distance_pct": round(dist, 2)})
+
+    near.sort(key=lambda x: x["distance_pct"])
+    count = len(near)
+    label = next(name for floor, name in CLUSTER_BANDS if count >= floor)
+    span = None
+    if count >= 2:
+        span = round(near[-1]["distance_pct"] - near[0]["distance_pct"], 2)
+    out.update({"count": count, "label": label, "levels": near,
+                "span_pct": span})
+    return out
 
 
 def compute_resistance_level(row: dict) -> dict:

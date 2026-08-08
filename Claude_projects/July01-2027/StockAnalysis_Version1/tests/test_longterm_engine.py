@@ -150,15 +150,13 @@ class TestSupportRequiresPriceAboveTheLevel(unittest.TestCase):
         self.assertEqual(conf["score"], 0)
         self.assertEqual(conf["hits"], [])
 
-    def test_a_stock_falling_through_every_average_is_a_breakdown(self):
+    def test_a_stock_falling_through_every_average_scores_no_support(self):
         # The failure mode the module exists to prevent: proximity to four
         # averages at once during a collapse reading as strong confluence.
-        pull = T.compute_pullback(
-            _row(**{"Current Price": 79.0, "8EMA": 99.0, "21EMA": 98.5,
-                    "50MA": 92.0, "200MA": 80.0, "Pct_vs_8EMA": -20.2}))
-        self.assertEqual(pull["zone"], "NONE")
-        self.assertEqual(pull["stage"], "STAGE4_BREAKDOWN")
-        self.assertIn("breakdown", pull["note"])
+        row = _row(**{"Current Price": 79.0, "8EMA": 99.0, "21EMA": 98.5,
+                      "50MA": 92.0, "200MA": 80.0, "Pct_vs_8EMA": -20.2})
+        self.assertEqual(T.compute_pullback(row)["zone"], "NONE")
+        self.assertEqual(T.compute_support_confluence(row)["score"], 0)
 
     def test_the_breakdown_note_does_not_contradict_itself(self):
         """The distance is derived from the price and level just compared.
@@ -169,7 +167,8 @@ class TestSupportRequiresPriceAboveTheLevel(unittest.TestCase):
         """
         pull = T.compute_pullback(
             _row(**{"Current Price": 79.0, "200MA": 80.0,
-                    "Price_vs_200MA%": 25.0}))
+                    "Price_vs_200MA%": 25.0, "MA200_Slope%": -1.0,
+                    "MA50_Slope%": -1.0}))
         self.assertIn("-1.2%", pull["note"])
         self.assertNotIn("+25.0%", pull["note"])
 
@@ -556,10 +555,11 @@ class TestSortableDraggableTable(unittest.TestCase):
         self.view = longterm_view
         self.html = longterm_view._row(E.evaluate(_row()))
 
-    def test_columns_include_the_support_ladder(self):
+    def test_columns_cover_both_verdicts_and_both_levels(self):
         keys = [c[0] for c in self.view._COLUMNS]
-        for slot in ("s1", "s2", "s3", "s4"):
-            self.assertIn(slot, keys)
+        for key in ("investment", "entry_score", "buyzone", "resistance",
+                    "support"):
+            self.assertIn(key, keys)
 
     def test_every_cell_carries_a_column_key_and_sort_value(self):
         # The JS finds cells by data-col rather than by index, so a reordered
@@ -590,16 +590,21 @@ class TestSortableDraggableTable(unittest.TestCase):
                            self.view._ACTION_RANK["AVOID"])
         self.assertGreater(self.view._BAND_RANK["UNDERVALUED"],
                            self.view._BAND_RANK["OVERVALUED"])
-        self.assertGreater(self.view._TREND_RANK[True],
-                           self.view._TREND_RANK[False])
-        self.assertGreater(self.view._TREND_RANK[None],
-                           self.view._TREND_RANK[False])
+        self.assertGreater(self.view._TREND_RANK["CONFIRMED"],
+                           self.view._TREND_RANK["BROKEN"])
+        self.assertGreater(self.view._TREND_RANK["PARTIAL"],
+                           self.view._TREND_RANK["IMPAIRED"])
+        self.assertGreater(self.view._TREND_RANK["IMPAIRED"],
+                           self.view._TREND_RANK["BROKEN"])
 
     def test_missing_values_emit_an_empty_sort_key(self):
         # The JS pins empty data-sort to the bottom in both directions; a "0"
         # here would rank a ticker with no 200 MA as the worst 200 MA support.
-        html = self.view._row(E.evaluate(_row(**{"200MA": None})))
-        self.assertIn('data-col="s4" data-sort=""', html)
+        html = self.view._row(E.evaluate(_row(**{"S1": None, "R1": None,
+                                                 "8EMA": None, "21EMA": None,
+                                                 "50MA": None, "200MA": None,
+                                                 "Prior_Breakout_Level": None})))
+        self.assertIn('data-col="buyzone" data-sort=""', html)
 
 
 class TestBuyZoneLevel(unittest.TestCase):
@@ -657,10 +662,15 @@ class TestColumns(unittest.TestCase):
         from stockanalysis.webapp import longterm_view
         self.view = longterm_view
 
-    def test_the_support_ladder_headers_have_no_s_prefix(self):
-        labels = {c[0]: c[1] for c in self.view._COLUMNS}
-        self.assertEqual(labels["s1"], "8 EMA")
-        self.assertEqual(labels["s4"], "200 MA")
+    def test_the_ma_distance_columns_moved_to_the_reasoning_panel(self):
+        # Reference prices, not judgments — four columns of noise before a
+        # name is worth looking at.
+        keys = [c[0] for c in self.view._COLUMNS]
+        for gone in ("s1", "s2", "s3", "s4"):
+            self.assertNotIn(gone, keys)
+        html = self.view._levels_panel(E.evaluate(_row()))
+        for label in ("8 EMA", "21 EMA", "50 MA", "200 MA"):
+            self.assertIn(label, html)
 
     def test_price_support_and_resistance_are_columns(self):
         keys = [c[0] for c in self.view._COLUMNS]
@@ -670,10 +680,13 @@ class TestColumns(unittest.TestCase):
         self.assertEqual(labels["buyzone"], "S1 \u00b7 Support")
         self.assertEqual(labels["resistance"], "R1 \u00b7 Resistance")
 
-    def test_the_support_confluence_column_is_gone(self):
-        # The score still gates buys and still appears in the reasoning
-        # panel; it is no longer a column of its own.
-        self.assertNotIn("support", [c[0] for c in self.view._COLUMNS])
+    def test_the_company_and_timing_verdicts_are_separate_columns(self):
+        # The whole point: "excellent company" and "poor entry" are
+        # different findings and one blended score cannot hold both.
+        keys = [c[0] for c in self.view._COLUMNS]
+        self.assertIn("investment", keys)
+        self.assertIn("entry_score", keys)
+        self.assertNotIn("lt", keys)
 
     def test_every_column_still_renders_a_cell(self):
         html = self.view._row(E.evaluate(_row()))
@@ -991,3 +1004,137 @@ class TestPresets(unittest.TestCase):
                 self.assertTrue(preset.get("needs_statements"),
                                 f"{preset['key']} depends on statement data "
                                 f"but is not flagged")
+
+
+class TestBelow200MASplitsByMeasuredSlope(unittest.TestCase):
+    """A breakdown is price below a FALLING 200 MA — not below any 200 MA.
+
+    Meta is the case that exposed it: below its 200 MA with a death cross
+    but both slopes unscanned, reported as a confirmed trend breakdown on
+    the strength of one inequality. Price under a RISING long-term average
+    is a deep correction, and the two call for opposite actions.
+    """
+
+    def _below(self, **kw):
+        base = {"Current Price": 90.0, "200MA": 100.0, "50MA": 95.0,
+                "8EMA": 99.0, "21EMA": 98.0, "Pct_vs_8EMA": -9.1,
+                "S1": None, "R1": None, "Prior_Breakout_Level": None}
+        base.update(kw)
+        return _row(**base)
+
+    def test_unmeasured_slopes_are_unconfirmed_not_broken(self):
+        pull = T.compute_pullback(self._below(**{"MA200_Slope%": None,
+                                                 "MA50_Slope%": None}))
+        self.assertEqual(pull["stage"], "STAGE4_UNCONFIRMED")
+        self.assertIn("cannot be said", pull["note"])
+
+    def test_a_falling_200ma_is_a_confirmed_breakdown(self):
+        pull = T.compute_pullback(self._below(**{"MA200_Slope%": -2.0,
+                                                 "MA50_Slope%": -3.0}))
+        self.assertEqual(pull["stage"], "STAGE4_BREAKDOWN")
+
+    def test_a_rising_200ma_is_a_deep_pullback(self):
+        pull = T.compute_pullback(self._below(**{"MA200_Slope%": 1.5,
+                                                 "MA50_Slope%": 1.0}))
+        self.assertEqual(pull["stage"], "STAGE3_DEEP")
+
+    def test_trend_is_impaired_not_broken_without_the_slope(self):
+        trend = T.compute_trend(self._below(**{"MA200_Slope%": None,
+                                               "MA50_Slope%": None,
+                                               "Above_200MA": False}))
+        self.assertEqual(trend["state"], "IMPAIRED")
+        self.assertIs(trend["pass"], False)   # still not a trend to buy into
+        self.assertIn("unconfirmed", trend["summary"])
+
+    def test_trend_is_broken_once_the_slope_confirms_it(self):
+        trend = T.compute_trend(self._below(**{"MA200_Slope%": -2.0,
+                                               "MA50_Slope%": -2.0,
+                                               "Above_200MA": False}))
+        self.assertEqual(trend["state"], "BROKEN")
+
+
+class TestMACluster(unittest.TestCase):
+    """Compression around the price — a different question from support."""
+
+    def test_it_counts_levels_on_both_sides(self):
+        # Support confluence only counts levels price sits ABOVE; a cluster
+        # is about how tightly the averages are wound, either side.
+        cluster = T.compute_ma_cluster(
+            _row(**{"Current Price": 100.0, "8EMA": 99.4, "21EMA": 100.9,
+                    "50MA": 101.3, "200MA": 140.0, "S1": 99.6, "R1": 100.2,
+                    "Prior_Breakout_Level": None}))
+        self.assertEqual(cluster["count"], 5)
+        self.assertIn("Strong", cluster["label"])
+        self.assertLess(cluster["span_pct"], 2.5)
+
+    def test_a_far_flung_chart_has_no_cluster(self):
+        cluster = T.compute_ma_cluster(
+            _row(**{"Current Price": 100.0, "8EMA": 80.0, "21EMA": 70.0,
+                    "50MA": 60.0, "200MA": 50.0, "S1": None, "R1": None,
+                    "Prior_Breakout_Level": None}))
+        self.assertEqual(cluster["count"], 0)
+
+    def test_a_cluster_can_coexist_with_weak_support(self):
+        """Meta: five levels inside 1.9%, only two of them beneath price.
+
+        Both readings are correct, and reporting only the support score
+        describes a tight coil as an absence.
+        """
+        row = _row(**{"Current Price": 592.10, "8EMA": 588.38,
+                      "21EMA": 597.75, "50MA": 599.62, "200MA": 630.44,
+                      "S1": 589.98, "R1": 593.55, "ATR_Pct": 3.88,
+                      "Prior_Breakout_Level": None})
+        cluster = T.compute_ma_cluster(row)
+        conf = T.compute_support_confluence(row)
+        self.assertGreaterEqual(cluster["count"], 4)
+        self.assertLess(conf["score"], 50)
+
+
+class TestTwoVerdicts(unittest.TestCase):
+    """Company verdict and timing verdict, reported separately."""
+
+    def test_an_elite_business_at_a_bad_price_is_watch_not_avoid(self):
+        r = E.evaluate(_row(FreeCashFlow=2.0e8,
+                            **{"FCF_CAGR%": 3.0, "Revenue_CAGR%": 3.0,
+                               "Revenue": 3.0}))
+        self.assertEqual(r["investment"]["status"], "WATCH")
+        self.assertIn("not at this price", r["investment"]["why"])
+        self.assertGreaterEqual(r["quality"]["score"], 85)
+
+    def test_quality_and_price_both_fine_is_own(self):
+        r = E.evaluate(_row())
+        self.assertEqual(r["investment"]["status"], "OWN")
+
+    def test_a_weak_business_is_avoid_whatever_the_chart(self):
+        r = E.evaluate(_row(**{"Revenue": -5.0, "EPS_Growth%": -20.0,
+                               "ReturnOnEquity%": 2.0, "OperatingMargin%": 1.0,
+                               "GrossMargin%": 8.0, "FCF_Margin%": -5.0}))
+        self.assertEqual(r["investment"]["status"], "AVOID")
+
+    def test_the_two_verdicts_can_disagree(self):
+        # The pairing the page exists to show: worth owning, not worth
+        # buying today.
+        r = E.evaluate(_row(FreeCashFlow=2.0e8,
+                            **{"FCF_CAGR%": 3.0, "Revenue_CAGR%": 3.0,
+                               "Revenue": 3.0}))
+        self.assertEqual(r["investment"]["status"], "WATCH")
+        self.assertEqual(r["action"], "WAIT")
+
+    def test_five_component_scores_are_reported_separately(self):
+        r = E.evaluate(_row())
+        keys = [c["key"] for c in r["components"]]
+        self.assertEqual(keys, ["quality", "valuation", "trend", "pullback",
+                                "support"])
+
+    def test_thesis_broken_needs_both_halves(self):
+        weak = {"Revenue": -5.0, "EPS_Growth%": -20.0, "ReturnOnEquity%": 2.0,
+                "OperatingMargin%": 1.0, "GrossMargin%": 8.0,
+                "FCF_Margin%": -5.0}
+        # Weak business, trend not measurably broken -> plain AVOID.
+        self.assertEqual(E.evaluate(_row(**weak))["action"], "AVOID")
+        # Weak business AND a falling 200 MA -> the numbers and tape agree.
+        broken = dict(weak)
+        broken.update({"Current Price": 90.0, "200MA": 100.0, "50MA": 95.0,
+                       "MA200_Slope%": -2.0, "MA50_Slope%": -2.0,
+                       "Above_200MA": False})
+        self.assertEqual(E.evaluate(_row(**broken))["action"], "THESIS BROKEN")

@@ -27,8 +27,6 @@ from __future__ import annotations
 import string
 from urllib.parse import urlencode
 
-from stockanalysis.core.longterm.technicals import SUPPORT_SLOTS
-
 from stockanalysis.core.longterm.engine import ACTION_ICONS
 
 from .views import badge, card, empty, esc, tv_url
@@ -46,6 +44,7 @@ _ACTION_STYLE = {
     "WAIT": ("#FAEEDA", "#633806"),
     "RESEARCH": ("#F1EFE8", "#444441"),
     "AVOID": ("#FCEBEB", "#791F1F"),
+    "THESIS BROKEN": ("#FCEBEB", "#791F1F"),
 }
 
 _TIER_STYLE = {"Elite": "good", "High Quality": "good",
@@ -66,18 +65,21 @@ _ACTION_SHORT = {"BUY NOW": "Buy now",
                  "BUY ON SUPPORT": "Buy on support",
                  "DEEP PULLBACK — WAIT FOR SUPPORT": "Deep pullback",
                  "WATCH": "Watch", "WAIT": "Wait",
-                 "RESEARCH": "Research", "AVOID": "Avoid"}
+                 "RESEARCH": "Research", "AVOID": "Avoid",
+                 "THESIS BROKEN": "Thesis broken"}
 
 # Stage is what the Pullback column shows now. The zone answers "is price on
 # a tracked level" and collapses a 22%-below-the-50-MA correction to "—";
 # the stage names it.
 _STAGE_SHORT = {"AT_HIGHS": "At highs", "STAGE1_EMA": "S1 · 8/21 EMA",
                 "STAGE2_50MA": "S2 · 50 MA", "STAGE3_DEEP": "S3 · deep",
+                "STAGE4_UNCONFIRMED": "Below 200 MA · unconfirmed",
                 "STAGE4_BREAKDOWN": "S4 · breakdown",
                 "EXTENDED": "Extended"}
 # Ordered so sorting descending puts the shallow, tradeable pullbacks first.
-_STAGE_RANK = {"STAGE2_50MA": 5, "STAGE1_EMA": 4, "STAGE3_DEEP": 3,
-               "AT_HIGHS": 2, "EXTENDED": 1, "STAGE4_BREAKDOWN": 0}
+_STAGE_RANK = {"STAGE2_50MA": 6, "STAGE1_EMA": 5, "STAGE3_DEEP": 4,
+               "AT_HIGHS": 3, "EXTENDED": 2, "STAGE4_UNCONFIRMED": 1,
+               "STAGE4_BREAKDOWN": 0}
 
 # Which gate a name stopped at, in plain language for the filter chips.
 _GATE_LABEL = {
@@ -205,6 +207,84 @@ def _trend_panel(t):
     return f'<ul style="margin:0;padding-left:16px;list-style:none">{"".join(cells)}</ul>'
 
 
+def _levels_panel(r):
+    """The moving-average reference prices, moved out of the table.
+
+    Every level with its price and signed distance, plus which of them are
+    clustered around the current price. Green when price is above the level
+    (support underfoot), red when below it (resistance overhead).
+    """
+    p = r["pullback"]
+    by, cluster = p.get("by_level") or {}, p.get("ma_cluster") or {}
+    near = {l["name"] for l in cluster.get("levels", [])}
+    rows = []
+    for key, label in (("8EMA", "8 EMA"), ("21EMA", "21 EMA"),
+                       ("50MA", "50 MA"), ("200MA", "200 MA"),
+                       ("Prior_Breakout_Level", "prior breakout")):
+        lv = by.get(key) or {}
+        dist, price = lv.get("distance_pct"), lv.get("price")
+        if price is None and dist is None:
+            continue
+        colour = "#898781" if dist is None else (
+            "#0F6E56" if lv.get("held") else "#A32D2D")
+        rows.append(
+            f'<tr><td style="padding:3px 12px 3px 0;white-space:nowrap">'
+            f'{esc(label)}'
+            + (' <span style="color:#8a6d1a" title="inside the cluster">◆</span>'
+               if label in near else '')
+            + f'</td>'
+            f'<td style="padding:3px 12px 3px 0;text-align:right">'
+            f'{f"${price:,.2f}" if price is not None else "—"}</td>'
+            f'<td style="padding:3px 0;text-align:right;color:{colour};'
+            f'font-weight:600">{f"{dist:+.1f}%" if dist is not None else "—"}'
+            f'</td></tr>')
+    head = ""
+    if cluster.get("count", 0) >= 2:
+        head = (f'<div style="font-size:11px;margin-bottom:6px">'
+                f'{esc(cluster["label"])} — {cluster["count"]} levels within '
+                f'{cluster.get("within_pct", 2):.0f}% of the price'
+                + (f', spanning {cluster["span_pct"]:.1f}%'
+                   if cluster.get("span_pct") is not None else "")
+                + '. A coil says a move resolves here, not which way.</div>')
+    return head + (f'<table style="border-collapse:collapse;font-size:11px">'
+                   f'{"".join(rows)}</table>')
+
+
+def _scenarios_panel(r):
+    """The buy triggers as a decision tree rather than one price.
+
+    A quality name can become buyable three different ways — the trend
+    repairs, support confirms, or the price comes to the valuation — and
+    they are alternatives, not steps. Presenting only the last of them
+    ("wait for $434.93") describes the least likely of the three as the
+    only one.
+    """
+    groups = {"A": ("Technical recovery", []), "B": ("Support confirmation", []),
+              "C": ("Valuation reset", []), "D": ("Deep value", []),
+              "X": ("Invalidation", []), "": ("Other", [])}
+    for t in r.get("triggers") or []:
+        key = t[0] if t[:2] in ("A ", "B ", "C ", "D ") else (
+            "X" if t.lower().startswith("invalidation") else "")
+        body = t[4:] if key in ("A", "B", "C", "D") else t
+        groups.setdefault(key, (key, []))[1].append(body)
+    out = []
+    for key in ("A", "B", "C", "D", "X", ""):
+        label, items = groups.get(key, ("", []))
+        if not items:
+            continue
+        colour = "#A32D2D" if key == "X" else "#0F6E56"
+        mark = "✕" if key == "X" else (key or "→")
+        out.append(
+            f'<div style="margin-bottom:8px">'
+            f'<div style="font-size:10px;text-transform:uppercase;'
+            f'letter-spacing:.06em;color:{colour};font-weight:700;'
+            f'margin-bottom:2px">{esc(mark)} {esc(label)}</div>'
+            + "".join(f'<div style="font-size:11px;color:#444441;'
+                      f'margin-left:12px">{esc(i)}</div>' for i in items)
+            + '</div>')
+    return "".join(out) or empty("no triggers computed")
+
+
 def _range_panel(rng):
     """The 52-week range as a position, not just two numbers."""
     high, low, price = rng.get("high"), rng.get("low"), rng.get("price")
@@ -305,7 +385,7 @@ def _detail(r):
         f' from {int((r["lt_coverage"] or 0) * 100)}% of its inputs</div>',
         _list_block("Why", r.get("why"), "✓", "#0F6E56"),
         _list_block("What is blocking it", r.get("blockers"), "✗", "#A32D2D"),
-        _list_block("What would change it", r.get("triggers"), "→", "#0C447C"),
+
         _entries_panel(r),
     ]
     grid = (
@@ -314,6 +394,8 @@ def _detail(r):
         f'<div>{card("Business quality — LQuality", _quality_panel(q), "💎")}</div>'
         f'<div>{card("Valuation", _valuation_panel(v), "⚖️")}</div>'
         f'<div>{card("Long-term trend", _trend_panel(t), "📈")}</div>'
+        f'<div>{card("Moving-average levels", _levels_panel(r), "📐")}</div>'
+        f'<div>{card("What would change it", _scenarios_panel(r), "🔀")}</div>'
         f'<div>{card("52-week range", _range_panel(r["pullback"].get("range_52w") or {}), "📏")}</div>'
         f'<div>{card("Support and pullback volume", _support_panel(r["confluence"], r["volume"], r["pullback"]), "🧱")}</div>'
         '</div>')
@@ -669,6 +751,80 @@ def _buyzone_cell(pullback):
             f'{esc(sub)}</div>', dist)
 
 
+def _support_confluence_cell(conf, cluster=None):
+    """Support as two readings that are allowed to disagree.
+
+    The cluster says how tightly the levels are wound around price; the
+    count says how many are actually holding it up. Meta has five levels
+    inside a 1.9% band and only two of them beneath the price — a strong
+    coil at a weak support reading, and both are true. Showing only the
+    second describes a decision point as an absence.
+    """
+    n = conf.get("agreeing", len(conf.get("hits", [])))
+    possible = conf.get("possible", 6)
+    score = conf.get("score", 0)
+    cluster = cluster or {}
+    count = cluster.get("count") or 0
+    if count >= 2:
+        colour = "#0F6E56" if count >= 3 else "#8a6d1a"
+        names = ", ".join(l["name"] for l in cluster.get("levels", []))
+        head = (f'<span style="color:{colour};font-weight:700" '
+                f'title="{esc(names)}">{esc(cluster.get("label", ""))}</span>')
+        sub = (f'{count} within {cluster.get("within_pct", 2):.0f}%'
+               + (f', span {cluster["span_pct"]:.1f}%'
+                  if cluster.get("span_pct") is not None else "")
+               + f' · {n} of {possible} holding')
+    else:
+        colour = "#0b0b0b" if n >= 3 else "#8a6d1a" if n >= 2 else "#A32D2D"
+        head = (f'<span style="color:{colour};font-weight:700">'
+                f'{n} of {possible}</span>')
+        sub = f'{esc(conf.get("label", ""))} · {score}/100'
+    return (f'{head}<div style="font-size:10px;color:#898781;'
+            f'white-space:nowrap">{sub}</div>',
+            # Sorted on levels actually holding, cluster size as tiebreak.
+            n * 1000 + count * 10 + min(score, 9))
+
+
+def _status_cell(view, style_map):
+    """A status badge with its score underneath — the company verdict and
+    the timing verdict shown as two separate answers."""
+    status = view.get("status")
+    if not status:
+        return '<span style="color:#898781">—</span>', None
+    rank = {"OWN": 3, "WATCH": 2, "AVOID": 1}.get(status, 0)
+    score = view.get("score")
+    return (f'{badge(status.title(), style_map.get(status, "muted"), "small")}'
+            f'<div style="font-size:10px;color:#898781" '
+            f'title="{esc(view.get("why") or "")}">'
+            f'{score if score is not None else "—"}/100</div>',
+            rank * 1000 + (score or 0))
+
+
+def _fair_value_line(v):
+    """The modelled value, labelled as a reference rather than a target.
+
+    The peer method prices a company against its sector; it does not say
+    what the business is worth, and a fair value shown bare invites being
+    read as a buy price. Meta's $434.93 is "where the sector multiple puts
+    it", which is a reason to wait and not a limit order.
+    """
+    fair = v.get("fair_value")
+    conf = f'{v.get("confidence_icon", "")} {(v.get("confidence") or "").title()}'
+    if fair is None:
+        implied = v.get("implied_growth_pct")
+        extra = (f'needs {implied:.0f}% growth' if implied is not None else "")
+        return (f'<div style="font-size:10px;color:#898781" '
+                f'title="{esc(v.get("confidence_note") or "")}">'
+                f'{esc(conf.strip())}{" · " + extra if extra else ""}</div>')
+    upside = v.get("upside_pct")
+    return (f'<div style="font-size:10px;color:#898781" '
+            f'title="Reference value, not a price target — '
+            f'{esc(v.get("confidence_note") or "")}">'
+            f'ref ${fair:,.2f}'
+            + (f' ({upside:+.0f}%)' if upside is not None else "")
+            + f' · {esc(conf.strip())}</div>')
+
+
 def _resistance_cell(pullback):
     """The first price overhead, and whether the market has actually turned
     down from it.
@@ -698,31 +854,14 @@ def _resistance_cell(pullback):
             f'{esc(sub)}</div>', dist)
 
 
-def _support_cell(r, key):
-    """One rung of the S1..S4 ladder: how far price sits above or below that
-    moving average, and whether the level is holding at all.
-
-    The sign is the content. Above means support underfoot, below means the
-    level was lost and is now overhead — the distinction the whole engine
-    turns on — so the colour follows `held`, not the magnitude.
-    """
-    lv = (r["pullback"].get("by_level") or {}).get(key) or {}
-    dist, price = lv.get("distance_pct"), lv.get("price")
-    if dist is None:
-        return '<span style="color:#898781">—</span>', None
-    colour = "#0F6E56" if lv.get("held") else "#A32D2D"
-    weight = "700" if lv.get("supporting") else "400"
-    at = ' title="price is sitting on this level"' if lv.get("supporting") else ""
-    html = (f'<span style="color:{colour};font-weight:{weight}"{at}>'
-            f'{dist:+.1f}%</span>')
-    if price is not None:
-        html += (f'<div style="font-size:10px;color:#898781">'
-                 f'${price:,.2f}</div>')
-    return html, dist
-
-
 # (key, header, alignment, sort type). Order here is the DEFAULT order; the
 # user can drag columns and the choice persists in localStorage.
+#
+# The four moving-average distance columns moved into the reasoning panel.
+# They are reference prices rather than judgments — useful once a name is
+# worth looking at, and four columns of noise before that. What replaced
+# them is the pair the page exists to separate: the company verdict and the
+# timing verdict, which routinely disagree.
 _COLUMNS = (
     ("ticker", "Ticker", "left", "text"),
     ("price", "Price", "right", "num"),
@@ -730,28 +869,26 @@ _COLUMNS = (
     ("valuation", "Valuation", "left", "num"),
     ("trend", "Trend", "center", "num"),
     ("pullback", "Pullback", "left", "num"),
-    ("buyzone", "S1 · Support", "right", "num"),
-    ("resistance", "R1 · Resistance", "right", "num"),
-    ("s1", "8 EMA", "right", "num"),
-    ("s2", "21 EMA", "right", "num"),
-    ("s3", "50 MA", "right", "num"),
-    ("s4", "200 MA", "right", "num"),
+    ("support", "Support", "left", "num"),
+    ("buyzone", "S1 \u00b7 Support", "right", "num"),
+    ("resistance", "R1 \u00b7 Resistance", "right", "num"),
     ("rs", "RS", "center", "num"),
     ("market", "Market", "center", "text"),
-    ("lt", "LT Score", "left", "num"),
+    ("investment", "Investment", "left", "num"),
+    ("entry_score", "Entry", "left", "num"),
     ("action", "Action", "left", "num"),
 )
 _HEADERS = tuple(c[1] for c in _COLUMNS)
 
-# Sort keys for the columns whose display is a symbol or a label. Ranked so
-# "descending" means "better" everywhere — otherwise sorting Trend puts the
-# broken ones on top, which nobody wants on the first click.
-_TREND_RANK = {True: 2, None: 1, False: 0}
+# Sort keys for columns whose display is a symbol or a label. Ranked so
+# "descending" means "better" everywhere — otherwise the first click on
+# Trend puts the broken ones on top.
+_TREND_RANK = {"CONFIRMED": 3, "PARTIAL": 2, "IMPAIRED": 1, "BROKEN": 0}
 _BAND_RANK = {"UNDERVALUED": 2, "FAIR": 1, "OVERVALUED": 0}
 _ACTION_ORDER = ("BUY NOW", "BUY ON CONFIRMATION", "BUY ON 8/21 EMA",
                  "BUY ON 50 MA", "BUY ON BREAKOUT RETEST", "BUY ON 200 MA",
-                 "BUY ON SUPPORT", "DEEP PULLBACK — WAIT FOR SUPPORT",
-                 "WATCH", "WAIT", "RESEARCH", "AVOID")
+                 "BUY ON SUPPORT", "DEEP PULLBACK \u2014 WAIT FOR SUPPORT",
+                 "WATCH", "WAIT", "RESEARCH", "AVOID", "THESIS BROKEN")
 _ACTION_RANK = {a: len(_ACTION_ORDER) - i for i, a in enumerate(_ACTION_ORDER)}
 
 
@@ -763,6 +900,7 @@ def _cells(r):
     # A grey "unknown" dot read as "no data" when the real meaning is
     # "structure holds, slopes unmeasured".
     trend_mark = r["trend"].get("icon") or "⚪"
+    trend_state = r["trend"].get("state")
     rs_mark = ("🟢" if rs["strong"] else "🔴" if rs["strong"] is False else "⚪")
     market = {"FAVORABLE": "🟢", "SELECTIVE": "🟡", "DEFENSIVE": "🔴"}.get(
         r["regime"], "⚪")
@@ -781,13 +919,12 @@ def _cells(r):
         "valuation": (
             (f'{v["band_icon"]} '
              f'{badge(v.get("band_label") or v["band"].title(), _BAND_STYLE.get(v["band"], "muted"), "small")}'
-             f'<div style="font-size:10px;color:#898781" '
-             f'title="{esc(v.get("confidence_note") or "")}">'
-             f'{v.get("confidence_icon", "")} {esc((v.get("confidence") or "").title())}'
-             f'</div>'
+             f'{_fair_value_line(v)}'
              if v["band"] else '<span style="color:#898781">—</span>'),
             _BAND_RANK.get(v["band"])),
-        "trend": (trend_mark, _TREND_RANK.get(r["trend"]["pass"])),
+        "trend": (f'<span title="{esc(r["trend"].get("summary") or "")}">'
+                  f'{trend_mark}</span>',
+                  _TREND_RANK.get(trend_state)),
         "pullback": (
             f'{p.get("stage_icon", "")} '
             f'{esc(_STAGE_SHORT.get(p.get("stage"), _ZONE_SHORT.get(p["zone"], p["zone"])))}',
@@ -796,6 +933,14 @@ def _cells(r):
                   else '<span style="color:#898781">—</span>', r.get("price")),
         "buyzone": _buyzone_cell(p),
         "resistance": _resistance_cell(p),
+        "support": _support_confluence_cell(conf, r.get("ma_cluster") or {}),
+        "investment": _status_cell(r.get("investment") or {},
+                                   {"OWN": "good", "WATCH": "info",
+                                    "AVOID": "bad"}),
+        "entry_score": (
+            f'<strong>{(r.get("entry") or {}).get("score", "—")}</strong>'
+            f'<div style="font-size:10px;color:#898781">of 100</div>',
+            (r.get("entry") or {}).get("score")),
         "rs": (rs_mark, rs["score"]),
         "market": (market, r["regime"]),
         "lt": (f'<strong>{r["lt_score"] if r["lt_score"] is not None else "—"}</strong>',
@@ -807,8 +952,6 @@ def _cells(r):
                if r.get("tranche_pct") else ""),
             _ACTION_RANK.get(r["action"])),
     }
-    for slot, key, _name in SUPPORT_SLOTS:
-        out[slot.lower()] = _support_cell(r, key)
     return out
 
 

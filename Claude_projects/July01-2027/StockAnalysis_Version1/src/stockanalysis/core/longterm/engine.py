@@ -85,14 +85,15 @@ SELECTIVE_QUALITY_BUMP = 5
 ACTIONS = ("BUY NOW", "BUY ON CONFIRMATION", "BUY ON 8/21 EMA",
            "BUY ON 50 MA", "BUY ON BREAKOUT RETEST", "BUY ON 200 MA",
            "BUY ON SUPPORT", "DEEP PULLBACK — WAIT FOR SUPPORT",
-           "WATCH", "WAIT", "RESEARCH", "AVOID")
+           "WATCH", "WAIT", "RESEARCH", "AVOID", "THESIS BROKEN")
 
 ACTION_ICONS = {"BUY NOW": "🟢", "BUY ON CONFIRMATION": "🟢",
                 "BUY ON 8/21 EMA": "🟢", "BUY ON 50 MA": "🟢",
                 "BUY ON BREAKOUT RETEST": "🟢", "BUY ON 200 MA": "🟢",
                 "BUY ON SUPPORT": "🟢",
                 "DEEP PULLBACK — WAIT FOR SUPPORT": "🟡",
-                "WATCH": "🔵", "WAIT": "⏳", "RESEARCH": "🔎", "AVOID": "🔴"}
+                "WATCH": "🔵", "WAIT": "⏳", "RESEARCH": "🔎", "AVOID": "🔴",
+                "THESIS BROKEN": "💀"}
 
 # A buy that is not yet actionable needs the trend CONFIRMED, not merely
 # un-broken. PARTIAL means something structural was never measured, and the
@@ -129,6 +130,116 @@ def compute_lt_score(lq, val, tech_sub, market_sub) -> dict:
         ("Technical setup", 25, tech_sub, "trend, support, volume, RS"),
         ("Market & sector", 15, market_sub, "regime and sector strength"),
     ])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TWO VERDICTS, NOT ONE NUMBER
+# ─────────────────────────────────────────────────────────────────────────────
+# "Excellent company" and "poor entry" are different findings, and a single
+# blended score cannot hold both. Meta scored 51 with a 92 LQuality — a number
+# that reads as a mediocre opportunity when the data says an elite business at
+# a bad price. Averaging them destroys the only thing the reader needed.
+#
+# So the engine reports two statuses side by side:
+#
+#   INVESTMENT  do I want to own this company at all?   quality + valuation
+#   ENTRY       is now the moment to buy it?            trend + support + volume
+#
+# LT_Score survives as a ranking key across names that already share a
+# verdict. It is not the verdict.
+
+INVESTMENT_STATUSES = ("OWN", "WATCH", "AVOID")
+INVESTMENT_ICONS = {"OWN": "🟢", "WATCH": "🔵", "AVOID": "🔴"}
+
+# Weighted 70/30 within the company question, preserving the framework's own
+# 40:20 ratio between quality and valuation.
+INVESTMENT_WEIGHTS = (70, 30)
+
+
+def investment_view(lq: dict, val: dict) -> dict:
+    """The company verdict, computed without reference to timing.
+
+    A name can be OWN here and WAIT on entry — that pairing is the single
+    most useful thing this page says, and it is unrepresentable in one score.
+    """
+    quality = lq.get("score")
+    val_sub = V.valuation_sub_score(val)
+    blended = blend([
+        ("Business quality", INVESTMENT_WEIGHTS[0],
+         None if quality is None else float(quality), lq.get("tier") or ""),
+        ("Valuation", INVESTMENT_WEIGHTS[1], val_sub, val.get("band") or ""),
+    ])
+
+    if quality is None or not lq.get("reliable"):
+        status, why = "AVOID", "Quality could not be assessed"
+    elif quality < Q.MIN_OWNABLE:
+        status, why = "AVOID", (f"LQuality {quality} is below the "
+                                f"{Q.MIN_OWNABLE} ownable bar")
+    elif val.get("acceptable") is False:
+        # The Meta case: a business worth owning, at a price that is not.
+        status, why = "WATCH", "Worth owning, but not at this price"
+    elif val.get("acceptable") is None:
+        status, why = "WATCH", "Worth owning; the price could not be assessed"
+    else:
+        status, why = "OWN", "Quality and price both acceptable"
+
+    return {"score": blended["score"], "status": status,
+            "icon": INVESTMENT_ICONS[status], "why": why,
+            "coverage": blended["coverage"], "components": blended["components"]}
+
+
+# The entry question. Trend carries the most weight because it is the one
+# leg that can veto the others: strong support inside a broken trend is a
+# reason to be careful, not a reason to buy.
+ENTRY_WEIGHTS = (("Long-term trend", 30), ("Support confluence", 20),
+                 ("Pullback volume", 20), ("Entry readiness", 30))
+
+
+def entry_view(trend: dict, confluence: dict, volume: dict,
+               readiness: dict) -> dict:
+    blended = blend([
+        ("Long-term trend", 30, _as_float(trend.get("score")),
+         trend.get("state") or ""),
+        ("Support confluence", 20, _as_float(confluence.get("score")),
+         confluence.get("label") or ""),
+        ("Pullback volume", 20, _as_float(volume.get("score")),
+         volume.get("label") or ""),
+        ("Entry readiness", 30, _as_float(readiness.get("score")),
+         readiness.get("label") or ""),
+    ])
+    return {"score": blended["score"], "coverage": blended["coverage"],
+            "components": blended["components"]}
+
+
+def _as_float(v):
+    return None if v is None else float(v)
+
+
+def component_scores(lq, val, trend, confluence, volume, readiness,
+                     cluster) -> list[dict]:
+    """The five readings the card shows separately.
+
+    Kept as a list of (label, score, note) rather than folded into one
+    number, because the whole point is that they can disagree — Meta is
+    92 quality against a 25 trend, and both are true.
+    """
+    return [
+        {"key": "quality", "label": "Business quality", "icon": "💎",
+         "score": lq.get("score"), "note": lq.get("tier") or "unrated"},
+        {"key": "valuation", "label": "Valuation", "icon": "💰",
+         "score": None if V.valuation_sub_score(val) is None
+                  else round(V.valuation_sub_score(val)),
+         "note": val.get("band_label") or val.get("band") or "not priced"},
+        {"key": "trend", "label": "Long-term trend", "icon": "📈",
+         "score": trend.get("score"),
+         "note": f"{trend.get('icon', '')} {trend.get('state', '')}".strip()},
+        {"key": "pullback", "label": "Pullback quality", "icon": "📉",
+         "score": volume.get("score"), "note": volume.get("label") or "not measured"},
+        {"key": "support", "label": "Support", "icon": "🧱",
+         "score": confluence.get("score"),
+         "note": (cluster.get("label") or "") if cluster else
+                 (confluence.get("label") or "")},
+    ]
 
 
 def _market_sub_score(row, regime) -> tuple[float | None, str]:
@@ -243,6 +354,11 @@ def evaluate(row: dict, peers: dict | None = None,
     rs = T.relative_strength(row)
     readiness = T.compute_entry_readiness(row, pullback, rs, regime)
     insider = Q.insider_signal(row)
+    cluster = pullback.get("ma_cluster") or {}
+    investment = investment_view(lq, val)
+    entry = entry_view(trend, confluence, volume, readiness)
+    components = component_scores(lq, val, trend, confluence, volume,
+                                  readiness, cluster)
 
     tech_sub = T.technical_sub_score(trend, pullback, confluence, volume, rs)
     market_sub, market_note = _market_sub_score(row, regime)
@@ -258,7 +374,7 @@ def evaluate(row: dict, peers: dict | None = None,
         return _assemble(ticker, action, gate, row, lq, val, trend, pullback,
                          confluence, volume, rs, lt, market_note, entries,
                          blockers, triggers, price, regime_up, readiness,
-                         insider)
+                         insider, investment, entry, components, cluster)
 
     # ── GATE 1 — business quality. Nothing below matters if this fails. ──
     if lq["score"] is None or not lq["reliable"]:
@@ -273,6 +389,14 @@ def evaluate(row: dict, peers: dict | None = None,
         blockers.append(f"LQuality {lq['score']} ({lq['tier']}) — below the "
                         f"{Q.MIN_OWNABLE} ownable bar. No chart pattern "
                         f"compensates for this.")
+        # Deterioration in the business AND a measurably falling 200 MA is a
+        # different statement from either alone: the market and the numbers
+        # agree. Named separately so it is not filed with names that are
+        # merely mediocre.
+        if trend["state"] == "BROKEN":
+            blockers.append("The 200 MA is falling too — the business and "
+                            "the tape agree")
+            return verdict("THESIS BROKEN", "quality")
         return verdict("AVOID", "quality")
 
     # ── GATE 2 — valuation. A great company at any price is not a buy. ──
@@ -299,9 +423,15 @@ def evaluate(row: dict, peers: dict | None = None,
 
     # ── GATE 3 — long-term trend. Buying weakness inside an uptrend only. ──
     if trend["pass"] is False:
-        blockers.append("Trend broken: " + ", ".join(trend["required_failed"]))
+        blockers.append(f"{trend['icon']} Trend {trend['state'].lower()} — "
+                        f"{trend['summary']}: "
+                        + ", ".join(trend["required_failed"]))
         triggers.append("Trend repairs — price reclaims the 200 MA and the "
                         "50 MA crosses back above it")
+        if trend["state"] == "IMPAIRED":
+            triggers.append("Re-scan to measure the 200 MA slope — that is "
+                            "what separates a deep correction from a "
+                            "breakdown")
         # Not AVOID: the business still passed gate 1, so this is a
         # watchlist name whose chart has to heal, not a company to discard.
         return verdict("WATCH", "trend")
@@ -470,7 +600,8 @@ def _buy_triggers(row, pullback, readiness, trend) -> list[str]:
 
 def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
               volume, rs, lt, market_note, entries, blockers, triggers, price,
-              regime, readiness=None, insider=None) -> dict:
+              regime, readiness=None, insider=None, investment=None,
+              entry=None, components=None, cluster=None) -> dict:
     """The verdict with its whole audit attached — never a score without the
     reasoning that produced it."""
     zone = pullback["zone"]
@@ -527,6 +658,13 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
         "readiness": readiness or {},
         # Reported beside the verdict, never inside the quality score.
         "insider": insider or {},
+        # The two verdicts, and the five readings behind them. `action` is
+        # the ENTRY answer; `investment` is the company answer, and a name
+        # is routinely OWN on one and WAIT on the other.
+        "investment": investment or {},
+        "entry": entry or {},
+        "components": components or [],
+        "ma_cluster": cluster or {},
         "regime": regime,
         "market_note": market_note,
         "tranche_pct": tranche,
