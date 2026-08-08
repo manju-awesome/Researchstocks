@@ -437,6 +437,15 @@ def build_universe(index_rows: Iterable[dict],
             "abs_vs_50ma": _abs(pct_50),
             "pct_vs_200ma": pct_200,
             "abs_vs_200ma": _abs(pct_200),
+            # The levels themselves, not just the distance to them. A
+            # decision that says "wait for a pullback" has to name the price
+            # it is waiting for, and "-4.1% from here" is not an order you
+            # can place. See decision_engine.pullback_plan.
+            "ema8": _f(raw.get("8EMA")),
+            "ema21": _f(raw.get("21EMA")),
+            "ma50": ma50,
+            "ma200": ma200,
+            "high_52w": _f(raw.get("52W High")),
             "above_50ma": None if pct_50 is None else pct_50 > 0,
             "above_200ma": _b(raw.get("Above_200MA")),
             "above_vwap": _b(raw.get("Above_VWAP")),

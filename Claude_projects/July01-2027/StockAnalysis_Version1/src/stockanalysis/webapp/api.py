@@ -916,6 +916,17 @@ def screen(payload: dict) -> dict:
         m["confluence"] = d["confluence"]
         m["decision_triggers"] = d["triggers"]
         m["decision_risks"] = d["risks"]
+        # The pullback plan, when either verdict is waiting for one. The
+        # levels and distances are strategy-independent — they are read off
+        # the tape — so the active strategy's plan is preferred only for the
+        # "what gate did it miss" part, which is the one strategy-specific
+        # piece. `strategies` names who is waiting: both agreeing is a
+        # stronger statement than one of them, and the card says which.
+        pb = d.get("pullback") or lt.get("pullback") or sw.get("pullback")
+        if pb:
+            waiting = [name for name, v in (("Long-term", lt), ("Swing", sw))
+                       if v["action"] == "BUY ON PULLBACK"]
+            m["pullback"] = {**pb, "strategies": waiting}
         m["earnings_risk"] = d["earnings_risk"]
         m["decision_reliable"] = d["reliable"]
 
@@ -985,6 +996,7 @@ _SCREEN_KEYS = (
     "action_longterm", "action_longterm_icon",
     "action_swing", "action_swing_icon",
     "decision_triggers", "decision_risks", "earnings_risk", "decision_reliable",
+    "pullback",
 )
 
 

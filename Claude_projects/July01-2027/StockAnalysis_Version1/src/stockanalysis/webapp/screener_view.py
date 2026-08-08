@@ -200,6 +200,11 @@ _STYLE = """
 .scr-meta { display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; font-size:11px;
   color:#898781 }
 .scr-meta b { color:#0b0b0b; font-weight:600 }
+/* Pullback plan: collapsed by default so a screen of 100 rows stays
+   readable, but one click from the verdict that depends on it. */
+.scr-pb summary::-webkit-details-marker { display:none }
+.scr-pb summary:hover { text-decoration:underline }
+.scr-pb[open] summary { color:#0b0b0b }
 .scr-ms { margin-left:auto; text-align:right; flex-shrink:0 }
 .scr-ms .v { font-size:17px; font-weight:700; color:#0F6E56 }
 .scr-ms .l { font-size:9px; color:#898781; text-transform:uppercase }
@@ -1242,7 +1247,75 @@ function scrDecisionRow(r) {
   const risks = (r.decision_risks || []).length
     ? `<div style="font-size:10.5px;color:#8a6d1a;margin-top:3px">⚠ ${
         (r.decision_risks || []).map(scrEsc).join(' · ')}</div>` : '';
-  return `<div class="scr-meta" style="margin-top:7px">${bits}</div>${trig}${risks}`;
+  return `<div class="scr-meta" style="margin-top:7px">${bits}</div>${trig}${risks}${
+    scrPullback(r)}`;
+}
+
+// ── the pullback, priced (decision_engine.pullback_plan) ────────────────────
+// "BUY ON PULLBACK" names a price you are not being offered yet, so the
+// badge on its own is an instruction with the instruction missing. This
+// panel is the answer to "a pullback to what, from what, and why wait" —
+// every number comes off the row, and a level with no data is left out
+// rather than filled in.
+function scrPct(v, nd) {
+  if (v === null || v === undefined) return '—';
+  return (v > 0 ? '+' : '') + Number(v).toFixed(nd === undefined ? 1 : nd) + '%';
+}
+
+function scrPullback(r) {
+  const p = r.pullback;
+  if (!p) return '';
+  const both = (p.strategies || []).length > 1;
+  const who = both ? 'Both strategies say wait'
+    : `${(p.strategies || ['The engine'])[0]} says wait`;
+
+  const levels = (p.levels || []).map(l => `
+    <tr>
+      <td style="padding:2px 10px 2px 0;color:#0b0b0b;font-weight:600">${scrEsc(l.name)}</td>
+      <td style="padding:2px 10px 2px 0;text-align:right">${
+        l.price === null || l.price === undefined ? '—' : '$' + Number(l.price).toFixed(2)}</td>
+      <!-- Deliberately not coloured by sign: being above the level is what
+           you are waiting out here, so green-for-positive would read as
+           approval of the thing the verdict is objecting to. -->
+      <td style="padding:2px 10px 2px 0;text-align:right;color:#0b0b0b">${
+        scrPct(l.pct)}</td>
+      <td style="padding:2px 10px 2px 0;text-align:right;color:#52514e">${
+        l.move === null || l.move === undefined ? '—' : scrPct(l.move)}</td>
+      <td style="padding:2px 0;color:#898781">${scrEsc(l.note || '')}</td>
+    </tr>`).join('');
+
+  const ctx = (p.context || []).map(x =>
+    `<span style="margin-right:12px">${scrEsc(x.label)}
+      <b style="color:#0b0b0b">${scrEsc(x.value)}</b>${
+      x.note ? ` <span style="color:#898781">(${scrEsc(x.note)})</span>` : ''}</span>`
+  ).join('');
+
+  // The gates it missed. On an extended name the wait is about price and
+  // this is usually empty; on the catch-all pullback it IS the reason, and
+  // leaving it out was what made that verdict unreadable.
+  const gaps = (p.gaps || []).length ? `
+    <div style="margin-top:6px;font-size:10.5px;color:#8a6d1a">
+      Short of a full buy: ${(p.gaps || []).map(scrEsc).join(' · ')}</div>` : '';
+
+  return `<details class="scr-pb" style="margin-top:6px">
+    <summary style="cursor:pointer;font-size:11px;color:#085041;font-weight:600;
+      list-style:none">⤵ ${scrEsc(who)} — ${scrEsc(p.headline)}</summary>
+    <div style="margin-top:6px;padding:8px 10px;background:#f7f6f2;
+      border-left:2px solid #0F6E56;border-radius:3px">
+      <table style="font-size:11px;border-collapse:collapse;width:100%">
+        <thead><tr style="color:#898781;font-size:10px;text-transform:uppercase">
+          <th style="text-align:left;padding-bottom:3px">Level</th>
+          <th style="text-align:right;padding-bottom:3px">Price</th>
+          <th style="text-align:right;padding-bottom:3px" title="Signed distance of the current price from this level">Price is</th>
+          <th style="text-align:right;padding-bottom:3px" title="Move from the current price needed to reach this level">Move to</th>
+          <th style="text-align:left;padding-bottom:3px"></th>
+        </tr></thead>
+        <tbody>${levels || '<tr><td colspan="5" style="color:#898781">No moving-average levels on this row</td></tr>'}</tbody>
+      </table>
+      <div style="margin-top:7px;font-size:10.5px;color:#52514e">${ctx}</div>
+      ${gaps}
+    </div>
+  </details>`;
 }
 
 function scrCard(r) {

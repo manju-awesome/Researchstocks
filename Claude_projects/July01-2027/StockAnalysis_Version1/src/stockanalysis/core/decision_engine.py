@@ -426,6 +426,203 @@ def _watch_triggers(c) -> list[str]:
     return out or ["A valid entry appears"]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# THE PULLBACK, PRICED
+# ─────────────────────────────────────────────────────────────────────────────
+# BUY ON PULLBACK is the only action that names a price you are not being
+# offered yet, which is what makes the bare label unusable: it says wait
+# without saying what for, how far below the tape it sits, or what would
+# turn it into a buy. Two different rules produce it — extended above the
+# 8 EMA (a chase), and a good name that simply missed a BUY NOW gate — and
+# those are different waits, so the plan says which one this is.
+#
+# Every number here is measured off the row. Where a moving average's price
+# is absent it is back-derived from the signed distance the scan did write
+# (level = price / (1 + pct/100)), which is arithmetic on data already
+# present rather than an estimate; with neither, the level is dropped.
+_PULLBACK_LEVELS = (
+    ("8 EMA", "ema8", "pct_vs_8ema"),
+    ("21 EMA", "ema21", "pct_vs_21ema"),
+    ("50 MA", "ma50", "pct_vs_50ma"),
+)
+
+# How deep each level is, ranked by where it actually sits rather than by
+# which average it is. Labelling the 50 MA "full reset" by convention read
+# as nonsense on CRDO, whose 50 MA sits 0.3% under the price while its
+# 8 EMA is 5.5% below — the moving averages do not stay in textbook order
+# after a fast move, and the description has to follow the tape.
+_DEPTH = ("first stop on the way down", "deeper — second tranche",
+          "full reset")
+
+
+def _level(price, level_px, pct):
+    """(level price, signed % the price sits above it, % move to reach it)."""
+    if level_px is None and price and pct is not None and pct != -100:
+        level_px = price / (1 + pct / 100.0)
+    if pct is None and price and level_px:
+        pct = (price - level_px) / level_px * 100.0
+    move = (level_px / price - 1) * 100.0 if (price and level_px) else None
+    return level_px, pct, move
+
+
+def _entry_levels(c) -> list[str]:
+    """The entry named as a price, not as a distance. "Pull back toward the
+    8/21 EMA" is not something you can leave a limit order on."""
+    row, price = c["row"], _f(c["row"].get("price"))
+    below = []
+    for name, px_key, pct_key in _PULLBACK_LEVELS:
+        lp, _pct, move = _level(price, _f(row.get(px_key)), _f(row.get(pct_key)))
+        if lp is None or move is None or move >= 0:
+            continue                      # price is already at or under it
+        below.append((move, name, lp))
+    # Nearest first, and only the two you would actually stage into — a
+    # third line adds a price nobody is waiting for.
+    below.sort(reverse=True)
+    return [f"Pulls back to the {name} at ${lp:,.2f} ({move:+.1f}% from here)"
+            for move, name, lp in below[:2]]
+
+
+def _pullback_triggers(c) -> list[str]:
+    out = _entry_levels(c)
+    for t in _watch_triggers(c):
+        # The level lines already say this, and with a price attached.
+        if out and ("8 EMA" in t or t == "A valid entry appears"):
+            continue
+        out.append(t)
+    return out or ["A valid entry appears"]
+
+
+def _score_label(strategy: str) -> str:
+    return {"LONGTERM": "Investment score", "SWING": "Swing score"}.get(
+        strategy, "Weaker of the two scores")
+
+
+def _buy_now_gaps(c) -> list[str]:
+    """What separates this from a BUY NOW, as numbers.
+
+    The second pullback rule fires on names that are not extended at all,
+    so without this the card said "wait" and named nothing to wait for.
+    """
+    out = []
+    if not _gt(c["best"], c["buy_score"]):
+        out.append(f"{_score_label(c['strategy'])} {c['best']} — a buy needs "
+                   f"{c['buy_score']}")
+    if not _gt(c["conf"], c["buy_conf"]):
+        out.append(f"Confluence {c['conf']}/10 — a buy needs {c['buy_conf']}")
+    if c["rr"] is None:
+        out.append("R:R unknown — no target/stop levels for this ticker")
+    elif c["rr"] < MIN_RR:
+        out.append(f"R:R {c['rr']:.1f} — a buy needs {MIN_RR:.0f}")
+    if not c["in_zone"] and c["dist8"] is not None and c["dist8"] > 3:
+        out.append(f"{c['dist8']:.1f}% from the 8 EMA — a buy needs it inside "
+                   f"3%, or price in the buy zone")
+    return out
+
+
+def pullback_plan(c) -> dict:
+    """The wait, in numbers: how extended it is, off what, where the entry
+    sits, and what still has to change before it is a buy.
+
+    Takes the resolved context from `_context`, not a raw row — which gate
+    it fell short of depends on the strategy being asked about, and that
+    lives there rather than on the row.
+    """
+    row, pct8 = c["row"], c["pct8"]
+    price = _f(row.get("price"))
+
+    levels = []
+    for name, px_key, pct_key in _PULLBACK_LEVELS:
+        lp, pct, move = _level(price, _f(row.get(px_key)), _f(row.get(pct_key)))
+        if lp is None and pct is None:
+            continue
+        levels.append({"name": name,
+                       "price": None if lp is None else round(lp, 2),
+                       "pct": None if pct is None else round(pct, 2),
+                       "move": None if move is None else round(move, 2),
+                       "note": None})
+    # The note is the level's role in the wait, which depends on how deep it
+    # sits — not on which average it happens to be. Levels the price has
+    # already fallen through are not entries you are waiting for, and say so.
+    depth = sorted((l for l in levels if (l["move"] or 0) < 0),
+                   key=lambda l: -l["move"])
+    for i, l in enumerate(depth):
+        l["note"] = _DEPTH[i] if i < len(_DEPTH) else _DEPTH[-1]
+    for l in levels:
+        if l["note"] is None:
+            l["note"] = ("price is already below it" if l["move"] is not None
+                         else "")
+
+    # Extension in units of the stock's own daily range: 6% above the 8 EMA
+    # is a chase on a quiet name and a normal Tuesday on a volatile one, and
+    # the raw percentage cannot tell those apart. Only computed where there
+    # is something to be stretched by — "0.2× ATR above the 8 EMA" is a way
+    # of saying "not extended", and on a card it reads as a finding.
+    atr = _f(row.get("atr_pct"))
+    stretch = (pct8 / atr) if (atr and atr > 0 and pct8 is not None
+                               and pct8 > 2) else None
+
+    if pct8 is None:
+        reason = "unknown"
+        headline = ("No 8 EMA distance for this ticker — the entry cannot be "
+                    "priced, so this is a watch rather than a plan")
+    elif pct8 > 3:
+        reason = "extended"
+        headline = (f"Extended {pct8:.1f}% above the 8 EMA — buying here pays "
+                    f"the top of the move")
+    elif pct8 < -1:
+        reason = "in_progress"
+        headline = (f"Already {abs(pct8):.1f}% below the 8 EMA — the pullback "
+                    f"is under way; what is missing is a buy trigger")
+    else:
+        reason = "at_the_line"
+        headline = (f"Sitting on the 8 EMA ({pct8:+.1f}%) — the entry is here, "
+                    f"but the setup falls short of a buy")
+
+    ctx = []
+
+    def add(label, value, note=None):
+        if value is not None:
+            ctx.append({"label": label, "value": value, "note": note})
+
+    d52 = _f(row.get("dist_52w_high"))
+    if d52 is not None:
+        add("52W high", "at the high" if d52 >= -0.5 else f"{abs(d52):.1f}% below",
+            None if _f(row.get("high_52w")) is None
+            else f"${_f(row.get('high_52w')):,.2f}")
+    if stretch is not None:
+        # No claim about how long the gap takes to close — that would be a
+        # forecast. The multiple alone is the honest statement: this much
+        # extension is N days' worth of the stock's own range.
+        add("Stretch", f"{stretch:.1f}× ATR above the 8 EMA",
+            f"ATR {atr:.1f}%/day")
+    elif atr is not None:
+        add("ATR", f"{atr:.1f}%/day")
+    rsi = _f(row.get("rsi"))
+    if rsi is not None:
+        add("RSI (14)", f"{rsi:.0f}",
+            "overbought" if rsi >= 70 else "oversold" if rsi <= 30 else None)
+    add("R:R", "unknown" if c["rr"] is None else f"{c['rr']:.1f}",
+        None if c["rr"] is None or c["rr"] >= MIN_RR
+        else f"below the {MIN_RR:.0f} a buy needs")
+    bz = row.get("buy_zone_label")
+    if bz:
+        score = _f(row.get("buy_zone_score"))
+        add("Buy zone", str(bz), None if score is None else f"score {score:.0f}")
+
+    return {
+        "reason": reason,
+        "headline": headline,
+        "pct_vs_8ema": pct8,
+        "stretch_atr": None if stretch is None else round(stretch, 1),
+        "price": price,
+        "levels": levels,
+        "context": ctx,
+        # Not extended and not in the zone means the wait is about the
+        # setup, not the price — say which gate, or the card is a shrug.
+        "gaps": _buy_now_gaps(c),
+    }
+
+
 LADDER = (
     _rule("AVOID", lambda c: bool(_avoid_reasons(c)),
           note=lambda c: (_avoid_reasons(c), [])),
@@ -461,8 +658,8 @@ LADDER = (
           test=lambda c: _gt(c["best"], PULLBACK_SCORE)
           and _gt(c["conf"], PULLBACK_CONFLUENCE)
           and c["pct8"] is not None and c["pct8"] > 3,
-          note=lambda c: ([], [f"Pull back toward the 8/21 EMA "
-                               f"(now {c['pct8']:.1f}% above it)"])),
+          note=lambda c: ([f"Extended {c['pct8']:.1f}% above the 8 EMA"],
+                          _pullback_triggers(c))),
 
     # Poor R:R on an otherwise good name is a timing problem, not a verdict.
     _rule("WAIT",
@@ -473,10 +670,14 @@ LADDER = (
                           [f"R:R improves above {MIN_RR:.0f} "
                            f"(now {c['rr']:.1f})"])),
 
+    # The catch-all pullback: scores well enough to own, but missed a BUY
+    # NOW gate. It used to carry no note at all, so the card read "wait"
+    # and named neither the gate nor a price to wait for.
     _rule("BUY ON PULLBACK", buy=True,
           test=lambda c: _gt(c["best"], PULLBACK_SCORE)
           and _gt(c["conf"], PULLBACK_CONFLUENCE)
-          and not (c["pct8"] is not None and c["pct8"] < -6)),
+          and not (c["pct8"] is not None and c["pct8"] < -6),
+          note=lambda c: (_buy_now_gaps(c), _pullback_triggers(c))),
 
     # Well under the short-term average is weakness, not a dip to buy.
     _rule("WATCH",
@@ -519,14 +720,18 @@ def decide(row: dict, scores: dict | None = None,
         if not rule["test"](c):
             continue
         blockers, triggers = rule["note"](c) if rule["note"] else ([], [])
+        # "Wait for a pullback" is only actionable with the pullback
+        # attached — both rules that produce it carry the full plan.
+        plan = pullback_plan(c) if rule["action"] == "BUY ON PULLBACK" else None
         return _verdict(rule["action"], row, s, c["er"],
-                        blockers=blockers, triggers=triggers)
+                        blockers=blockers, triggers=triggers, pullback=plan)
 
     return _verdict("AVOID", row, s, c["er"])
 
 
 
-def _verdict(action, row, scores, er, why=None, blockers=None, triggers=None):
+def _verdict(action, row, scores, er, why=None, blockers=None, triggers=None,
+             pullback=None):
     """Assemble the audit alongside the action — §9/§22: never a score
     without the reasoning that produced it."""
     conf = scores["confluence"]
@@ -554,4 +759,6 @@ def _verdict(action, row, scores, er, why=None, blockers=None, triggers=None):
         "unknown_fields": unknown,
         "risks": risks,
         "triggers": triggers or [],
+        # Present only on BUY ON PULLBACK; see pullback_plan().
+        "pullback": pullback,
     }

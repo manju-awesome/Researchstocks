@@ -293,6 +293,117 @@ class TestEmaDirection(unittest.TestCase):
         self.assertIn(d["action"], ("BUY ON PULLBACK", "WATCH"))
 
 
+class TestPullbackPlan(unittest.TestCase):
+    """BUY ON PULLBACK names a price it never showed. The badge said wait;
+    it did not say wait for what, how far away it was, or — on the
+    catch-all rule, which carried no note at all — why waiting was the
+    verdict on a stock sitting right on its 8 EMA."""
+
+    def _pb(self, **kw):
+        row = _row(quality=88, health=80, moat=3, eps_growth=32.0,
+                   revenue_growth=22.0, forward_pe=28.0, rs_rank=88,
+                   swing_score=80, breakout_probability=62, rr=2.6,
+                   rvol=1.1, price=140.0, ema8=130.2, ema21=126.1,
+                   ma50=121.7, pct_vs_8ema=7.5, abs_vs_8ema=7.5,
+                   pct_vs_21ema=11.0, pct_vs_50ma=15.0, dist_52w_high=-1.2,
+                   high_52w=141.7, rsi=74, atr_pct=2.7, in_buy_zone=False,
+                   buy_zone_label="Watch List", buy_zone_score=55,
+                   days_to_earnings=40)
+        row.update(kw)
+        return row
+
+    def test_every_pullback_verdict_carries_a_plan(self):
+        for pct8 in (7.5, 0.6, -2.8):
+            with self.subTest(pct8=pct8):
+                d = DE.decide(self._pb(pct_vs_8ema=pct8, abs_vs_8ema=abs(pct8)),
+                              strategy="LONGTERM")
+                if d["action"] != "BUY ON PULLBACK":
+                    continue
+                self.assertIsNotNone(d["pullback"])
+                self.assertTrue(d["pullback"]["headline"])
+
+    def test_other_actions_carry_no_plan(self):
+        d = DE.decide(_row(quality=20, health=15, rr=0.4), strategy="LONGTERM")
+        self.assertEqual(d["action"], "AVOID")
+        self.assertIsNone(d["pullback"])
+
+    def test_the_entry_is_named_as_a_price_not_a_distance(self):
+        d = DE.decide(self._pb(), strategy="LONGTERM")
+        levels = {l["name"]: l for l in d["pullback"]["levels"]}
+        self.assertAlmostEqual(levels["8 EMA"]["price"], 130.2, places=2)
+        # Signed distance of price above the level, and the move down to it.
+        self.assertAlmostEqual(levels["8 EMA"]["pct"], 7.5, places=1)
+        self.assertLess(levels["8 EMA"]["move"], 0)
+        self.assertTrue(any("$130.20" in t for t in d["triggers"]))
+
+    def test_a_missing_level_price_is_derived_not_dropped(self):
+        # The scan writes the distance on some rows and the level on others.
+        # A row carrying only the distance still has to price the entry.
+        d = DE.decide(self._pb(ema8=None), strategy="LONGTERM")
+        ema8 = next(l for l in d["pullback"]["levels"] if l["name"] == "8 EMA")
+        self.assertAlmostEqual(ema8["price"], 140.0 / 1.075, places=2)
+
+    def test_a_level_with_no_data_at_all_is_omitted(self):
+        d = DE.decide(self._pb(ema21=None, pct_vs_21ema=None),
+                      strategy="LONGTERM")
+        names = [l["name"] for l in d["pullback"]["levels"]]
+        self.assertNotIn("21 EMA", names)
+        self.assertIn("8 EMA", names)
+
+    def test_extension_is_reported_in_units_of_the_stocks_own_range(self):
+        # 7.5% above the 8 EMA is a chase on a quiet stock and a normal day
+        # on a volatile one; the raw percentage cannot tell them apart.
+        d = DE.decide(self._pb(), strategy="LONGTERM")
+        self.assertAlmostEqual(d["pullback"]["stretch_atr"], 7.5 / 2.7, places=1)
+
+    def test_a_stock_on_its_average_is_not_reported_as_stretched(self):
+        d = DE.decide(self._pb(pct_vs_8ema=0.6, abs_vs_8ema=0.6),
+                      strategy="LONGTERM")
+        self.assertIsNone(d["pullback"]["stretch_atr"])
+
+    def test_the_catch_all_pullback_names_the_gate_it_missed(self):
+        # Not extended, so the wait is about the setup rather than the
+        # price — and that used to be left entirely unsaid.
+        d = DE.decide(self._pb(price=131.0, pct_vs_8ema=0.6, abs_vs_8ema=0.6,
+                               rr=None), strategy="LONGTERM")
+        self.assertEqual(d["action"], "BUY ON PULLBACK")
+        self.assertEqual(d["pullback"]["reason"], "at_the_line")
+        self.assertTrue(any("R:R unknown" in g for g in d["pullback"]["gaps"]))
+        self.assertTrue(d["risks"])
+
+    def test_a_pullback_already_under_way_says_so(self):
+        d = DE.decide(self._pb(price=126.5, pct_vs_8ema=-2.8, abs_vs_8ema=2.8,
+                               pct_vs_21ema=0.3, pct_vs_50ma=3.9, rr=3.1),
+                      strategy="LONGTERM")
+        self.assertEqual(d["action"], "BUY ON PULLBACK")
+        self.assertEqual(d["pullback"]["reason"], "in_progress")
+        # The 8 EMA is above the price now, so it is not offered as an entry.
+        self.assertFalse(any("8 EMA at" in t for t in d["triggers"]))
+
+    def test_a_row_with_no_8ema_reading_says_so_rather_than_pricing_one(self):
+        d = DE.decide(self._pb(pct_vs_8ema=None, abs_vs_8ema=None, ema8=None,
+                               rr=3.0), strategy="LONGTERM")
+        if d["action"] == "BUY ON PULLBACK":
+            self.assertEqual(d["pullback"]["reason"], "unknown")
+            self.assertNotIn("8 EMA",
+                             [l["name"] for l in d["pullback"]["levels"]])
+
+    def test_the_gate_named_follows_the_strategy_asked_about(self):
+        row = self._pb(price=131.0, pct_vs_8ema=0.6, abs_vs_8ema=0.6,
+                       swing_score=74)
+        lt = DE.decide(row, strategy="LONGTERM")
+        sw = DE.decide(row, strategy="SWING")
+        for d, expected in ((lt, "Investment score"), (sw, "Swing score")):
+            if d["action"] == "BUY ON PULLBACK" and d["pullback"]["gaps"]:
+                joined = " ".join(d["pullback"]["gaps"])
+                if "score" in joined:
+                    self.assertIn(expected, joined)
+
+    def test_the_plan_is_json_safe(self):
+        import json
+        json.dumps(DE.decide(self._pb(), strategy="LONGTERM")["pullback"])
+
+
 class TestEarningsGateAppliesToEveryBuy(unittest.TestCase):
     """The gate used to fire only when the score already cleared WATCH, so a
     low-scoring stock skipped it and reached a buy further down the ladder.
