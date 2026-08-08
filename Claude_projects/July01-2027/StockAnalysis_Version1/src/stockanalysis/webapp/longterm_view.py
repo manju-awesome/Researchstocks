@@ -883,6 +883,55 @@ DEFAULT_LIMIT = 60
 # RULE BUILDER — screener rules over the engine's own columns
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _preset_bar(link, active_rules, needs_rescan):
+    """The screens a manager actually runs, grouped by the question asked.
+
+    Ordered "what to own" -> "when to buy" -> "what would stop me" because
+    that is the order the work happens in, and it is the framework's own
+    hierarchy. A preset list organised by field type would scatter it.
+    """
+    from stockanalysis.core.longterm import screen as LS
+    current = set(active_rules)
+    sections = []
+    for group in LS.PRESET_GROUPS:
+        items = [p for p in LS.PRESETS if p["group"] == group]
+        if not items:
+            continue
+        pills = []
+        for preset in items:
+            on = current == set(preset["rules"])
+            # A preset whose inputs the library does not carry yet returns
+            # nothing, and would be indistinguishable from a broken one
+            # without saying so.
+            stale = preset.get("needs_statements") and needs_rescan
+            bg, fg = ("#0b0b0b", "white") if on else (
+                ("#F7F4EC", "#a09b8c") if stale else ("#F1EFE8", "#444441"))
+            note = ("needs a scan for statement data — "
+                    "the reverse DCF has no inputs yet" if stale
+                    else preset["desc"])
+            count = preset.get("note", "")
+            pills.append(
+                f'<a href="{esc(link(rule=[] if on else list(preset["rules"]), action=""))}" '
+                f'title="{esc(note)}" style="background:{bg};color:{fg};'
+                f'font-size:11px;font-weight:600;padding:5px 10px;'
+                f'border-radius:6px;text-decoration:none;white-space:nowrap;'
+                f'display:inline-flex;gap:5px;align-items:center">'
+                f'{preset["icon"]} {esc(preset["name"])}'
+                + (f'<span style="font-weight:400;opacity:.65">'
+                   f'{esc(count if not stale else "needs scan")}</span>'
+                   if (count or stale) else "")
+                + '</a>')
+        sections.append(
+            f'<div style="display:flex;gap:6px;flex-wrap:wrap;'
+            f'align-items:center;margin-bottom:6px">'
+            f'<span style="font-size:10px;text-transform:uppercase;'
+            f'letter-spacing:.06em;color:#898781;min-width:112px">'
+            f'{esc(group)}</span>{"".join(pills)}</div>')
+    return (f'<div style="background:white;border:0.5px solid #e1e0d9;'
+            f'border-radius:12px;padding:12px 14px;margin-bottom:14px">'
+            f'{"".join(sections)}</div>')
+
+
 def _rule_pills(conds, link):
     """Active rules, each removable. Rules live in the URL, so a filtered
     view is a link and the back button undoes one rule at a time."""
@@ -1232,6 +1281,7 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
 {warn}
 {search}
 {notfound}
+{_preset_bar(link, rule_texts, cov["needs_rescan"])}
 {_rule_builder(rule_conds, rule_op, link, rule_stats, len(base),
                before_rules, raw_query)}
 

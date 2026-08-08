@@ -371,3 +371,138 @@ def apply_rules(results, rule_texts, op: str = "AND", sort: str = "lt_score"):
         if S.eval_group(row, group, []):
             kept.append(row["_result"])
     return kept, conds, stats
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PRESETS — the screens a long-only quality manager actually runs
+# ─────────────────────────────────────────────────────────────────────────────
+# Grouped by the question being asked, because that is the order the work
+# happens in: decide what deserves to be owned, then decide when to buy it,
+# then check what would stop you. That is the framework's own hierarchy, and
+# a preset list organised by field type instead would scatter it.
+#
+# Every preset below was measured against the live 545-row library and its
+# count recorded in `note`. That is not decoration — three separate features
+# in this engine were first built with thresholds that were empty by
+# construction (the forward DCF, the confluence gate, the readiness bands),
+# and a preset that returns nothing on every library is indistinguishable
+# from a broken one.
+#
+# `needs_statements` marks the four screens that depend on the annual
+# cash-flow and income statements. Those columns are 0% covered until a scan
+# runs core.longterm.fundamentals, so these presets return nothing today —
+# not because the rules are wrong but because the reverse DCF has no inputs
+# and every valuation is falling back to a peer multiple. The UI says so
+# rather than showing a bare zero.
+
+PRESET_GROUPS = ("What to own", "When to buy", "What would stop me")
+
+PRESETS: tuple[dict, ...] = (
+    # ── What to own ─────────────────────────────────────────────────────────
+    {"key": "quality_at_discount", "icon": "💎", "name": "Quality at a Discount",
+     "group": "What to own", "note": "20 names",
+     "desc": "The core screen: an elite business, not overpriced, trend not "
+             "broken. Everything else here is a refinement of this one.",
+     "rules": ["lquality:gte:85", "valuation_band:ne:OVERVALUED",
+               "trend_state:ne:BROKEN"]},
+    {"key": "wide_moat_cheap", "icon": "🏰", "name": "Wide Moat, Undervalued",
+     "group": "What to own", "note": "3 names",
+     "desc": "Top-decile quality trading below what the model says it is "
+             "worth. Rare by design — if this list is long, check the "
+             "valuation method before believing it.",
+     "rules": ["lquality:gte:90", "valuation_band:eq:UNDERVALUED"]},
+    {"key": "cashflow_verified", "icon": "🧾", "name": "Cash-Flow Verified Value",
+     "group": "What to own", "needs_statements": True,
+     "desc": "Undervalued on a reverse DCF built from filed statements, not "
+             "on a peer multiple. The strongest valuation claim this engine "
+             "can make.",
+     "rules": ["valuation_method:eq:REVERSE_DCF",
+               "valuation_confidence:eq:HIGH",
+               "valuation_band:eq:UNDERVALUED"]},
+    {"key": "garp", "icon": "📐", "name": "Growth at a Reasonable Price",
+     "group": "What to own", "needs_statements": True,
+     "desc": "Compounding at 15%+ while the price demands little more than "
+             "that. The gap between implied and delivered growth is the "
+             "whole test.",
+     "rules": ["delivered_growth:gte:15", "growth_gap:lte:10",
+               "lquality:gte:75"]},
+    {"key": "sector_leaders", "icon": "🥇", "name": "Sector Leaders",
+     "group": "What to own", "note": "11 names",
+     "desc": "Top-quintile relative strength inside its OWN sector — a name "
+             "leading its group while the group lags still leads.",
+     "rules": ["lt_sector_rs:gte:80", "lquality:gte:85"]},
+
+    # ── When to buy ─────────────────────────────────────────────────────────
+    {"key": "ready_to_deploy", "icon": "🟢", "name": "Ready to Deploy",
+     "group": "When to buy", "note": "18 names",
+     "desc": "Entry readiness 65+ on a quality business — the level, the "
+             "volume and the market all lining up now rather than eventually.",
+     "rules": ["readiness:gte:65", "lquality:gte:85"]},
+    {"key": "compounder_pullback", "icon": "🎯", "name": "Compounder Pullback",
+     "group": "When to buy", "note": "16 names",
+     "desc": "Stage 1: quality resting on the 8/21 EMA with a tested shelf "
+             "underneath. The shallow, high-momentum entry.",
+     "rules": ["lquality:gte:85", "stage:eq:STAGE1_EMA", "s1_tested:eq:true"]},
+    {"key": "fifty_ma_entry", "icon": "🎣", "name": "50 MA Pullback",
+     "group": "When to buy", "note": "3 names",
+     "desc": "Stage 2 — the framework's preferred core entry for a quality "
+             "name, and the only stage where every readiness point is "
+             "reachable.",
+     "rules": ["lquality:gte:85", "stage:eq:STAGE2_50MA"]},
+    {"key": "deep_pullback_quality", "icon": "🪂", "name": "Deep Pullback in Quality",
+     "group": "When to buy", "note": "4 names",
+     "desc": "Elite businesses well below the 50 MA but still above the 200 "
+             "MA, structure intact. Not a buy — a list to work support on.",
+     "rules": ["lq_tier:eq:Elite", "stage:eq:STAGE3_DEEP",
+               "trend_state:ne:BROKEN"]},
+    {"key": "asymmetric_entry", "icon": "⚖️", "name": "Asymmetric Entry",
+     "group": "When to buy", "note": "19 names",
+     "desc": "Twice as much headroom to the first resistance as give-back to "
+             "a TESTED support. Position sizing writes itself.",
+     "rules": ["headroom_ratio:gte:2", "s1_tested:eq:true",
+               "lquality:gte:85"]},
+    {"key": "accumulation", "icon": "🧲", "name": "Quiet Accumulation",
+     "group": "When to buy", "note": "36 names",
+     "desc": "Pullback volume drying up while relative strength holds — the "
+             "shape of institutions buying rather than retail selling.",
+     "rules": ["volume_score:gte:60", "lt_rs_rank:gte:60",
+               "lquality:gte:80"]},
+
+    # ── What would stop me ──────────────────────────────────────────────────
+    {"key": "priced_for_perfection", "icon": "🎈", "name": "Priced for Perfection",
+     "group": "What would stop me", "needs_statements": True,
+     "desc": "Great businesses whose price already requires 35%+ FCF growth "
+             "for five years. The most expensive mistake in a quality "
+             "portfolio is a quality company.",
+     "rules": ["lquality:gte:85", "implied_growth:gte:35"]},
+    {"key": "fallen_quality", "icon": "🩺", "name": "Fallen Quality — Thesis Review",
+     "group": "What would stop me", "note": "10 names",
+     "desc": "Businesses that still score well while price sits below the "
+             "200 MA. Either the market knows something the fundamentals "
+             "have not shown yet, or it is wrong. Worth deciding which.",
+     "rules": ["lquality:gte:85", "stage:eq:STAGE4_BREAKDOWN"]},
+    {"key": "dry_powder", "icon": "⏳", "name": "Dry Powder Watchlist",
+     "group": "What would stop me", "note": "7 names",
+     "desc": "Worth owning, priced acceptably, and extended above the 8 EMA. "
+             "Nothing to do but wait for the pullback — which is the point.",
+     "rules": ["lquality:gte:85", "valuation_band:ne:OVERVALUED",
+               "extended:eq:true"]},
+    {"key": "insider_aligned", "icon": "🤝", "name": "Insiders Buying",
+     "group": "What would stop me", "note": "31 names",
+     "desc": "Quality where the people who know it best are net buyers. A "
+             "tiebreaker, never a thesis — it sits outside LQuality for "
+             "exactly that reason.",
+     "rules": ["lquality:gte:85", "insider:eq:Net buying"]},
+    {"key": "earnings_clear", "icon": "📅", "name": "Clear of Earnings",
+     "group": "What would stop me", "note": "57 names",
+     "desc": "Quality names with no report inside two weeks — the gap risk "
+             "that no amount of setup quality offsets.",
+     "rules": ["lquality:gte:85", "lt_days_to_earnings:gte:14"]},
+)
+
+PRESET_BY_KEY = {p["key"]: p for p in PRESETS}
+
+
+def preset_rules(key: str) -> list[str]:
+    preset = PRESET_BY_KEY.get(str(key or ""))
+    return list(preset["rules"]) if preset else []

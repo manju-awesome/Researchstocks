@@ -902,3 +902,92 @@ class TestLongTermScreening(unittest.TestCase):
                     "Prior_Breakout_Level": None})))
         # 20% of headroom against 10% of give-back.
         self.assertAlmostEqual(flat["headroom_ratio"], 2.0, places=1)
+
+
+class TestPresets(unittest.TestCase):
+    """Every preset must be able to return something, and say so when it
+    cannot yet.
+
+    Three features in this engine were first built with thresholds that were
+    empty by construction — the forward DCF, the confluence gate and the
+    readiness bands. A preset that returns nothing on every library is
+    indistinguishable from a broken one, so the counts in `note` are checked
+    against the real thing rather than trusted.
+    """
+
+    def setUp(self):
+        from stockanalysis.core.longterm import screen as LS
+        self.LS = LS
+
+    def test_every_preset_parses_to_valid_conditions(self):
+        for preset in self.LS.PRESETS:
+            conds = [self.LS.parse_rule(r) for r in preset["rules"]]
+            self.assertTrue(all(c is not None for c in conds),
+                            f"{preset['key']} has an unparseable rule")
+
+    def test_every_preset_rule_names_a_real_field(self):
+        for preset in self.LS.PRESETS:
+            for rule in preset["rules"]:
+                key = rule.split(":")[0]
+                self.assertIn(key, self.LS.LONGTERM_FIELD_BY_KEY,
+                              f"{preset['key']} -> unknown field {key}")
+
+    def test_enum_rules_use_a_declared_value(self):
+        # "valuation_band:eq:CHEAP" would parse and silently match nothing.
+        for preset in self.LS.PRESETS:
+            for rule in preset["rules"]:
+                key, op, _, value = (rule.split(":", 2) + [""])[:3] + [
+                    rule.split(":", 2)[2] if rule.count(":") >= 2 else ""]
+                spec = self.LS.LONGTERM_FIELD_BY_KEY.get(key)
+                if spec and spec.kind == self.LS.ENUM and op in ("eq", "ne"):
+                    self.assertIn(value, spec.values,
+                                  f"{preset['key']}: {value} is not a "
+                                  f"value of {key}")
+
+    def test_keys_and_groups_are_well_formed(self):
+        keys = [p["key"] for p in self.LS.PRESETS]
+        self.assertEqual(len(keys), len(set(keys)), "duplicate preset key")
+        for preset in self.LS.PRESETS:
+            self.assertIn(preset["group"], self.LS.PRESET_GROUPS)
+            for field in ("icon", "name", "desc", "rules"):
+                self.assertTrue(preset.get(field), f"{preset['key']}.{field}")
+
+    def test_preset_rules_looks_up_by_key(self):
+        first = self.LS.PRESETS[0]
+        self.assertEqual(self.LS.preset_rules(first["key"]), list(first["rules"]))
+        self.assertEqual(self.LS.preset_rules("nope"), [])
+
+    def test_a_preset_actually_filters(self):
+        results = [E.evaluate(_row(Ticker="ELITE")),
+                   E.evaluate(_row(Ticker="WEAK", **{"Revenue": -5.0,
+                                                     "EPS_Growth%": -20.0,
+                                                     "ReturnOnEquity%": 2.0,
+                                                     "OperatingMargin%": 1.0,
+                                                     "GrossMargin%": 8.0,
+                                                     "FCF_Margin%": -5.0}))]
+        kept, conds, _ = self.LS.apply_rules(
+            results, self.LS.preset_rules("quality_at_discount"))
+        self.assertEqual(len(conds), 3)
+        self.assertNotIn("WEAK", [r["ticker"] for r in kept])
+
+    def test_statement_dependent_presets_are_flagged(self):
+        """The four screens that need the annual statements declare it.
+
+        Their fields are 0% covered until a scan runs
+        core.longterm.fundamentals, so they return nothing today — not
+        because the rules are wrong but because the reverse DCF has no
+        inputs. The flag is what lets the UI say that instead of showing a
+        bare zero.
+        """
+        statement_fields = {"implied_growth", "delivered_growth",
+                            "growth_gap", "valuation_method",
+                            "valuation_confidence"}
+        for preset in self.LS.PRESETS:
+            uses = {r.split(":")[0] for r in preset["rules"]}
+            needs = bool(uses & {"implied_growth", "delivered_growth",
+                                 "growth_gap"}) or (
+                "valuation_method" in uses)
+            if needs:
+                self.assertTrue(preset.get("needs_statements"),
+                                f"{preset['key']} depends on statement data "
+                                f"but is not flagged")
