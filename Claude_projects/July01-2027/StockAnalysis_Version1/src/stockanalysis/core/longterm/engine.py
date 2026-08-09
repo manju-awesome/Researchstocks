@@ -286,24 +286,66 @@ def investment_view(lq: dict, val: dict) -> dict:
 # The entry question. Trend carries the most weight because it is the one
 # leg that can veto the others: strong support inside a broken trend is a
 # reason to be careful, not a reason to buy.
-ENTRY_WEIGHTS = (("Long-term trend", 30), ("Support confluence", 20),
-                 ("Pullback volume", 20), ("Entry readiness", 30))
+#
+# "Swing setup" is the scan's own Swing_Score, included because it is an
+# INDEPENDENT read on the same question — is now the moment — built from
+# pattern work this engine has no access to: the setup category, risk/reward
+# to target, ATR contraction, Bollinger position. Brown & Brown is the case
+# that argued for it: sitting on its 8 EMA with a Momentum-Pullback
+# classification, 6.8 R:R and RS 88, the swing engine calls it a buy while
+# the long-term readiness sees only a moving average nearby.
+ENTRY_WEIGHTS = (("Long-term trend", 30), ("Entry readiness", 25),
+                 ("Swing setup", 20), ("Support confluence", 15),
+                 ("Pullback volume", 10))
+
+
+def swing_signal(row: dict) -> tuple[float | None, str]:
+    """The scan's Swing_Score, or None where the number is administrative.
+
+    core.strategy_scores ZEROES the swing score whenever the entry gate
+    failed — 126 of 552 library rows — and that zero means "no tradeable
+    swing plan", not "a bad setup". Folding it in as a zero would punish
+    long-term entries for a short-term gate, which the scan's own docstring
+    warns against: a 6-24 month accumulation does not need a trend already
+    in place, and the investment score is deliberately allowed to survive a
+    flat-ADX failure.
+
+    So an administrative zero is reported as UNMEASURED and blend()
+    renormalises over the rest — the same rule every other missing input in
+    this package follows.
+    """
+    score = f(row.get("Swing_Score"))
+    if score is None:
+        return None, "no swing score"
+    gate_ok = b(row.get("Entry_Gate_Pass"))
+    if score == 0 and gate_ok is False:
+        return None, "swing score zeroed by the scan's entry gate — not a "\
+                     "judgment on the setup"
+    bits = [x for x in (s(row.get("Category")), s(row.get("Grade")) and
+                        f"grade {row.get('Grade')}") if x]
+    rr = f(row.get("RR_T2"))
+    if rr:
+        bits.append(f"R:R {rr:.1f}")
+    return score, "; ".join(bits) or "swing setup"
 
 
 def entry_view(trend: dict, confluence: dict, volume: dict,
-               readiness: dict) -> dict:
+               readiness: dict, row: dict | None = None) -> dict:
+    swing, swing_note = swing_signal(row or {})
     blended = blend([
         ("Long-term trend", 30, _as_float(trend.get("score")),
          trend.get("state") or ""),
-        ("Support confluence", 20, _as_float(confluence.get("score")),
-         confluence.get("label") or ""),
-        ("Pullback volume", 20, _as_float(volume.get("score")),
-         volume.get("label") or ""),
-        ("Entry readiness", 30, _as_float(readiness.get("score")),
+        ("Entry readiness", 25, _as_float(readiness.get("score")),
          readiness.get("label") or ""),
+        ("Swing setup", 20, swing, swing_note),
+        ("Support confluence", 15, _as_float(confluence.get("score")),
+         confluence.get("label") or ""),
+        ("Pullback volume", 10, _as_float(volume.get("score")),
+         volume.get("label") or ""),
     ])
     return {"score": blended["score"], "coverage": blended["coverage"],
-            "components": blended["components"]}
+            "components": blended["components"],
+            "swing": swing, "swing_note": swing_note}
 
 
 def _as_float(v):
@@ -451,7 +493,7 @@ def evaluate(row: dict, peers: dict | None = None,
     insider = Q.insider_signal(row)
     cluster = pullback.get("ma_cluster") or {}
     investment = investment_view(lq, val)
-    entry = entry_view(trend, confluence, volume, readiness)
+    entry = entry_view(trend, confluence, volume, readiness, row)
     components = component_scores(lq, val, trend, confluence, volume,
                                   readiness, cluster)
 

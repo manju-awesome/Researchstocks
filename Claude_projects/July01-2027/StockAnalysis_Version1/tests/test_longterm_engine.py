@@ -1559,3 +1559,77 @@ class TestEarningsRisk(unittest.TestCase):
 
     def test_it_rides_along_with_every_verdict(self):
         self.assertIn("earnings_risk", E.evaluate(_row()))
+
+
+class TestSwingSetupInEntry(unittest.TestCase):
+    """The scan's Swing_Score as an independent read on entry timing.
+
+    Brown & Brown argued for it: on its 8 EMA with a Momentum-Pullback
+    classification, 6.8 R:R and RS 88, the swing engine calls it a buy while
+    the long-term readiness sees only a moving average nearby. The swing
+    score carries pattern work — category, risk/reward, ATR contraction,
+    Bollinger position — that this engine has no other access to.
+    """
+
+    def test_a_real_swing_score_is_used(self):
+        score, note = E.swing_signal(
+            {"Swing_Score": 75, "Entry_Gate_Pass": True,
+             "Category": "Momentum-Pullback", "Grade": "B", "RR_T2": 6.81})
+        self.assertEqual(score, 75)
+        self.assertIn("Momentum-Pullback", note)
+        self.assertIn("R:R 6.8", note)
+
+    def test_a_gate_zeroed_score_is_unmeasured_not_zero(self):
+        """126 of 552 library rows carry a swing score of 0 because the
+        scan's entry gate failed — an administrative zero, not a verdict.
+
+        core.strategy_scores deliberately lets the INVESTMENT score survive
+        a flat-ADX gate failure, since a 6-24 month accumulation does not
+        need a trend already in place. Folding the zero into a long-term
+        entry would punish exactly that case.
+        """
+        score, note = E.swing_signal({"Swing_Score": 0,
+                                      "Entry_Gate_Pass": False})
+        self.assertIsNone(score)
+        self.assertIn("entry gate", note)
+
+    def test_a_genuine_zero_with_the_gate_passing_still_counts(self):
+        score, _ = E.swing_signal({"Swing_Score": 0, "Entry_Gate_Pass": True})
+        self.assertEqual(score, 0)
+
+    def test_an_absent_score_is_unmeasured(self):
+        self.assertIsNone(E.swing_signal({})[0])
+
+    def test_the_missing_leg_renormalises_rather_than_scoring_zero(self):
+        legs = ({"score": 80, "state": "CONFIRMED"}, {"score": 80, "label": ""},
+                {"score": 80, "label": ""}, {"score": 80, "label": ""})
+        with_swing = E.entry_view(*legs, {"Swing_Score": 80,
+                                          "Entry_Gate_Pass": True})
+        gated = E.entry_view(*legs, {"Swing_Score": 0,
+                                     "Entry_Gate_Pass": False})
+        # Same four measured legs at 80 -> same score; the gated row must
+        # not be dragged toward zero by an administrative blank.
+        self.assertEqual(with_swing["score"], 80)
+        self.assertEqual(gated["score"], 80)
+        self.assertLess(gated["coverage"], with_swing["coverage"])
+
+    def test_a_strong_swing_setup_lifts_the_entry_score(self):
+        legs = ({"score": 40, "state": "PARTIAL"}, {"score": 40, "label": ""},
+                {"score": 40, "label": ""}, {"score": 40, "label": ""})
+        weak = E.entry_view(*legs, {"Swing_Score": 10, "Entry_Gate_Pass": True})
+        strong = E.entry_view(*legs, {"Swing_Score": 90,
+                                      "Entry_Gate_Pass": True})
+        self.assertGreater(strong["score"], weak["score"])
+
+    def test_the_weights_still_sum_to_one_hundred(self):
+        self.assertEqual(sum(w for _n, w in E.ENTRY_WEIGHTS), 100)
+
+    def test_the_top_tranche_band_is_reachable(self):
+        # A 40%-of-target band that no score can reach is empty by
+        # construction — the trap this engine has fallen into three times.
+        perfect = E.entry_view(
+            {"score": 100, "state": "CONFIRMED"}, {"score": 100, "label": ""},
+            {"score": 100, "label": ""}, {"score": 100, "label": ""},
+            {"Swing_Score": 100, "Entry_Gate_Pass": True})
+        self.assertGreaterEqual(perfect["score"], 80)
+        self.assertEqual(E.tranche_for(perfect["score"]), 40)
