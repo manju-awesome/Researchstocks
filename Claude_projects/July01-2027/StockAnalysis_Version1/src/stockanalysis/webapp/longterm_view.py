@@ -793,6 +793,30 @@ def _support_confluence_cell(conf, cluster=None):
             n * 1000 + count * 10 + min(score, 9))
 
 
+def _swing_cell(r):
+    """The scan's swing score, which feeds 20% of Entry and can stand in for
+    a reversal candle when it clears SWING_CONFIRMS.
+
+    A blank means the scan's own entry gate zeroed it — "no tradeable swing
+    plan", not "a bad setup" — and it is shown as a dash rather than a zero
+    so the two cannot be confused at a glance.
+    """
+    entry = r.get("entry") or {}
+    score, note = entry.get("swing"), entry.get("swing_note") or ""
+    if score is None:
+        return (f'<span style="color:#898781" title="{esc(note)}">—</span>'
+                f'<div style="font-size:10px;color:#898781">not scored</div>',
+                None)
+    colour = ("#0F6E56" if score >= 70 else "#8a6d1a" if score >= 50
+              else "#A32D2D")
+    confirms = (' <span title="strong enough to confirm an entry on its own"'
+                '>✓</span>' if score >= 70 else "")
+    return (f'<span style="color:{colour};font-weight:700">{score:.0f}</span>'
+            f'{confirms}'
+            f'<div style="font-size:10px;color:#898781;white-space:nowrap" '
+            f'title="{esc(note)}">{esc(note[:26])}</div>', score)
+
+
 def _status_cell(view, style_map):
     """A status badge with its score underneath — the company verdict and
     the timing verdict shown as two separate answers."""
@@ -882,6 +906,7 @@ _COLUMNS = (
     ("resistance", "R1 \u00b7 Resistance", "right", "num"),
     ("rs", "RS", "center", "num"),
     ("market", "Market", "center", "text"),
+    ("swing", "Swing", "left", "num"),
     ("investment", "Investment", "left", "num"),
     ("entry_score", "Entry", "left", "num"),
     ("action", "Action", "left", "num"),
@@ -950,6 +975,7 @@ def _cells(r):
             f'<strong>{(r.get("entry") or {}).get("score", "—")}</strong>'
             f'<div style="font-size:10px;color:#898781">of 100</div>',
             (r.get("entry") or {}).get("score")),
+        "swing": _swing_cell(r),
         "rs": (rs_mark, rs["score"]),
         "market": (market, r["regime"]),
         "lt": (f'<strong>{r["lt_score"] if r["lt_score"] is not None else "—"}</strong>',

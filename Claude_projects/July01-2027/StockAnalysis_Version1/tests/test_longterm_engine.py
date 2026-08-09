@@ -1633,3 +1633,93 @@ class TestSwingSetupInEntry(unittest.TestCase):
             {"Swing_Score": 100, "Entry_Gate_Pass": True})
         self.assertGreaterEqual(perfect["score"], 80)
         self.assertEqual(E.tranche_for(perfect["score"]), 40)
+
+
+class TestSwingConfirmsEntry(unittest.TestCase):
+    """A strong swing setup can stand in for a reversal candle.
+
+    The scan's Swing_Score above SWING_CONFIRMS already encodes a recognised
+    setup, a risk/reward to target and volatility contraction — independent
+    pattern work reaching the same conclusion the candle would. What it must
+    NOT do is override a measured failure, or reach past the quality,
+    valuation and trend gates.
+    """
+
+    def _at_level(self, **kw):
+        base = {"Reversal_Candle": None, "Swing_Score": 80,
+                "Entry_Gate_Pass": True, "Category": "Momentum-Pullback",
+                "Grade": "B", "RR_T2": 5.0}
+        base.update(kw)
+        return _row(**base)
+
+    def test_it_rescues_an_unmeasured_candle(self):
+        r = E.evaluate(self._at_level())
+        self.assertEqual(r["action"], "BUY NOW")
+        self.assertTrue(any("swing setup instead" in t for t in r["why"]),
+                        "the reason the buy fired must survive the buy")
+
+    def test_a_weak_swing_score_does_not(self):
+        r = E.evaluate(self._at_level(**{"Swing_Score": 55}))
+        self.assertNotEqual(r["action"], "BUY NOW")
+
+    def test_it_cannot_override_a_measured_failure(self):
+        # Overbought into the level is a reason the setup is wrong, not a
+        # gap in what was measured.
+        r = E.evaluate(self._at_level(**{"Reversal_Candle": "none",
+                                         "RSI_14": 78.0}))
+        self.assertNotEqual(r["action"], "BUY NOW")
+
+    def test_distributing_volume_still_blocks(self):
+        r = E.evaluate(self._at_level(**{"Vol_vs_20D": 2.4,
+                                         "Pullback_Vol_Ratio": 2.2,
+                                         "VolumeDryingUp": False,
+                                         "Distribution_Days_25d": 9}))
+        self.assertNotEqual(r["action"], "BUY NOW")
+
+    def test_it_cannot_reach_past_the_quality_gate(self):
+        # The hierarchy is structural. A perfect swing setup on a weak
+        # business is still not a long-term buy.
+        r = E.evaluate(self._at_level(**{"Revenue": -5.0, "EPS_Growth%": -20.0,
+                                         "ReturnOnEquity%": 2.0,
+                                         "OperatingMargin%": 1.0,
+                                         "GrossMargin%": 8.0,
+                                         "FCF_Margin%": -5.0}))
+        self.assertEqual(r["gate"], "quality")
+        self.assertIn(r["action"], ("AVOID", "THESIS BROKEN"))
+
+    def test_it_cannot_reach_past_the_valuation_gate(self):
+        r = E.evaluate(self._at_level(FreeCashFlow=2.0e8,
+                                      **{"FCF_CAGR%": 3.0,
+                                         "Revenue_CAGR%": 3.0,
+                                         "Revenue": 3.0}))
+        self.assertEqual(r["gate"], "valuation")
+
+    def test_a_gate_zeroed_swing_cannot_confirm(self):
+        r = E.evaluate(self._at_level(**{"Swing_Score": 0,
+                                         "Entry_Gate_Pass": False}))
+        self.assertNotEqual(r["action"], "BUY NOW")
+
+    def test_the_threshold_matches_the_screener_card(self):
+        # The Screener prints "Swing Score 75 (> 70)"; one bar, one number.
+        self.assertEqual(E.SWING_CONFIRMS, 70)
+
+
+class TestSwingColumn(unittest.TestCase):
+    def test_swing_is_a_column(self):
+        from stockanalysis.webapp import longterm_view as V
+        self.assertIn("swing", [c[0] for c in V._COLUMNS])
+
+    def test_a_scored_row_shows_the_number(self):
+        from stockanalysis.webapp import longterm_view as V
+        html, sort_value = V._swing_cell(
+            E.evaluate(_row(**{"Swing_Score": 75, "Entry_Gate_Pass": True})))
+        self.assertIn("75", html)
+        self.assertEqual(sort_value, 75)
+
+    def test_a_gate_zeroed_row_shows_a_dash_not_a_zero(self):
+        # "0" and "not scored" mean different things and must not look alike.
+        from stockanalysis.webapp import longterm_view as V
+        html, sort_value = V._swing_cell(
+            E.evaluate(_row(**{"Swing_Score": 0, "Entry_Gate_Pass": False})))
+        self.assertIn("not scored", html)
+        self.assertIsNone(sort_value)

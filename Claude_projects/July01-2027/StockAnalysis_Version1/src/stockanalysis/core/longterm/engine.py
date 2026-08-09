@@ -415,6 +415,11 @@ def _entry_prices(pullback, price) -> list[dict]:
     return out
 
 
+# The swing engine's own bar for "this is a setup" — the same threshold the
+# Screener card uses when it prints "Swing Score 75 (> 70)".
+SWING_CONFIRMS = 70
+
+
 def _confirmation(row, pullback, volume) -> tuple[bool | None, list[str]]:
     """§5: touch → stabilization → confirmation → entry. A touch is not an
     entry, and this is the check that keeps the engine from buying one.
@@ -422,6 +427,15 @@ def _confirmation(row, pullback, volume) -> tuple[bool | None, list[str]]:
     Returns (confirmed, missing_reasons). None means the confirming inputs
     were never measured — which is not a confirmation, and is reported as
     such rather than assumed either way.
+
+    A strong swing score is accepted as an ALTERNATIVE confirmation. The
+    scan's Swing_Score above SWING_CONFIRMS already encodes a recognised
+    setup, a risk/reward to target and volatility contraction — independent
+    pattern work reaching the same conclusion a reversal candle would, and
+    on Brown & Brown it does so while the candle column is blank. It cannot
+    override a measured failure: overbought RSI or distributing volume still
+    block, because those are reasons the setup is wrong rather than gaps in
+    what was measured.
     """
     missing = []
     reversal = row.get("Reversal_Candle")
@@ -456,6 +470,14 @@ def _confirmation(row, pullback, volume) -> tuple[bool | None, list[str]]:
         have_any = True
         missing.append(f"RSI {rsi:.0f} — overbought into the level")
         confirmed = False
+
+    swing, swing_note = swing_signal(row)
+    if confirmed is not False and swing is not None and swing >= SWING_CONFIRMS:
+        # Only rescues the UNMEASURED case. `confirmed is False` means
+        # something was checked and failed, and a pattern score does not
+        # overrule that.
+        return True, [f"Confirmed by the swing setup instead — "
+                      f"Swing_Score {swing:.0f} ({swing_note})"]
 
     if not have_any:
         return None, missing
@@ -507,11 +529,18 @@ def evaluate(row: dict, peers: dict | None = None,
     blockers, triggers = [], []
     entries = _entry_prices(pullback, price)
 
+    # Positive findings the gates discover on the way down — currently the
+    # note explaining that a swing setup stood in for a missing reversal
+    # candle. Without somewhere to put it, the reason a buy fired was
+    # discarded the moment the buy succeeded.
+    why_extra: list[str] = []
+
     def verdict(action, gate):
         return _assemble(ticker, action, gate, row, lq, val, trend, pullback,
                          confluence, volume, rs, lt, market_note, entries,
                          blockers, triggers, price, regime_up, readiness,
-                         insider, investment, entry, components, cluster)
+                         insider, investment, entry, components, cluster,
+                         why_extra)
 
     # ── GATE 1 — business quality. Nothing below matters if this fails. ──
     if lq["score"] is None or not lq["reliable"]:
@@ -671,6 +700,8 @@ def evaluate(row: dict, peers: dict | None = None,
         return verdict("WATCH", "support")
 
     confirmed, missing = _confirmation(row, pullback, volume)
+    if confirmed is True and missing:
+        why_extra.extend(missing)      # how it confirmed, not what is missing
     if confirmed is not True:
         blockers.extend(missing)
         if readiness["score"] >= READY_CONFIRM:
@@ -747,7 +778,8 @@ def _buy_triggers(row, pullback, readiness, trend) -> list[str]:
 def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
               volume, rs, lt, market_note, entries, blockers, triggers, price,
               regime, readiness=None, insider=None, investment=None,
-              entry=None, components=None, cluster=None) -> dict:
+              entry=None, components=None, cluster=None,
+              why_extra=None) -> dict:
     """The verdict with its whole audit attached — never a score without the
     reasoning that produced it."""
     zone = pullback["zone"]
@@ -755,7 +787,7 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
     tranche = (tranche_for(entry_score, zone)
                if action.startswith("BUY") else None)
 
-    why = []
+    why = list(why_extra or [])
     if lq["tier"]:
         why.append(f"{lq['tier_icon']} {lq['tier']} business — LQuality "
                    f"{lq['score']}/100")
