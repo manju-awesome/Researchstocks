@@ -45,8 +45,13 @@ _ACTION_STYLE = {
     "RESEARCH": ("#F1EFE8", "#444441"),
     "AVOID": ("#FCEBEB", "#791F1F"),
     "THESIS BROKEN": ("#FCEBEB", "#791F1F"),
+    "OWN / WAIT FOR PRICE": ("#FAEEDA", "#633806"),
+    "OWN / WAIT FOR TREND": ("#FAEEDA", "#633806"),
+    "OWN / WAIT FOR ENTRY": ("#FAEEDA", "#633806"),
 }
 
+_INVEST_STYLE = {"CORE": "good", "OWN": "good", "WATCHLIST": "watch",
+                 "REJECT": "bad"}
 _TIER_STYLE = {"Elite": "good", "High Quality": "good",
                "Watchlist": "watch", "Reject": "bad"}
 _BAND_STYLE = {"UNDERVALUED": "good", "FAIR": "watch", "OVERVALUED": "bad"}
@@ -66,7 +71,10 @@ _ACTION_SHORT = {"BUY NOW": "Buy now",
                  "DEEP PULLBACK — WAIT FOR SUPPORT": "Deep pullback",
                  "WATCH": "Watch", "WAIT": "Wait",
                  "RESEARCH": "Research", "AVOID": "Avoid",
-                 "THESIS BROKEN": "Thesis broken"}
+                 "THESIS BROKEN": "Thesis broken",
+                 "OWN / WAIT FOR PRICE": "Own / wait for price",
+                 "OWN / WAIT FOR TREND": "Own / wait for trend",
+                 "OWN / WAIT FOR ENTRY": "Own / wait for entry"}
 
 # Stage is what the Pullback column shows now. The zone answers "is price on
 # a tracked level" and collapses a 22%-below-the-50-MA correction to "—";
@@ -365,7 +373,7 @@ def _entries_panel(r):
         f'<td style="padding:3px 10px 3px 0;color:#898781">'
         f'{_pct(e["move_pct"])} from here</td>'
         f'<td style="padding:3px 0;color:#898781">'
-        + (f'{e["tranche_pct"]}% tranche' if e["tranche_pct"] else "—")
+        + (f'{e["tranche_pct"]}% of target' if e["tranche_pct"] else "—")
         + '</td></tr>' for e in entries[:4])
     return (f'<div style="margin-top:10px">'
             f'<div style="font-size:10px;text-transform:uppercase;'
@@ -791,7 +799,7 @@ def _status_cell(view, style_map):
     status = view.get("status")
     if not status:
         return '<span style="color:#898781">—</span>', None
-    rank = {"OWN": 3, "WATCH": 2, "AVOID": 1}.get(status, 0)
+    rank = {"CORE": 4, "OWN": 3, "WATCHLIST": 2, "REJECT": 1}.get(status, 0)
     score = view.get("score")
     return (f'{badge(status.title(), style_map.get(status, "muted"), "small")}'
             f'<div style="font-size:10px;color:#898781" '
@@ -889,6 +897,8 @@ _BAND_RANK = {"UNDERVALUED": 2, "FAIR": 1, "OVERVALUED": 0}
 _ACTION_ORDER = ("BUY NOW", "BUY ON CONFIRMATION", "BUY ON 8/21 EMA",
                  "BUY ON 50 MA", "BUY ON BREAKOUT RETEST", "BUY ON 200 MA",
                  "BUY ON SUPPORT", "DEEP PULLBACK \u2014 WAIT FOR SUPPORT",
+                 "OWN / WAIT FOR PRICE", "OWN / WAIT FOR TREND",
+                 "OWN / WAIT FOR ENTRY",
                  "WATCH", "WAIT", "RESEARCH", "AVOID", "THESIS BROKEN")
 _ACTION_RANK = {a: len(_ACTION_ORDER) - i for i, a in enumerate(_ACTION_ORDER)}
 
@@ -935,9 +945,7 @@ def _cells(r):
         "buyzone": _buyzone_cell(p),
         "resistance": _resistance_cell(p),
         "support": _support_confluence_cell(conf, r.get("ma_cluster") or {}),
-        "investment": _status_cell(r.get("investment") or {},
-                                   {"OWN": "good", "WATCH": "info",
-                                    "AVOID": "bad"}),
+        "investment": _status_cell(r.get("investment") or {}, _INVEST_STYLE),
         "entry_score": (
             f'<strong>{(r.get("entry") or {}).get("score", "—")}</strong>'
             f'<div style="font-size:10px;color:#898781">of 100</div>',
@@ -949,7 +957,7 @@ def _cells(r):
         "action": (
             _action_pill(r["action"], r["icon"])
             + (f'<div style="font-size:10px;color:#898781">'
-               f'{r["tranche_pct"]}% tranche</div>'
+               f'{r["tranche_pct"]}% of target</div>'
                if r.get("tranche_pct") else ""),
             _ACTION_RANK.get(r["action"])),
     }

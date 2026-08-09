@@ -58,8 +58,45 @@ from stockanalysis.core.longterm._common import b, blend, f, s
 # fundamental deterioration rather than a correction.
 ZONE_MIN_QUALITY = {"EMA": 85, "50MA": 85, "BREAKOUT": 85, "200MA": 90}
 
-# Share of the intended full position each tranche takes (§7).
+# Share of the intended full position each tranche takes (§7). Expressed
+# throughout as "% of target position", never a bare "% tranche" — the
+# ambiguity between "28% of this holding" and "28% of the portfolio" is the
+# difference between a normal starter and a wildly concentrated bet.
 ZONE_TRANCHE = {"EMA": 22, "50MA": 28, "BREAKOUT": 28, "200MA": 25}
+
+# Size follows the ENTRY score, not the zone alone. A 50 MA touch inside a
+# confirmed trend on contracting volume deserves more capital than the same
+# touch with nothing else agreeing, and the zone cannot tell them apart.
+ENTRY_TRANCHE = ((80, 40), (70, 28), (60, 18), (50, 8), (0, 0))
+
+
+def tranche_for(entry_score, zone=None) -> int:
+    """Percent OF THE TARGET POSITION to take on this entry."""
+    if entry_score is None:
+        return ZONE_TRANCHE.get(zone, 0)
+    for floor, pct in ENTRY_TRANCHE:
+        if entry_score >= floor:
+            return pct
+    return 0
+
+
+# Proximity to a report, as its own risk reading. A setup does not become
+# wrong before earnings; it becomes unreliable, and that is worth saying
+# separately from the verdict rather than folding into it.
+EARNINGS_RISK_BANDS = ((30, "🟢 Clear"), (15, "🟡 Approaching"),
+                       (7, "🟠 Near"), (-1, "🔴 Imminent"))
+
+
+def earnings_risk(days) -> dict:
+    d = f(days)
+    if d is None:
+        return {"label": "⚪ Unknown", "days": None}
+    if d < 0:
+        return {"label": "🟢 Clear", "days": d}
+    for floor, label in EARNINGS_RISK_BANDS:
+        if d >= floor:
+            return {"label": label, "days": d}
+    return {"label": "🔴 Imminent", "days": d}
 
 ZONE_ACTION = {"EMA": "BUY ON 8/21 EMA", "50MA": "BUY ON 50 MA",
                "200MA": "BUY ON 200 MA",
@@ -82,16 +119,32 @@ MIN_PULLBACK_VOLUME = 40
 
 SELECTIVE_QUALITY_BUMP = 5
 
+# "WATCH" said nothing about WHAT was being watched. A name can be held back
+# by its price, its trend, or simply having no setup yet, and those are three
+# different waits with three different triggers. Where the business is worth
+# owning the action says so first, then names the wait.
 ACTIONS = ("BUY NOW", "BUY ON CONFIRMATION", "BUY ON 8/21 EMA",
            "BUY ON 50 MA", "BUY ON BREAKOUT RETEST", "BUY ON 200 MA",
            "BUY ON SUPPORT", "DEEP PULLBACK — WAIT FOR SUPPORT",
+           "OWN / WAIT FOR PRICE", "OWN / WAIT FOR TREND",
+           "OWN / WAIT FOR ENTRY",
            "WATCH", "WAIT", "RESEARCH", "AVOID", "THESIS BROKEN")
+
+# Which "wait" label to use, by what is holding the name back. Only offered
+# to businesses good enough to own — below that the wait is about the
+# company, and WATCH/RESEARCH say so.
+OWN_AND_WAIT = {"price": "OWN / WAIT FOR PRICE",
+                "trend": "OWN / WAIT FOR TREND",
+                "entry": "OWN / WAIT FOR ENTRY"}
+OWNABLE_TIERS = ("CORE", "OWN")
 
 ACTION_ICONS = {"BUY NOW": "🟢", "BUY ON CONFIRMATION": "🟢",
                 "BUY ON 8/21 EMA": "🟢", "BUY ON 50 MA": "🟢",
                 "BUY ON BREAKOUT RETEST": "🟢", "BUY ON 200 MA": "🟢",
                 "BUY ON SUPPORT": "🟢",
                 "DEEP PULLBACK — WAIT FOR SUPPORT": "🟡",
+                "OWN / WAIT FOR PRICE": "🟡", "OWN / WAIT FOR TREND": "🟡",
+                "OWN / WAIT FOR ENTRY": "🟡",
                 "WATCH": "🔵", "WAIT": "⏳", "RESEARCH": "🔎", "AVOID": "🔴",
                 "THESIS BROKEN": "💀"}
 
@@ -148,12 +201,47 @@ def compute_lt_score(lq, val, tech_sub, market_sub) -> dict:
 # LT_Score survives as a ranking key across names that already share a
 # verdict. It is not the verdict.
 
-INVESTMENT_STATUSES = ("OWN", "WATCH", "AVOID")
-INVESTMENT_ICONS = {"OWN": "🟢", "WATCH": "🔵", "AVOID": "🔴"}
+# Tiers, not a pass/fail. The question "do I want to own this business" has
+# more than two answers, and the top one has to survive a bad price.
+INVESTMENT_TIERS = ((85, "CORE"), (75, "OWN"), (65, "WATCHLIST"), (0, "REJECT"))
+INVESTMENT_ICONS = {"CORE": "💎", "OWN": "🟢", "WATCHLIST": "🟡",
+                    "REJECT": "🔴"}
+INVESTMENT_STATUSES = tuple(name for _f, name in INVESTMENT_TIERS)
 
-# Weighted 70/30 within the company question, preserving the framework's own
-# 40:20 ratio between quality and valuation.
-INVESTMENT_WEIGHTS = (70, 30)
+# Valuation is 10% of the company question, not 30%.
+#
+# At 30% an expensive price dragged elite businesses out of the top tier —
+# Nvidia at 98 quality landed in the same bucket as a mediocre company,
+# which is the opposite of useful. A demanding price is a reason to wait for
+# a better entry, not a reason to stop wanting the business; that judgment
+# belongs to the ENTRY side, where waiting is the available action.
+#
+# The remaining 90% is LQuality, which already contains the framework's
+# earnings growth, revenue growth, FCF, balance sheet and moat weights —
+# restating them here would define the same thing twice and let the two
+# copies drift.
+INVESTMENT_WEIGHTS = (90, 10)
+
+
+def investment_tier(score) -> str | None:
+    if score is None:
+        return None
+    for floor, name in INVESTMENT_TIERS:
+        if score >= floor:
+            return name
+    return INVESTMENT_TIERS[-1][1]
+
+
+def _wait_label(investment: dict, holding_back: str) -> str:
+    """Name the wait, and say first whether the business is worth owning.
+
+    "WATCH" on Meta told the reader nothing: the company is a 93, and what
+    is missing is a trend. "OWN / WAIT FOR TREND" is the same verdict with
+    the useful half restored.
+    """
+    if (investment or {}).get("status") in OWNABLE_TIERS:
+        return OWN_AND_WAIT[holding_back]
+    return "WATCH" if holding_back == "trend" else "WAIT"
 
 
 def investment_view(lq: dict, val: dict) -> dict:
@@ -170,21 +258,28 @@ def investment_view(lq: dict, val: dict) -> dict:
         ("Valuation", INVESTMENT_WEIGHTS[1], val_sub, val.get("band") or ""),
     ])
 
+    score = blended["score"]
     if quality is None or not lq.get("reliable"):
-        status, why = "AVOID", "Quality could not be assessed"
+        status, why = "REJECT", "Quality could not be assessed"
     elif quality < Q.MIN_OWNABLE:
-        status, why = "AVOID", (f"LQuality {quality} is below the "
-                                f"{Q.MIN_OWNABLE} ownable bar")
-    elif val.get("acceptable") is False:
-        # The Meta case: a business worth owning, at a price that is not.
-        status, why = "WATCH", "Worth owning, but not at this price"
-    elif val.get("acceptable") is None:
-        status, why = "WATCH", "Worth owning; the price could not be assessed"
+        status, why = "REJECT", (f"LQuality {quality} is below the "
+                                 f"{Q.MIN_OWNABLE} ownable bar")
     else:
-        status, why = "OWN", "Quality and price both acceptable"
+        status = investment_tier(score)
+        why = {
+            "CORE": "A business to own through cycles",
+            "OWN": "Worth owning",
+            "WATCHLIST": "Good, not yet a core holding",
+            "REJECT": "Below the ownable bar",
+        }[status]
+        if val.get("acceptable") is False:
+            why += " — but the price is demanding"
+        elif val.get("acceptable") is None:
+            why += " — the price could not be assessed"
 
-    return {"score": blended["score"], "status": status,
+    return {"score": score, "status": status,
             "icon": INVESTMENT_ICONS[status], "why": why,
+            "priced_well": val.get("acceptable"),
             "coverage": blended["coverage"], "components": blended["components"]}
 
 
@@ -415,7 +510,7 @@ def evaluate(row: dict, peers: dict | None = None,
                 f"the price already assumes")
         else:
             triggers.append("Valuation improves")
-        return verdict("WAIT", "valuation")
+        return verdict(_wait_label(investment, "price"), "valuation")
 
     if val["acceptable"] is None:
         blockers.append("Could not be valued — " +
@@ -434,7 +529,7 @@ def evaluate(row: dict, peers: dict | None = None,
                             "breakdown")
         # Not AVOID: the business still passed gate 1, so this is a
         # watchlist name whose chart has to heal, not a company to discard.
-        return verdict("WATCH", "trend")
+        return verdict(_wait_label(investment, "trend"), "trend")
 
     if trend["state"] == "RECOVERING":
         # Not a shortfall in measurement — a shortfall in confirmation. Price
@@ -487,7 +582,7 @@ def evaluate(row: dict, peers: dict | None = None,
     # STAGE 4 — below the 200 MA. Not a pullback; a thesis review.
     if stage == "STAGE4_BREAKDOWN":
         blockers.append(pullback["note"])
-        return verdict("WATCH", "trend")
+        return verdict(_wait_label(investment, "trend"), "trend")
 
     # STAGE 3 — deep correction, long-term structure not broken. The state
     # that had no name before: too far below the 50 MA to be a normal
@@ -513,7 +608,7 @@ def evaluate(row: dict, peers: dict | None = None,
             first = entries[0]
             if lq["score"] >= ZONE_MIN_QUALITY.get(first["zone"], 85) + bump:
                 return verdict(ZONE_ACTION.get(first["zone"], "WATCH"), "entry")
-        return verdict("WATCH", "entry")
+        return verdict(_wait_label(investment, "entry"), "entry")
 
     # STAGE 1 / STAGE 2 — price is on a tracked level.
     zone = pullback["zone"]
@@ -546,8 +641,9 @@ def evaluate(row: dict, peers: dict | None = None,
     if trend["state"] != "CONFIRMED":
         return verdict("BUY ON CONFIRMATION", "trigger")
 
-    triggers.insert(0, f"Take the {ZONE_TRANCHE.get(zone, 25)}% tranche here; "
-                       f"add on the next level down or on trend resumption")
+    triggers.insert(0, f"Take {tranche_for(entry.get('score'), zone)}% of the "
+                       f"target position here; add on the next level down or "
+                       f"on trend resumption")
     return verdict("BUY NOW", "confirmed")
 
 
@@ -613,9 +709,9 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
     """The verdict with its whole audit attached — never a score without the
     reasoning that produced it."""
     zone = pullback["zone"]
-    tranche = (ZONE_TRANCHE.get(zone) if action == "BUY NOW"
-               else (entries[0]["tranche_pct"] if entries
-                     and action.startswith("BUY ON") else None))
+    entry_score = (entry or {}).get("score")
+    tranche = (tranche_for(entry_score, zone)
+               if action.startswith("BUY") else None)
 
     why = []
     if lq["tier"]:
@@ -676,6 +772,7 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
         "regime": regime,
         "market_note": market_note,
         "tranche_pct": tranche,
+        "earnings_risk": earnings_risk(row.get("Days_To_Earnings")),
         "entries": entries,
         "why": why,
         "blockers": blockers,

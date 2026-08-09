@@ -90,7 +90,8 @@ class TestHierarchyIsStructural(unittest.TestCase):
         r = E.evaluate(_row(FreeCashFlow=2.0e8,
                             **{"FCF_CAGR%": 3.0, "Revenue_CAGR%": 3.0,
                                "Revenue": 3.0}))
-        self.assertEqual(r["action"], "WAIT")
+        # Named, not bare: the business is fine, the price is not.
+        self.assertEqual(r["action"], "OWN / WAIT FOR PRICE")
         self.assertEqual(r["gate"], "valuation")
 
     def test_broken_trend_watches_rather_than_avoids(self):
@@ -103,7 +104,7 @@ class TestHierarchyIsStructural(unittest.TestCase):
                                "200MA": 120.0, "50MA": 110.0,
                                "Price_vs_50MA%": -9.0}))
         self.assertEqual(r["trend"]["state"], "BROKEN")
-        self.assertEqual(r["action"], "WATCH")
+        self.assertEqual(r["action"], "OWN / WAIT FOR TREND")
         self.assertEqual(r["gate"], "trend")
 
     def test_zone_quality_bars_come_from_the_framework(self):
@@ -1128,23 +1129,35 @@ class TestMACluster(unittest.TestCase):
 class TestTwoVerdicts(unittest.TestCase):
     """Company verdict and timing verdict, reported separately."""
 
-    def test_an_elite_business_at_a_bad_price_is_watch_not_avoid(self):
+    def test_an_elite_business_at_a_bad_price_stays_a_core_holding(self):
+        """A demanding price is a reason to wait, not to stop wanting it.
+
+        Valuation is 10% of the company question; at 30% it dragged
+        Nvidia at 98 quality out of the top tier, which is the opposite of
+        useful — the waiting belongs on the entry side.
+        """
         r = E.evaluate(_row(FreeCashFlow=2.0e8,
                             **{"FCF_CAGR%": 3.0, "Revenue_CAGR%": 3.0,
                                "Revenue": 3.0}))
-        self.assertEqual(r["investment"]["status"], "WATCH")
-        self.assertIn("not at this price", r["investment"]["why"])
+        # Still an ownable tier despite the price — valuation costs about
+        # ten points, so a 98 stays CORE and an 88 slips to OWN. What must
+        # NOT happen is an elite business falling out of the ownable tiers
+        # because it is expensive.
+        self.assertIn(r["investment"]["status"], E.OWNABLE_TIERS)
+        self.assertIn("price is demanding", r["investment"]["why"])
+        self.assertIs(r["investment"]["priced_well"], False)
         self.assertGreaterEqual(r["quality"]["score"], 85)
 
-    def test_quality_and_price_both_fine_is_own(self):
+    def test_quality_and_price_both_fine_is_a_core_holding(self):
         r = E.evaluate(_row())
-        self.assertEqual(r["investment"]["status"], "OWN")
+        self.assertEqual(r["investment"]["status"], "CORE")
+        self.assertIs(r["investment"]["priced_well"], True)
 
     def test_a_weak_business_is_avoid_whatever_the_chart(self):
         r = E.evaluate(_row(**{"Revenue": -5.0, "EPS_Growth%": -20.0,
                                "ReturnOnEquity%": 2.0, "OperatingMargin%": 1.0,
                                "GrossMargin%": 8.0, "FCF_Margin%": -5.0}))
-        self.assertEqual(r["investment"]["status"], "AVOID")
+        self.assertEqual(r["investment"]["status"], "REJECT")
 
     def test_the_two_verdicts_can_disagree(self):
         # The pairing the page exists to show: worth owning, not worth
@@ -1152,8 +1165,8 @@ class TestTwoVerdicts(unittest.TestCase):
         r = E.evaluate(_row(FreeCashFlow=2.0e8,
                             **{"FCF_CAGR%": 3.0, "Revenue_CAGR%": 3.0,
                                "Revenue": 3.0}))
-        self.assertEqual(r["investment"]["status"], "WATCH")
-        self.assertEqual(r["action"], "WAIT")
+        self.assertIn(r["investment"]["status"], E.OWNABLE_TIERS)
+        self.assertEqual(r["action"], "OWN / WAIT FOR PRICE")
 
     def test_five_component_scores_are_reported_separately(self):
         r = E.evaluate(_row())
@@ -1460,3 +1473,89 @@ class TestFCFMarginComesFromStatements(unittest.TestCase):
         # The only assignment left should be the None placeholder the
         # statements overwrite.
         self.assertNotIn('info.get("freeCashflow")', src)
+
+
+class TestInvestmentTiersAndNamedWaits(unittest.TestCase):
+    """Company tier is fundamentals-driven; the wait says what it waits for."""
+
+    def test_valuation_is_a_tenth_of_the_company_question(self):
+        # At 30% an expensive price pulled elite businesses out of the top
+        # tier, which reads as "bad investment" when the finding is "bad
+        # price". Waiting belongs to the entry side.
+        self.assertEqual(E.INVESTMENT_WEIGHTS, (90, 10))
+
+    def test_an_elite_business_survives_a_demanding_price(self):
+        elite = _row(**{"EPS_Growth%": 60.0, "Revenue": 40.0,
+                        "ReturnOnEquity%": 45.0, "OperatingMargin%": 45.0,
+                        "GrossMargin%": 78.0, "FCF_Margin%": 35.0})
+        priced = E.evaluate(elite)
+        expensive = E.evaluate(dict(elite, FreeCashFlow=2.0e8,
+                                    **{"FCF_CAGR%": 3.0, "Revenue_CAGR%": 3.0,
+                                       "Revenue": 3.0}))
+        self.assertEqual(priced["investment"]["status"], "CORE")
+        self.assertIn(expensive["investment"]["status"], E.OWNABLE_TIERS)
+
+    def test_the_four_tiers_are_ordered_and_reachable(self):
+        floors = [f for f, _n in E.INVESTMENT_TIERS]
+        self.assertEqual(floors, sorted(floors, reverse=True))
+        for score, want in ((92, "CORE"), (80, "OWN"), (70, "WATCHLIST"),
+                            (40, "REJECT")):
+            self.assertEqual(E.investment_tier(score), want)
+
+    def test_each_wait_names_what_it_is_waiting_for(self):
+        core = {"status": "CORE"}
+        self.assertEqual(E._wait_label(core, "price"), "OWN / WAIT FOR PRICE")
+        self.assertEqual(E._wait_label(core, "trend"), "OWN / WAIT FOR TREND")
+        self.assertEqual(E._wait_label(core, "entry"), "OWN / WAIT FOR ENTRY")
+
+    def test_a_name_not_worth_owning_gets_no_own_label(self):
+        weak = {"status": "REJECT"}
+        for reason in ("price", "trend", "entry"):
+            self.assertNotIn("OWN", E._wait_label(weak, reason))
+
+    def test_every_action_has_a_colour_label_and_rank(self):
+        from stockanalysis.webapp import longterm_view as V
+        for action in E.ACTIONS:
+            self.assertIn(action, V._ACTION_STYLE, action)
+            self.assertIn(action, V._ACTION_SHORT, action)
+            self.assertIn(action, V._ACTION_RANK, action)
+
+
+class TestTrancheSizing(unittest.TestCase):
+    """Size follows the entry score, and is stated as % of TARGET position."""
+
+    def test_a_better_entry_earns_more_capital(self):
+        sizes = [E.tranche_for(s) for s in (85, 75, 65, 55, 30)]
+        self.assertEqual(sizes, [40, 28, 18, 8, 0])
+        self.assertEqual(sizes, sorted(sizes, reverse=True))
+
+    def test_a_weak_entry_gets_nothing(self):
+        self.assertEqual(E.tranche_for(20), 0)
+
+    def test_it_falls_back_to_the_zone_when_entry_is_unscored(self):
+        self.assertEqual(E.tranche_for(None, "50MA"), E.ZONE_TRANCHE["50MA"])
+
+    def test_the_ui_says_of_target_not_bare_tranche(self):
+        # "28% tranche" is ambiguous between 28% of this holding and 28% of
+        # the portfolio — a difference that matters enormously.
+        from stockanalysis.webapp import longterm_view as V
+        html = V._row(E.evaluate(_row()))
+        self.assertNotIn("% tranche", html)
+        if "of target" in html:
+            self.assertIn("% of target", html)
+
+
+class TestEarningsRisk(unittest.TestCase):
+    def test_the_bands_run_from_clear_to_imminent(self):
+        for days, want in ((45, "Clear"), (20, "Approaching"), (10, "Near"),
+                           (3, "Imminent"), (0, "Imminent")):
+            self.assertIn(want, E.earnings_risk(days)["label"])
+
+    def test_a_passed_report_is_clear_not_imminent(self):
+        self.assertIn("Clear", E.earnings_risk(-4)["label"])
+
+    def test_unknown_stays_unknown(self):
+        self.assertIn("Unknown", E.earnings_risk(None)["label"])
+
+    def test_it_rides_along_with_every_verdict(self):
+        self.assertIn("earnings_risk", E.evaluate(_row()))
