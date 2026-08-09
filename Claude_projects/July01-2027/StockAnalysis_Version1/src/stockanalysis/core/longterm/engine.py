@@ -437,6 +437,58 @@ RR_MIN_QUALITY = 85
 # than good ones.
 RR_MIN_RISK_PCT = 2.0
 
+# ── Valuation override ───────────────────────────────────────────────────────
+# An exceptional risk/reward downgrades OVERVALUED from a block to a warning.
+#
+# The case for it: valuation says what you are paying for the business over
+# years; risk/reward says what this entry costs if the thesis is wrong now.
+# A 7:1 setup on an elite company with a confirmed uptrend risks a few
+# percent to a level the market has defended, and refusing it on a
+# trailing-cash-flow multiple treats a cyclical trough as a permanent state.
+# Western Digital is the case: quality 95, 200 MA rising 13%, a tested shelf
+# 2.7% below — and $1.28B of free cash flow after two negative years, which
+# makes any multiple built on it close to meaningless.
+#
+# The case against, which is why the bars are high: this is the one place the
+# hierarchy bends, and every guard below exists so it bends rather than
+# breaks.
+VALUATION_OVERRIDE_RR = 5.0        # clearly above the 4:1 that carries a
+                                   # trigger — this buys more than an entry
+VALUATION_OVERRIDE_QUALITY = 85    # elite businesses only
+# Measured across the first three targets rather than the second alone. What
+# the override asks is whether the trade's realistic range justifies the
+# price, and for a deep pullback that range is the level it fell from. The
+# 52-week high is deliberately out of reach of this window, so a collapsed
+# name cannot borrow a huge ratio from a distant old high.
+VALUATION_OVERRIDE_TARGETS = 3
+
+
+def valuation_override(lq, val, trend, targets) -> dict | None:
+    """Whether an exceptional setup earns a warning instead of a block.
+
+    Returns the reason when it applies, None otherwise. Requires ALL of:
+    an elite business, a CONFIRMED trend (not merely un-broken), a real stop,
+    and a ratio well beyond the one that already carries a trigger.
+    """
+    if val.get("acceptable") is not False:
+        return None
+    quality = lq.get("score")
+    if quality is None or quality < VALUATION_OVERRIDE_QUALITY:
+        return None
+    if trend.get("state") != "CONFIRMED":
+        return None
+    risk = abs(targets.get("risk_pct") or 0)
+    if risk < RR_MIN_RISK_PCT:
+        return None
+    ladder = (targets.get("ladder") or [])[:VALUATION_OVERRIDE_TARGETS]
+    if not ladder:
+        return None
+    best = max(ladder, key=lambda lv: lv["rr"])
+    if best["rr"] < VALUATION_OVERRIDE_RR:
+        return None
+    return {"rr": best["rr"], "target": best,
+            "stop": targets.get("stop"), "risk_pct": targets.get("risk_pct")}
+
 
 def _confirmation(row, pullback, volume) -> tuple[bool | None, list[str]]:
     """§5: touch → stabilization → confirmation → entry. A touch is not an
@@ -566,11 +618,6 @@ def evaluate(row: dict, peers: dict | None = None,
 
     blockers, triggers = [], []
     entries = _entry_prices(pullback, price)
-
-    # Positive findings the gates discover on the way down — currently the
-    # note explaining that a swing setup stood in for a missing reversal
-    # candle. Without somewhere to put it, the reason a buy fired was
-    # discarded the moment the buy succeeded.
     why_extra: list[str] = []
 
     def verdict(action, gate):
@@ -604,7 +651,19 @@ def evaluate(row: dict, peers: dict | None = None,
         return verdict("AVOID", "quality")
 
     # ── GATE 2 — valuation. A great company at any price is not a buy. ──
-    if val["acceptable"] is False:
+    override = valuation_override(lq, val, trend, targets)
+    if val["acceptable"] is False and override:
+        # Downgraded to a warning, not waived. The blocker still shows, and
+        # the card still says the price is demanding — what changes is that
+        # the ladder is allowed to continue past it.
+        blockers.append(f"⚠ Price is demanding — {val['headline']}")
+        why_extra.append(
+            f"Overvaluation overridden by a {override['rr']:.1f}:1 setup — "
+            f"stop ${override['stop']:,.2f} ({override['risk_pct']:+.1f}%), "
+            f"target ${override['target']['price']:,.2f} "
+            f"({override['target']['name']}). The price is still demanding; "
+            f"the trade is small enough to be wrong")
+    elif val["acceptable"] is False:
         # The headline is the only field both methods produce — the reverse
         # DCF deliberately has no fair value, and printing one it never
         # computed would be a number nobody could defend.
@@ -830,7 +889,10 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
     if lq["tier"]:
         why.append(f"{lq['tier_icon']} {lq['tier']} business — LQuality "
                    f"{lq['score']}/100")
-    if val["band"]:
+    # Only a price that is actually acceptable belongs in the reasons TO buy.
+    # Listing "🔴 Overvalued" among them read as an argument for the trade,
+    # and sat directly beside the override note contradicting it.
+    if val["band"] and val.get("acceptable"):
         why.append(f"{val['band_icon']} {val.get('band_label') or val['band']} "
                    f"— {val['headline']}")
     if trend["state"] == "CONFIRMED":

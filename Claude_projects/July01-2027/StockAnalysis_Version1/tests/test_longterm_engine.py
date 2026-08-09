@@ -1822,12 +1822,18 @@ class TestRiskRewardCanCarryAnEntry(unittest.TestCase):
                                       "FCF_Margin%": -5.0}))
         self.assertNotEqual(r["action"], "BUY NOW")
 
-    def test_it_cannot_reach_past_valuation(self):
-        # Western Digital's real case: excellent technicals, 117x free cash
-        # flow. The chart does not get to overrule the price.
+    def test_it_cannot_reach_past_valuation_on_an_unconfirmed_trend(self):
+        """The trigger override and the VALUATION override are separate.
+
+        A 4:1 ratio substitutes for a reversal candle. Getting past a
+        demanding price needs more — an elite business AND a confirmed
+        trend AND a bigger ratio — so without the slopes this still stops.
+        """
         r = E.evaluate(self._setup(FreeCashFlow=2.0e8,
                                    **{"FCF_CAGR%": 3.0, "Revenue_CAGR%": 3.0,
-                                      "Revenue": 3.0}))
+                                      "Revenue": 3.0, "MA200_Slope%": None,
+                                      "MA50_Slope%": None}))
+        self.assertNotEqual(r["trend"]["state"], "CONFIRMED")
         self.assertEqual(r["gate"], "valuation")
 
 
@@ -1855,3 +1861,90 @@ class TestPureTechnicalScore(unittest.TestCase):
 
     def test_the_weights_sum_to_one_hundred(self):
         self.assertEqual(sum(w for _n, w in T.TECHNICAL_WEIGHTS), 100)
+
+
+class TestValuationOverride(unittest.TestCase):
+    """An exceptional risk/reward downgrades OVERVALUED to a warning.
+
+    This is the one place the hierarchy bends, so every guard exists to make
+    it bend rather than break. Valuation says what you pay for the business
+    over years; risk/reward says what this entry costs if the thesis is
+    wrong now. A 7:1 setup on an elite company in a confirmed uptrend risks
+    a few percent to a defended level, and refusing it on a trailing
+    cash-flow multiple treats a cyclical trough as permanent.
+    """
+
+    def _expensive(self, **kw):
+        # Elite business, confirmed trend, priced far beyond what it delivers.
+        base = {"Current Price": 100.0, "S1": 94.0, "R1": 112.0,
+                "8EMA": 99.0, "21EMA": 98.0, "50MA": 96.0, "200MA": 80.0,
+                "Prior_Breakout_Level": 95.0, "52W High": 160.0,
+                "ATR_Pct": 4.0, "MA200_Slope%": 5.0, "MA50_Slope%": 2.0,
+                "Above_200MA": True, "FreeCashFlow": 2.0e8,
+                "FCF_CAGR%": 3.0, "Revenue_CAGR%": 3.0, "Revenue": 3.0,
+                "EPS_Growth%": 60.0, "ReturnOnEquity%": 45.0,
+                "OperatingMargin%": 45.0, "GrossMargin%": 78.0,
+                "FCF_Margin%": 35.0}
+        base.update(kw)
+        return _row(**base)
+
+    def test_it_lets_an_exceptional_setup_past_the_valuation_gate(self):
+        r = E.evaluate(self._expensive())
+        self.assertNotEqual(r["gate"], "valuation")
+        self.assertTrue(any("overridden by" in w for w in r["why"]))
+
+    def test_the_price_is_still_reported_as_demanding(self):
+        # Downgraded to a warning, not waived — the card must still say the
+        # price is demanding.
+        r = E.evaluate(self._expensive())
+        self.assertTrue(any("demanding" in b for b in r["blockers"]))
+
+    def test_overvalued_is_never_listed_as_a_reason_to_buy(self):
+        r = E.evaluate(self._expensive())
+        self.assertFalse(any("Overvalued" in w for w in r["why"]),
+                         "an overvalued reading is not an argument for the trade")
+
+    def test_a_merely_good_ratio_does_not_qualify(self):
+        # 4:1 carries a trigger; the valuation override asks for more.
+        r = E.evaluate(self._expensive(**{"R1": 104.0, "52W High": 106.0,
+                                          "8EMA": 103.0, "21EMA": 103.5,
+                                          "50MA": 104.5}))
+        self.assertEqual(r["gate"], "valuation")
+
+    def test_an_unconfirmed_trend_does_not_qualify(self):
+        # Not merely un-broken — CONFIRMED. Without the slopes the engine
+        # cannot say the uptrend is intact, and that is exactly when a
+        # demanding price should still stop it.
+        r = E.evaluate(self._expensive(**{"MA200_Slope%": None,
+                                          "MA50_Slope%": None}))
+        self.assertEqual(r["gate"], "valuation")
+
+    def test_a_lesser_business_does_not_qualify(self):
+        # Ownable, but not elite — reaches the valuation gate and stops
+        # there, because the override is for 85+ only.
+        r = E.evaluate(self._expensive(**{"EPS_Growth%": 20.0,
+                                          "ReturnOnEquity%": 20.0,
+                                          "OperatingMargin%": 20.0,
+                                          "GrossMargin%": 50.0,
+                                          "FCF_Margin%": 12.0,
+                                          "Revenue": 12.0}))
+        self.assertGreaterEqual(r["quality"]["score"], Q.MIN_OWNABLE)
+        self.assertLess(r["quality"]["score"], E.VALUATION_OVERRIDE_QUALITY)
+        self.assertEqual(r["gate"], "valuation")
+
+    def test_a_tight_stop_cannot_buy_the_override(self):
+        r = E.evaluate(self._expensive(**{"S1": 99.4,
+                                          "Prior_Breakout_Level": 99.3,
+                                          "8EMA": 99.5, "21EMA": 99.6,
+                                          "50MA": 99.7}))
+        self.assertEqual(r["gate"], "valuation")
+
+    def test_the_ratio_cannot_be_borrowed_from_a_distant_old_high(self):
+        # Only the first three targets are eligible, so a collapsed name
+        # cannot qualify on a 52-week high nobody expects it to see.
+        t = T.compute_targets(self._expensive())
+        eligible = (t["ladder"] or [])[:E.VALUATION_OVERRIDE_TARGETS]
+        self.assertLessEqual(len(eligible), 3)
+
+    def test_the_bar_sits_above_the_one_that_carries_a_trigger(self):
+        self.assertGreater(E.VALUATION_OVERRIDE_RR, E.RR_CONFIRMS)
