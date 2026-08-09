@@ -573,6 +573,7 @@ def compute_pullback(row: dict) -> dict:
         "buy_zone": compute_buy_zone_level(row),
         "resistance": compute_resistance_level(row),
         "ma_cluster": compute_ma_cluster(row),
+        "targets": compute_targets(row),
         "range_52w": compute_52w_range(row),
         "note": note,
     }
@@ -656,6 +657,165 @@ def compute_ma_cluster(row: dict) -> dict:
     out.update({"count": count, "label": label, "levels": near,
                 "span_pct": span})
     return out
+
+
+# A stop closer than this is inside ordinary daily noise for most names, so
+# a ratio measured against it says more about the level's proximity than
+# about the trade.
+MIN_STOP_PCT = 1.5
+
+
+def compute_targets(row: dict) -> dict:
+    """Stop, T1 and T2 — the trade priced, so risk/reward is a number.
+
+    T1 is the nearest resistance overhead and T2 the next one above it. Both
+    come from the same ladder the rest of the module uses (the key-level
+    engine's R1, the moving averages, the 52-week high), so a target is
+    always a price something has actually happened at rather than a
+    percentage picked to look good.
+
+    Which target matters depends on the setup, which is why both are
+    reported. Western Digital at $434.30 with support at $422.50 risks 2.7%;
+    to R1 at $454.49 that is 1.7:1, but to the 8 EMA at $491.46 — the level
+    a deep pullback is actually trying to reclaim — it is 4.8:1. Quoting
+    only the nearer target would understate the setup by a factor of three.
+    """
+    price = _price(row)
+    out = {"stop": None, "stop_name": None, "risk_pct": None, "t1": None,
+           "t2": None, "rr_t1": None, "rr_t2": None, "ladder": []}
+    if price is None or price <= 0:
+        return out
+
+    # The stop is the nearest level that is actually FAR ENOUGH to be one.
+    # compute_supports() returns the closest level of any kind, and a moving
+    # average sitting 1% under the price is not a stop — it is inside a
+    # normal session. Taking it anyway manufactures a 30:1 setup out of a
+    # level that will be lost on a quiet Tuesday.
+    below = []
+    for key, _zone, label in SUPPORT_LEVELS:
+        lv = f(row.get(key))
+        if lv and lv < price:
+            below.append((lv, label))
+    s1 = f(row.get("S1"))
+    if s1 and s1 < price:
+        below.append((s1, "volume shelf"))
+    # Nearest first, but skipping anything inside MIN_STOP_PCT.
+    candidates = sorted(((lv, label) for lv, label in below
+                         if (price - lv) / price * 100 >= MIN_STOP_PCT),
+                        reverse=True)
+    if not candidates:
+        return out
+    stop, stop_name = candidates[0]
+    out["stop_name"] = stop_name
+    risk = price - stop
+    out["stop"] = round(stop, 2)
+    out["risk_pct"] = round((stop / price - 1) * 100, 1)
+
+    # Every level above the price, nearest first, deduped on price.
+    above = []
+    r1 = f(row.get("R1"))
+    if r1 and r1 > price:
+        above.append((r1, "R1" + (f" ({f(row.get('Touches')):.0f} touches)"
+                                  if _touches_belong_to(row) == "R1"
+                                  and f(row.get("Touches")) else "")))
+    for key, _zone, label in SUPPORT_LEVELS:
+        lv = f(row.get(key))
+        if lv and lv > price:
+            above.append((lv, label))
+    high = f(row.get("52W High"))
+    if high and high > price:
+        above.append((high, "52W high"))
+
+    seen, ladder = set(), []
+    for level, label in sorted(above):
+        key = round(level, 2)
+        if key in seen:
+            continue
+        seen.add(key)
+        ladder.append({"price": key, "name": label,
+                       "move_pct": round((level / price - 1) * 100, 1),
+                       "rr": round((level - price) / risk, 2)})
+
+    if ladder:
+        out["t1"] = ladder[0]
+        out["rr_t1"] = ladder[0]["rr"]
+    if len(ladder) > 1:
+        out["t2"] = ladder[1]
+        out["rr_t2"] = ladder[1]["rr"]
+    out["ladder"] = ladder[:4]
+    return out
+
+
+# Pure price-and-volume. Nothing here reads a margin, a growth rate or a
+# multiple — the whole point is a second opinion on timing that shares no
+# input with the quality or valuation gates, so agreement between them means
+# something.
+TECHNICAL_WEIGHTS = (("Trend structure", 25), ("Pullback quality", 20),
+                     ("Support quality", 20), ("Risk / reward", 20),
+                     ("Momentum & volume", 15))
+
+# Depth bands. Being FURTHER below the 50 MA is not a better entry — past a
+# point it stops being a pullback and becomes a decline, and a score that
+# rises with depth hunts falling knives.
+DEPTH_BANDS = ((3, 60), (7, 85), (12, 100), (20, 70), (30, 35), (999, 10))
+
+
+def compute_technical_score(row: dict, trend: dict, pullback: dict,
+                            confluence: dict, volume: dict,
+                            targets: dict) -> dict:
+    """0-100 from price and volume alone."""
+    parts = []
+
+    parts.append(("Trend structure", 25, _as_num(trend.get("score")),
+                  trend.get("state") or ""))
+
+    vs50 = f(row.get("Price_vs_50MA%"))
+    if vs50 is None:
+        parts.append(("Pullback quality", 20, None, "no 50 MA distance"))
+    elif vs50 > 0:
+        # Above the 50 MA: reward being close to it, not far above.
+        parts.append(("Pullback quality", 20,
+                      band(vs50, [(3, 90), (8, 70), (15, 45), (99, 20)]),
+                      f"{vs50:+.1f}% above the 50 MA"))
+    else:
+        parts.append(("Pullback quality", 20, band(abs(vs50), DEPTH_BANDS),
+                      f"{abs(vs50):.1f}% below the 50 MA"))
+
+    bz = pullback.get("buy_zone") or {}
+    sup = None if confluence.get("score") is None else float(confluence["score"])
+    if sup is not None and bz.get("actual_support"):
+        sup = min(100.0, sup + 25)          # a tested shelf is worth more
+    parts.append(("Support quality", 20, sup,
+                  "tested shelf" if bz.get("actual_support") else "derived level"))
+
+    rr = targets.get("rr_t2") or targets.get("rr_t1")
+    parts.append(("Risk / reward", 20,
+                  None if rr is None else scale(rr, 0.5, 4.0),
+                  "no target" if rr is None else f"{rr:.1f}:1 to target"))
+
+    rsi = f(row.get("RSI_14"))
+    vol = volume.get("score")
+    momentum = []
+    if rsi is not None:
+        momentum.append(band(rsi, [(30, 55), (45, 90), (60, 100), (70, 55),
+                                   (99, 15)]))
+    if vol is not None:
+        momentum.append(float(vol))
+    parts.append(("Momentum & volume", 15,
+                  sum(momentum) / len(momentum) if momentum else None,
+                  f"RSI {rsi:.0f}" if rsi is not None else "no RSI"))
+
+    from stockanalysis.core.longterm._common import blend as _blend
+    out = _blend(parts)
+    out["label"] = next(
+        name for floor, name in ((80, "🔥 Excellent"), (65, "🟢 Good"),
+                                 (50, "🟡 Fair"), (0, "🔴 Poor"))
+        if (out["score"] or 0) >= floor)
+    return out
+
+
+def _as_num(v):
+    return None if v is None else float(v)
 
 
 def compute_resistance_level(row: dict) -> dict:

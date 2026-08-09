@@ -419,6 +419,24 @@ def _entry_prices(pullback, price) -> list[dict]:
 # Screener card uses when it prints "Swing Score 75 (> 70)".
 SWING_CONFIRMS = 70
 
+# Risk/reward strong enough to stand in for a confirmation trigger, and the
+# quality it takes to earn that.
+#
+# The reasoning is the one the framework already uses for position sizing: a
+# 4:1 setup can be wrong three times out of four and still make money, so
+# waiting for a reversal candle costs more than it protects. It substitutes
+# for the TRIGGER only — the quality, valuation and trend gates are upstream
+# and untouched, and a great chart on an expensive company still stops at
+# valuation.
+RR_CONFIRMS = 4.0
+RR_MIN_QUALITY = 85
+# ...and the stop has to be far enough away to be a stop. Risk/reward is a
+# ratio, so a support level sitting 0.8% under the price manufactures a 10:1
+# setup out of a level that ordinary noise removes before lunch. Requiring a
+# minimum risk distance is what stops the rule rewarding tight stops rather
+# than good ones.
+RR_MIN_RISK_PCT = 2.0
+
 
 def _confirmation(row, pullback, volume) -> tuple[bool | None, list[str]]:
     """§5: touch → stabilization → confirmation → entry. A touch is not an
@@ -471,6 +489,21 @@ def _confirmation(row, pullback, volume) -> tuple[bool | None, list[str]]:
         missing.append(f"RSI {rsi:.0f} — overbought into the level")
         confirmed = False
 
+    # Risk/reward as an alternative trigger. Same rule as the swing setup:
+    # it rescues the UNMEASURED case, never a measured failure.
+    targets = (pullback or {}).get("targets") or {}
+    rr = targets.get("rr_t2") or targets.get("rr_t1")
+    quality = f((row.get("_lquality")))
+    risk_pct = abs(targets.get("risk_pct") or 0)
+    if (confirmed is not False and rr is not None and rr >= RR_CONFIRMS
+            and risk_pct >= RR_MIN_RISK_PCT
+            and quality is not None and quality >= RR_MIN_QUALITY):
+        t2 = targets.get("t2") or targets.get("t1") or {}
+        return True, [f"Risk/reward {rr:.1f}:1 carries the entry — stop "
+                      f"${targets['stop']:,.2f} ({targets['risk_pct']:+.1f}%), "
+                      f"target ${t2.get('price', 0):,.2f} "
+                      f"({t2.get('name', 'resistance')})"]
+
     swing, swing_note = swing_signal(row)
     if confirmed is not False and swing is not None and swing >= SWING_CONFIRMS:
         # Only rescues the UNMEASURED case. `confirmed is False` means
@@ -514,6 +547,11 @@ def evaluate(row: dict, peers: dict | None = None,
     readiness = T.compute_entry_readiness(row, pullback, rs, regime)
     insider = Q.insider_signal(row)
     cluster = pullback.get("ma_cluster") or {}
+    targets = pullback.get("targets") or {}
+    # Pure price-and-volume, sharing no input with the quality or valuation
+    # gates — which is what makes agreement between them informative.
+    technical = T.compute_technical_score(row, trend, pullback, confluence,
+                                          volume, targets)
     investment = investment_view(lq, val)
     entry = entry_view(trend, confluence, volume, readiness, row)
     components = component_scores(lq, val, trend, confluence, volume,
@@ -540,7 +578,7 @@ def evaluate(row: dict, peers: dict | None = None,
                          confluence, volume, rs, lt, market_note, entries,
                          blockers, triggers, price, regime_up, readiness,
                          insider, investment, entry, components, cluster,
-                         why_extra)
+                         why_extra, technical, targets)
 
     # ── GATE 1 — business quality. Nothing below matters if this fails. ──
     if lq["score"] is None or not lq["reliable"]:
@@ -699,7 +737,8 @@ def evaluate(row: dict, peers: dict | None = None,
                         f"alone is a coordinate, not support")
         return verdict("WATCH", "support")
 
-    confirmed, missing = _confirmation(row, pullback, volume)
+    confirmed, missing = _confirmation({**row, "_lquality": lq["score"]},
+                                      pullback, volume)
     if confirmed is True and missing:
         why_extra.extend(missing)      # how it confirmed, not what is missing
     if confirmed is not True:
@@ -779,7 +818,7 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
               volume, rs, lt, market_note, entries, blockers, triggers, price,
               regime, readiness=None, insider=None, investment=None,
               entry=None, components=None, cluster=None,
-              why_extra=None) -> dict:
+              why_extra=None, technical=None, targets=None) -> dict:
     """The verdict with its whole audit attached — never a score without the
     reasoning that produced it."""
     zone = pullback["zone"]
@@ -843,6 +882,8 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
         "entry": entry or {},
         "components": components or [],
         "ma_cluster": cluster or {},
+        "technical": technical or {},
+        "targets": targets or {},
         "regime": regime,
         "market_note": market_note,
         "tranche_pct": tranche,

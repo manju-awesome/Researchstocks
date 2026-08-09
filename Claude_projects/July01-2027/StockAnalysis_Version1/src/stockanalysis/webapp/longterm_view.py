@@ -215,6 +215,44 @@ def _trend_panel(t):
     return f'<ul style="margin:0;padding-left:16px;list-style:none">{"".join(cells)}</ul>'
 
 
+def _targets_panel(r):
+    """Stop, T1, T2 and the risk/reward each implies.
+
+    Both targets are shown because which one matters depends on the setup.
+    Western Digital risks 2.7% to its shelf; to R1 that is 1.7:1, but to the
+    8 EMA the level a deep pullback is trying to reclaim it is 4.8:1.
+    Quoting only the nearer one would understate the trade threefold.
+    """
+    t = r.get("targets") or {}
+    if not t.get("stop") or not t.get("ladder"):
+        return empty("no stop or target — no tested level either side")
+    rows = [f'<tr><td style="padding:3px 14px 3px 0;color:#A32D2D;'
+            f'font-weight:600">Stop</td>'
+            f'<td style="padding:3px 14px 3px 0;text-align:right">'
+            f'<strong>${t["stop"]:,.2f}</strong></td>'
+            f'<td style="padding:3px 14px 3px 0;text-align:right;'
+            f'color:#A32D2D">{t["risk_pct"]:+.1f}%</td>'
+            f'<td style="padding:3px 0;color:#898781">risk</td></tr>']
+    for i, lv in enumerate(t["ladder"], 1):
+        rows.append(
+            f'<tr><td style="padding:3px 14px 3px 0;color:#0F6E56;'
+            f'font-weight:600">T{i}</td>'
+            f'<td style="padding:3px 14px 3px 0;text-align:right">'
+            f'<strong>${lv["price"]:,.2f}</strong></td>'
+            f'<td style="padding:3px 14px 3px 0;text-align:right;'
+            f'color:#0F6E56">{lv["move_pct"]:+.1f}%</td>'
+            f'<td style="padding:3px 0;color:#898781">'
+            f'{esc(lv["name"])} · <strong>{lv["rr"]:.1f}:1</strong></td></tr>')
+    tech = r.get("technical") or {}
+    head = ""
+    if tech.get("score") is not None:
+        head = (f'<div style="font-size:11px;margin-bottom:6px">'
+                f'Technical {tech["score"]}/100 — {esc(tech.get("label", ""))}'
+                f'</div>')
+    return head + (f'<table style="border-collapse:collapse;font-size:11px">'
+                   f'{"".join(rows)}</table>')
+
+
 def _levels_panel(r):
     """The moving-average reference prices, moved out of the table.
 
@@ -402,6 +440,7 @@ def _detail(r):
         f'<div>{card("Business quality — LQuality", _quality_panel(q), "💎")}</div>'
         f'<div>{card("Valuation", _valuation_panel(v), "⚖️")}</div>'
         f'<div>{card("Long-term trend", _trend_panel(t), "📈")}</div>'
+        f'<div>{card("Targets and risk", _targets_panel(r), "🎯")}</div>'
         f'<div>{card("Moving-average levels", _levels_panel(r), "📐")}</div>'
         f'<div>{card("What would change it", _scenarios_panel(r), "🔀")}</div>'
         f'<div>{card("52-week range", _range_panel(r["pullback"].get("range_52w") or {}), "📏")}</div>'
@@ -794,27 +833,30 @@ def _support_confluence_cell(conf, cluster=None):
 
 
 def _swing_cell(r):
-    """The scan's swing score, which feeds 20% of Entry and can stand in for
-    a reversal candle when it clears SWING_CONFIRMS.
+    """The PURE technical score — price and volume only.
 
-    A blank means the scan's own entry gate zeroed it — "no tradeable swing
-    plan", not "a bad setup" — and it is shown as a dash rather than a zero
-    so the two cannot be confused at a glance.
+    Shares no input with the quality or valuation gates, which is what makes
+    it a genuine second opinion rather than a restatement. The scan's own
+    Swing_Score rides underneath as context; it feeds 20% of Entry and can
+    stand in for a reversal candle, but it mixes chart category and grade
+    with the rest, so it is not the headline here.
     """
+    tech = r.get("technical") or {}
+    score = tech.get("score")
     entry = r.get("entry") or {}
-    score, note = entry.get("swing"), entry.get("swing_note") or ""
+    swing = entry.get("swing")
+    sub = ("scan swing —" if swing is None else f"scan swing {swing:.0f}")
+    rr = (r.get("targets") or {}).get("rr_t2") or (r.get("targets") or {}).get("rr_t1")
+    if rr is not None:
+        sub += f" · {rr:.1f}:1"
     if score is None:
-        return (f'<span style="color:#898781" title="{esc(note)}">—</span>'
-                f'<div style="font-size:10px;color:#898781">not scored</div>',
-                None)
-    colour = ("#0F6E56" if score >= 70 else "#8a6d1a" if score >= 50
+        return ('<span style="color:#898781">—</span>', None)
+    colour = ("#0F6E56" if score >= 65 else "#8a6d1a" if score >= 50
               else "#A32D2D")
-    confirms = (' <span title="strong enough to confirm an entry on its own"'
-                '>✓</span>' if score >= 70 else "")
-    return (f'<span style="color:{colour};font-weight:700">{score:.0f}</span>'
-            f'{confirms}'
-            f'<div style="font-size:10px;color:#898781;white-space:nowrap" '
-            f'title="{esc(note)}">{esc(note[:26])}</div>', score)
+    return (f'<span style="color:{colour};font-weight:700" '
+            f'title="{esc(tech.get("label", ""))}">{score}</span>'
+            f'<div style="font-size:10px;color:#898781;white-space:nowrap">'
+            f'{esc(sub)}</div>', score)
 
 
 def _status_cell(view, style_map):
@@ -906,7 +948,7 @@ _COLUMNS = (
     ("resistance", "R1 \u00b7 Resistance", "right", "num"),
     ("rs", "RS", "center", "num"),
     ("market", "Market", "center", "text"),
-    ("swing", "Swing", "left", "num"),
+    ("swing", "Technical", "left", "num"),
     ("investment", "Investment", "left", "num"),
     ("entry_score", "Entry", "left", "num"),
     ("action", "Action", "left", "num"),

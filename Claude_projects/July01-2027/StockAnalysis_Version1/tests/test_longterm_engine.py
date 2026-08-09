@@ -120,7 +120,10 @@ class TestMissingInputsAreNotSatisfiedConditions(unittest.TestCase):
         self.assertNotEqual(r["action"], "BUY NOW")
 
     def test_an_unmeasured_candle_is_not_a_confirmation(self):
-        r = E.evaluate(_row(Reversal_Candle=None))
+        # No swing score and no meaningful risk/reward to stand in for it.
+        r = E.evaluate(_row(Reversal_Candle=None, Swing_Score=None,
+                            **{"Prior_Breakout_Level": 96.0, "S1": None,
+                               "ATR_Pct": 4.0, "52W High": 108.0}))
         self.assertEqual(r["action"], "WATCH")
         self.assertEqual(r["gate"], "trigger")
 
@@ -1646,9 +1649,17 @@ class TestSwingConfirmsEntry(unittest.TestCase):
     """
 
     def _at_level(self, **kw):
+        # Prior breakout removed so the stop is not 0.8% away — otherwise
+        # the risk/reward rule confirms first and this class tests nothing.
+        # ATR 4% widens the tolerance to 6%, so the 8/21 EMA and the
+        # breakout shelf both count and the row clears the confluence gate.
+        # The shelf sits 4% down, far enough that risk/reward is 2:1 rather
+        # than a manufactured 10:1 off a 0.8% stop — otherwise the R:R rule
+        # confirms first and this class tests nothing.
         base = {"Reversal_Candle": None, "Swing_Score": 80,
                 "Entry_Gate_Pass": True, "Category": "Momentum-Pullback",
-                "Grade": "B", "RR_T2": 5.0}
+                "Grade": "B", "RR_T2": 5.0, "Prior_Breakout_Level": 96.0,
+                "S1": None, "ATR_Pct": 4.0, "52W High": 108.0}
         base.update(kw)
         return _row(**base)
 
@@ -1709,17 +1720,138 @@ class TestSwingColumn(unittest.TestCase):
         from stockanalysis.webapp import longterm_view as V
         self.assertIn("swing", [c[0] for c in V._COLUMNS])
 
-    def test_a_scored_row_shows_the_number(self):
+    def test_the_column_leads_with_the_pure_technical_score(self):
         from stockanalysis.webapp import longterm_view as V
-        html, sort_value = V._swing_cell(
-            E.evaluate(_row(**{"Swing_Score": 75, "Entry_Gate_Pass": True})))
-        self.assertIn("75", html)
-        self.assertEqual(sort_value, 75)
+        r = E.evaluate(_row(**{"Swing_Score": 75, "Entry_Gate_Pass": True}))
+        html, sort_value = V._swing_cell(r)
+        self.assertEqual(sort_value, r["technical"]["score"])
+        self.assertIn(str(r["technical"]["score"]), html)
 
-    def test_a_gate_zeroed_row_shows_a_dash_not_a_zero(self):
+    def test_the_scan_swing_rides_underneath_as_context(self):
+        from stockanalysis.webapp import longterm_view as V
+        html, _ = V._swing_cell(
+            E.evaluate(_row(**{"Swing_Score": 75, "Entry_Gate_Pass": True})))
+        self.assertIn("scan swing 75", html)
+
+    def test_a_gate_zeroed_scan_swing_shows_a_dash(self):
         # "0" and "not scored" mean different things and must not look alike.
         from stockanalysis.webapp import longterm_view as V
-        html, sort_value = V._swing_cell(
+        html, _ = V._swing_cell(
             E.evaluate(_row(**{"Swing_Score": 0, "Entry_Gate_Pass": False})))
-        self.assertIn("not scored", html)
-        self.assertIsNone(sort_value)
+        self.assertIn("scan swing —", html)
+
+
+class TestTargetsAndRiskReward(unittest.TestCase):
+    """Stop, T1, T2 — the trade priced so risk/reward is a number."""
+
+    def _wdc(self, **kw):
+        base = {"Current Price": 434.30, "S1": 422.50, "R1": 454.49,
+                "8EMA": 491.46, "21EMA": 516.73, "50MA": 561.18,
+                "200MA": 341.09, "52W High": 799.87, "ATR_Pct": 12.29,
+                "Volume_Confirmation": True, "Touches": 300,
+                "Prior_Breakout_Level": None}
+        base.update(kw)
+        return _row(**base)
+
+    def test_targets_climb_the_real_level_ladder(self):
+        t = T.compute_targets(self._wdc())
+        self.assertEqual(t["stop"], 422.50)
+        names = [lv["name"] for lv in t["ladder"]]
+        self.assertTrue(names[0].startswith("R1"))
+        self.assertIn("8 EMA", names)
+
+    def test_both_targets_are_reported_because_they_differ_threefold(self):
+        # 1.7:1 to R1, 4.8:1 to the 8 EMA — quoting only the nearer target
+        # would understate the setup by a factor of three.
+        t = T.compute_targets(self._wdc())
+        self.assertLess(t["rr_t1"], 2.0)
+        self.assertGreater(t["rr_t2"], 4.0)
+
+    def test_a_level_below_the_price_is_never_a_target(self):
+        t = T.compute_targets(self._wdc())
+        for lv in t["ladder"]:
+            self.assertGreater(lv["price"], 434.30)
+
+    def test_no_support_means_no_trade_to_price(self):
+        t = T.compute_targets(self._wdc(**{"S1": None, "8EMA": 500.0,
+                                           "21EMA": 510.0, "50MA": 520.0,
+                                           "200MA": 530.0}))
+        self.assertIsNone(t["stop"])
+
+
+class TestRiskRewardCanCarryAnEntry(unittest.TestCase):
+    def _setup(self, **kw):
+        base = {"Current Price": 100.0, "S1": 95.0, "R1": 130.0,
+                "8EMA": 99.0, "21EMA": 98.0, "50MA": 97.0, "200MA": 80.0,
+                "Prior_Breakout_Level": 96.0, "52W High": 140.0,
+                "ATR_Pct": 4.0, "Reversal_Candle": None, "Swing_Score": None,
+                "Volume_Confirmation": True, "Touches": 40}
+        base.update(kw)
+        return _row(**base)
+
+    def test_a_strong_ratio_substitutes_for_the_trigger(self):
+        r = E.evaluate(self._setup())
+        self.assertEqual(r["action"], "BUY NOW")
+        self.assertTrue(any("carries the entry" in w for w in r["why"]))
+
+    def test_a_level_inside_the_noise_is_never_the_stop(self):
+        """A shelf 0.8% under the price is not a stop.
+
+        Risk/reward is a ratio, so a level ordinary noise removes before
+        lunch produces a 30:1 setup out of nothing. The ladder skips past
+        anything inside MIN_STOP_PCT and uses the next real level, rather
+        than quoting a ratio measured against proximity.
+        """
+        t = T.compute_targets(self._setup(**{"S1": 99.2,
+                                             "Prior_Breakout_Level": 99.2}))
+        self.assertLessEqual(t["stop"], 100.0 * (1 - T.MIN_STOP_PCT / 100))
+        self.assertGreaterEqual(abs(t["risk_pct"]), T.MIN_STOP_PCT)
+
+    def test_no_level_far_enough_means_no_trade_to_price(self):
+        t = T.compute_targets(self._setup(**{"S1": 99.6, "8EMA": 99.5,
+                                             "21EMA": 99.4, "50MA": 99.3,
+                                             "200MA": 99.2,
+                                             "Prior_Breakout_Level": 99.1}))
+        self.assertIsNone(t["stop"])
+
+    def test_it_needs_the_quality_to_earn_it(self):
+        r = E.evaluate(self._setup(**{"Revenue": -5.0, "EPS_Growth%": -20.0,
+                                      "ReturnOnEquity%": 2.0,
+                                      "OperatingMargin%": 1.0,
+                                      "GrossMargin%": 8.0,
+                                      "FCF_Margin%": -5.0}))
+        self.assertNotEqual(r["action"], "BUY NOW")
+
+    def test_it_cannot_reach_past_valuation(self):
+        # Western Digital's real case: excellent technicals, 117x free cash
+        # flow. The chart does not get to overrule the price.
+        r = E.evaluate(self._setup(FreeCashFlow=2.0e8,
+                                   **{"FCF_CAGR%": 3.0, "Revenue_CAGR%": 3.0,
+                                      "Revenue": 3.0}))
+        self.assertEqual(r["gate"], "valuation")
+
+
+class TestPureTechnicalScore(unittest.TestCase):
+    def test_it_shares_no_input_with_quality_or_valuation(self):
+        base = _row()
+        rich = E.evaluate(base)
+        poor = E.evaluate(_row(**{"Revenue": -5.0, "EPS_Growth%": -20.0,
+                                  "ReturnOnEquity%": 2.0,
+                                  "OperatingMargin%": 1.0,
+                                  "GrossMargin%": 8.0, "FCF_Margin%": -5.0}))
+        # Same chart, opposite fundamentals -> identical technical score.
+        self.assertEqual(rich["technical"]["score"], poor["technical"]["score"])
+
+    def test_depth_has_an_optimal_zone(self):
+        def tech(vs50):
+            r = _row(**{"Price_vs_50MA%": vs50})
+            return T.compute_technical_score(
+                r, T.compute_trend(r), T.compute_pullback(r),
+                T.compute_support_confluence(r), T.compute_pullback_volume(r),
+                T.compute_targets(r))["score"]
+        # A 10% pullback beats both a 1% one and a 35% collapse.
+        self.assertGreater(tech(-10), tech(-1))
+        self.assertGreater(tech(-10), tech(-35))
+
+    def test_the_weights_sum_to_one_hundred(self):
+        self.assertEqual(sum(w for _n, w in T.TECHNICAL_WEIGHTS), 100)
