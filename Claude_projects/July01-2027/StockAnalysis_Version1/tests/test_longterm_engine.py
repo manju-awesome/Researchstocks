@@ -1406,3 +1406,57 @@ class TestRowLimit(unittest.TestCase):
         body, _ = self.view.longterm_page({"limit": ["banana"]})
         self.assertEqual(body.count('data-main="1"'),
                          self.view.DEFAULT_LIMIT)
+
+
+class TestFCFMarginComesFromStatements(unittest.TestCase):
+    """FCF margin must not inherit the broken .info["freeCashflow"].
+
+    Alphabet reported a 5.1% FCF margin beside "compounding +7%/yr, positive
+    in 4 of 4 years" — two lines that cannot both describe the same company.
+    The margin was $22.7B/$445.9B from .info; the filed statements say
+    $164.7B operating cash flow less $91.4B capex = $73.3B, a margin of 18%.
+    """
+
+    def setUp(self):
+        from stockanalysis.core.longterm import fundamentals as F
+        self.F = F
+
+    def _frames(self, fcf, revenue):
+        import pandas as pd
+        cols = pd.to_datetime(["2025-12-31", "2024-12-31"])
+        cash = pd.DataFrame([fcf], index=["Free Cash Flow"], columns=cols)
+        inc = pd.DataFrame([revenue], index=["Total Revenue"], columns=cols)
+        return cash, inc
+
+    def test_margin_is_computed_from_the_statement_not_info(self):
+        cash, inc = self._frames([73.3e9, 72.8e9], [402.5e9, 350.0e9])
+        out = self.F.compute_fundamentals(cash, inc)
+        self.assertAlmostEqual(out["FCF_Margin%"], 18.2, places=1)
+        self.assertIs(out["FCF_Positive"], True)
+
+    def test_both_sides_come_from_the_same_fiscal_year(self):
+        # Pairing a statement numerator with a trailing-twelve-month
+        # denominator quietly mixes periods.
+        cash, inc = self._frames([100e9, 90e9], [500e9, 400e9])
+        self.assertEqual(
+            self.F.compute_fundamentals(cash, inc)["FCF_Margin%"], 20.0)
+
+    def test_negative_free_cash_flow_reads_as_negative(self):
+        cash, inc = self._frames([-5e9, 2e9], [100e9, 90e9])
+        out = self.F.compute_fundamentals(cash, inc)
+        self.assertIs(out["FCF_Positive"], False)
+        self.assertLess(out["FCF_Margin%"], 0)
+        self.assertEqual(out["FCF_Positive_Years"], 1)
+
+    def test_no_statements_means_no_margin_rather_than_a_wrong_one(self):
+        out = self.F.compute_fundamentals(None, None)
+        self.assertIsNone(out["FCF_Margin%"])
+        self.assertIsNone(out["FCF_Positive"])
+
+    def test_metrics_no_longer_derives_the_margin_from_info(self):
+        import inspect
+        from stockanalysis.core import metrics
+        src = inspect.getsource(metrics.get_metrics)
+        # The only assignment left should be the None placeholder the
+        # statements overwrite.
+        self.assertNotIn('info.get("freeCashflow")', src)

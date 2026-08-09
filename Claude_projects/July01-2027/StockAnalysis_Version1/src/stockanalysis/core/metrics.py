@@ -653,15 +653,14 @@ def get_metrics(ticker: str, qqq_return_3m: float) -> dict:
     except Exception:
         row["PEG_Ratio"] = None
 
-    try:
-        fcf = info.get("freeCashflow")
-        revenue = info.get("totalRevenue")
-        row["FCF_Positive"] = bool(fcf > 0) if fcf is not None else None
-        row["FCF_Margin%"] = (round(fcf / revenue * 100, 1)
-                               if fcf is not None and revenue else None)
-    except Exception:
-        row["FCF_Positive"] = None
-        row["FCF_Margin%"] = None
+    # FCF_Margin% / FCF_Positive are NOT derived from .info here. That field
+    # ("freeCashflow") is wrong by 4-10x — see core.longterm.fundamentals —
+    # and computing a margin from it produced 5.1% for Alphabet against a
+    # filed 16.4%. Both keys come from the annual statements below; when
+    # those are unavailable they stay None, because a wrong margin is worse
+    # than an absent one.
+    row["FCF_Positive"] = None
+    row["FCF_Margin%"] = None
 
     try:
         si = info.get("shortPercentOfFloat")

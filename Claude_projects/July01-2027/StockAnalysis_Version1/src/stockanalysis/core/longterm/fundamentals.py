@@ -40,7 +40,7 @@ from __future__ import annotations
 
 FUNDAMENTAL_KEYS = (
     "FreeCashFlow", "FCF_History", "FCF_CAGR%", "FCF_Positive_Years",
-    "FCF_Years", "NetIncome", "Revenue_CAGR%",
+    "FCF_Years", "FCF_Margin%", "FCF_Positive", "NetIncome", "Revenue_CAGR%",
     "OperatingMargin_History", "OperatingMargin_Trend_pp",
     "GrossMargin_History", "GrossMargin_Trend_pp",
     "Fundamentals_As_Of",
@@ -141,6 +141,19 @@ def compute_fundamentals(cashflow=None, income=None) -> dict:
         out["FCF_Positive_Years"] = sum(1 for v in clean if v > 0)
 
     revenue = _series(income, "Total Revenue")
+
+    # Margin from the STATEMENTS, both sides. Computed from
+    # .info["freeCashflow"] it inherits that field's 4-10x error: Alphabet
+    # showed a 5.1% FCF margin against a real 16.4%, because the numerator
+    # was $22.7B rather than the filed $73.3B. Read beside "compounding
+    # +7%/yr, positive in 4 of 4 years" the two lines contradicted each
+    # other, which is how the error surfaced.
+    if out["FreeCashFlow"] is not None:
+        out["FCF_Positive"] = out["FreeCashFlow"] > 0
+        rev_now = next((v for v in revenue if v), None)
+        if rev_now and rev_now > 0:
+            out["FCF_Margin%"] = round(out["FreeCashFlow"] / rev_now * 100, 1)
+
     op_income = _series(income, "Operating Income")
     gross = _series(income, "Gross Profit")
     net = _series(income, "Net Income", "Net Income Common Stockholders")
