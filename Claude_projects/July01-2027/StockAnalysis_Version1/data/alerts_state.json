@@ -4788,28 +4788,6 @@
     },
     "since": "2026-08-04T13:26:56"
   },
-  "HIMS:news:ac21ff2613": {
-    "alert": {
-      "dedup_key": "HIMS:news:ac21ff2613",
-      "category": "news",
-      "ticker": "HIMS",
-      "priority": "HIGH",
-      "headline": "M&A / Acquisition: Why Hims & Hers Is the Perfect Acquisition Target (Even If a Deal Never Happens)",
-      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "M&A / Acquisition",
-        "publisher": "24/7 Wall St.",
-        "url": "https://finance.yahoo.com/healthcare/articles/why-hims-hers-perfect-acquisition-141529935.html",
-        "published": "2026-08-04"
-      },
-      "created_at": "2026-08-04T14:45:25"
-    },
-    "since": "2026-08-04T14:45:25"
-  },
   "HST:a_plus_setup": {
     "alert": {
       "dedup_key": "HST:a_plus_setup",
@@ -5139,28 +5117,6 @@
       "created_at": "2026-08-06T08:36:48"
     },
     "since": "2026-08-06T08:36:48"
-  },
-  "IREN:news:a54253062a": {
-    "alert": {
-      "dedup_key": "IREN:news:a54253062a",
-      "category": "news",
-      "ticker": "IREN",
-      "priority": "HIGH",
-      "headline": "M&A / Acquisition: IREN acquires Mirantis for $625M to boost AI software stack",
-      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "M&A / Acquisition",
-        "publisher": "Blockspace",
-        "url": "https://finance.yahoo.com/video/iren-acquires-mirantis-625m-boost-210740493.html",
-        "published": "2026-08-04"
-      },
-      "created_at": "2026-08-06T08:36:52"
-    },
-    "since": "2026-08-06T08:36:52"
   },
   "ARM:a_plus_setup": {
     "alert": {
@@ -5936,28 +5892,6 @@
       "created_at": "2026-08-07T08:30:37"
     },
     "since": "2026-08-07T08:30:37"
-  },
-  "AVGO:news:c5bce9412d": {
-    "alert": {
-      "dedup_key": "AVGO:news:c5bce9412d",
-      "category": "news",
-      "ticker": "AVGO",
-      "priority": "HIGH",
-      "headline": "M&A / Acquisition: AI Chips Update - AMD Advances AI Strategy With Taalas Acquisition",
-      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "M&A / Acquisition",
-        "publisher": "Simply Wall St.",
-        "url": "https://finance.yahoo.com/technology/ai/articles/ai-chips-amd-advances-ai-113923975.html",
-        "published": "2026-08-07"
-      },
-      "created_at": "2026-08-07T08:36:38"
-    },
-    "since": "2026-08-07T08:36:38"
   },
   "NEE:news:ddae8b54fb": {
     "alert": {
@@ -7621,72 +7555,6 @@
     },
     "since": "2026-08-07T09:55:32"
   },
-  "AMD:news:bb8019f2cb": {
-    "alert": {
-      "dedup_key": "AMD:news:bb8019f2cb",
-      "category": "news",
-      "ticker": "AMD",
-      "priority": "HIGH",
-      "headline": "M&A / Acquisition: Nvidia Stock Jumps After AMD Acquires AI Startup Taalas",
-      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "M&A / Acquisition",
-        "publisher": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/nvidia-stock-jumps-amd-acquires-164513864.html",
-        "published": "2026-08-07"
-      },
-      "created_at": "2026-08-07T11:53:17"
-    },
-    "since": "2026-08-07T11:53:17"
-  },
-  "AAPL:news:4313f5a29a": {
-    "alert": {
-      "dedup_key": "AAPL:news:4313f5a29a",
-      "category": "news",
-      "ticker": "AAPL",
-      "priority": "HIGH",
-      "headline": "Legal / Regulatory: Apple (AAPL) Seeks Injunction In AI Trade Secret Lawsuit",
-      "why_it_matters": "Investigations and litigation carry open-ended financial and reputational risk.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "Legal / Regulatory",
-        "publisher": "Simply Wall St.",
-        "url": "https://finance.yahoo.com/technology/ai/articles/apple-aapl-seeks-injunction-ai-161633279.html",
-        "published": "2026-08-07"
-      },
-      "created_at": "2026-08-07T11:53:18"
-    },
-    "since": "2026-08-07T11:53:18"
-  },
-  "PANW:news:6b59dfdf73": {
-    "alert": {
-      "dedup_key": "PANW:news:6b59dfdf73",
-      "category": "news",
-      "ticker": "PANW",
-      "priority": "HIGH",
-      "headline": "Guidance Cut: Top Midday Stories: Apollo Acquires EasyJet in Deal Valued at $7.68 Billion; Honeywell Aerospace Shares Fall Following Guidance Cut",
-      "why_it_matters": "Management lowering its own forecast is a direct signal of weakening fundamentals.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "Guidance Cut",
-        "publisher": "MT Newswires",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/top-midday-stories-apollo-acquires-154510891.html",
-        "published": "2026-08-06"
-      },
-      "created_at": "2026-08-07T11:53:23"
-    },
-    "since": "2026-08-07T11:53:23"
-  },
   "MA:news:7638da92ee": {
     "alert": {
       "dedup_key": "MA:news:7638da92ee",
@@ -7736,34 +7604,239 @@
     },
     "since": "2026-08-08T08:30:18"
   },
-  "PLTR:a_plus_setup": {
+  "SNOW:52w_high": {
     "alert": {
-      "dedup_key": "PLTR:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "PLTR",
+      "dedup_key": "SNOW:52w_high",
+      "category": "watchlist",
+      "ticker": "SNOW",
       "priority": "HIGH",
-      "headline": "A+ long-term setup (Avoid)",
-      "why_it_matters": "Scored in the top band for: long-term (score 95, all filters green).",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.3,
+        "52w_high": 331.4,
+        "price": 330.49
+      },
+      "created_at": "2026-08-08T19:03:01"
+    },
+    "since": "2026-08-08T19:03:01"
+  },
+  "UNH:a_plus_setup": {
+    "alert": {
+      "dedup_key": "UNH:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "UNH",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 98).",
       "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
       "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
       "confidence": 85,
       "time_sensitivity": "today",
       "supporting_data": {
         "strategies": [
-          "long-term (score 95, all filters green)"
+          "swing (rank 98)"
         ],
-        "category": "Avoid",
-        "swing_rank": null,
-        "day_rank": null,
-        "investment_score": 95.0,
-        "entry": "No trade \u2014 Avoid",
-        "stop": "N/A",
-        "target": "N/A",
-        "grade": "X",
-        "price": 172.01
+        "category": "Momentum-Pullback",
+        "swing_rank": 98.0,
+        "day_rank": 44.0,
+        "investment_score": 79.0,
+        "entry": "Near 8EMA \u2014 buy hold above $412.08 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
+        "stop": "$392.32 from entry fill \u2014 Prev-Day Low $400.66 / ATR\u00d71.5 $392.32. Hard stop -7% = $383.23.",
+        "target": "T1 $461.62 (52W high / +12.0%) \u2014 % from entry $412.08. Trail 21EMA $416.44 once in profit.",
+        "grade": "B",
+        "price": 407.08
       },
-      "created_at": "2026-08-08T08:54:22"
+      "created_at": "2026-08-08T19:03:01"
     },
-    "since": "2026-08-08T08:54:22"
+    "since": "2026-08-08T19:03:01"
+  },
+  "VTV:52w_high": {
+    "alert": {
+      "dedup_key": "VTV:52w_high",
+      "category": "watchlist",
+      "ticker": "VTV",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.3,
+        "52w_high": 225.06,
+        "price": 224.31
+      },
+      "created_at": "2026-08-08T19:03:01"
+    },
+    "since": "2026-08-08T19:03:01"
+  },
+  "day_session:init_2026-08-09": {
+    "alert": {
+      "dedup_key": "day_session:init_2026-08-09",
+      "category": "day_session",
+      "ticker": null,
+      "priority": "MEDIUM",
+      "headline": "day-trade universe set: 6 tickers (0 hot mover(s) merged)",
+      "why_it_matters": "Today's intraday scans run on: META, MSFT, NVDA, TSLA, AMD, AVGO",
+      "expected_impact": "Hot movers join the static day-trade list for every intraday scan until the next session init.",
+      "suggested_action": "Expand the daytrade category on the Scanner page to review or edit the merged list.",
+      "confidence": 100,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "hot_movers": [],
+        "merged_universe": [
+          "META",
+          "MSFT",
+          "NVDA",
+          "TSLA",
+          "AMD",
+          "AVGO"
+        ]
+      },
+      "created_at": "2026-08-09T08:30:31"
+    },
+    "since": "2026-08-09T08:30:31"
+  },
+  "day_session:init_2026-08-10": {
+    "alert": {
+      "dedup_key": "day_session:init_2026-08-10",
+      "category": "day_session",
+      "ticker": null,
+      "priority": "MEDIUM",
+      "headline": "day-trade universe set: 16 tickers (10 hot mover(s) merged)",
+      "why_it_matters": "Today's intraday scans run on: UNG, INTC, MRVL, AAOI, ASML, LITE, AMAT, HIMS, SMCI, QBTS, META, MSFT, NVDA, TSLA, AMD\u2026",
+      "expected_impact": "Hot movers join the static day-trade list for every intraday scan until the next session init.",
+      "suggested_action": "Expand the daytrade category on the Scanner page to review or edit the merged list.",
+      "confidence": 100,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "hot_movers": [
+          "UNG",
+          "INTC",
+          "MRVL",
+          "AAOI",
+          "ASML",
+          "LITE",
+          "AMAT",
+          "HIMS",
+          "SMCI",
+          "QBTS"
+        ],
+        "merged_universe": [
+          "UNG",
+          "INTC",
+          "MRVL",
+          "AAOI",
+          "ASML",
+          "LITE",
+          "AMAT",
+          "HIMS",
+          "SMCI",
+          "QBTS",
+          "META",
+          "MSFT",
+          "NVDA",
+          "TSLA",
+          "AMD",
+          "AVGO"
+        ]
+      },
+      "created_at": "2026-08-10T08:26:58"
+    },
+    "since": "2026-08-10T08:26:58"
+  },
+  "ORCL:news:3995f8b7d6": {
+    "alert": {
+      "dedup_key": "ORCL:news:3995f8b7d6",
+      "category": "news",
+      "ticker": "ORCL",
+      "priority": "MEDIUM",
+      "headline": "Restructuring: AI is Hollowing Out Tech Sector Jobs: Oracle and Microsoft Help Push Layoff Rate to 20-Year High",
+      "why_it_matters": "Layoffs/restructuring can mean either overdue cost discipline or a deeper slowdown.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "Restructuring",
+        "publisher": "24/7 Wall St.",
+        "url": "https://finance.yahoo.com/technology/ai/articles/ai-hollowing-tech-sector-jobs-153836165.html",
+        "published": "2026-08-08"
+      },
+      "created_at": "2026-08-10T08:35:57"
+    },
+    "since": "2026-08-10T08:35:57"
+  },
+  "GD:news:7e4edf185b": {
+    "alert": {
+      "dedup_key": "GD:news:7e4edf185b",
+      "category": "news",
+      "ticker": "GD",
+      "priority": "MEDIUM",
+      "headline": "Guidance Raised: General Dynamics (GD) Could Be 5% Undervalued After Its Q2 Beat And Guidance Raise",
+      "why_it_matters": "Management raising its own forecast is a direct signal of strengthening fundamentals.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "Guidance Raised",
+        "publisher": "Simply Wall St.",
+        "url": "https://finance.yahoo.com/markets/stocks/articles/general-dynamics-gd-could-5-002224603.html",
+        "published": "2026-08-09"
+      },
+      "created_at": "2026-08-10T08:36:04"
+    },
+    "since": "2026-08-10T08:36:04"
+  },
+  "TSLA:news:a8a167b3e4": {
+    "alert": {
+      "dedup_key": "TSLA:news:a8a167b3e4",
+      "category": "news",
+      "ticker": "TSLA",
+      "priority": "HIGH",
+      "headline": "M&A / Acquisition: Tesla (TSLA) Rumors Swirl Over China Split Ahead Of Possible Merger",
+      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "M&A / Acquisition",
+        "publisher": "Simply Wall St.",
+        "url": "https://finance.yahoo.com/markets/stocks/articles/tesla-tsla-rumors-swirl-over-070951483.html",
+        "published": "2026-08-10"
+      },
+      "created_at": "2026-08-10T08:36:05"
+    },
+    "since": "2026-08-10T08:36:05"
+  },
+  "HIMS:news:c9965340b5": {
+    "alert": {
+      "dedup_key": "HIMS:news:c9965340b5",
+      "category": "news",
+      "ticker": "HIMS",
+      "priority": "HIGH",
+      "headline": "Legal / Regulatory: Hims & Hers Health (HIMS) Responds To FTC Lawsuit Over Patient Data Use",
+      "why_it_matters": "Investigations and litigation carry open-ended financial and reputational risk.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "Legal / Regulatory",
+        "publisher": "Simply Wall St.",
+        "url": "https://finance.yahoo.com/healthcare/articles/hims-hers-health-hims-responds-081252527.html",
+        "published": "2026-08-08"
+      },
+      "created_at": "2026-08-10T08:36:07"
+    },
+    "since": "2026-08-10T08:36:07"
   }
 }

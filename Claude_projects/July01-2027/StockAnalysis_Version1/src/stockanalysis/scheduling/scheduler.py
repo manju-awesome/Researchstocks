@@ -770,6 +770,30 @@ def job_watchlist_alerts():
         _log(f"Research library refresh failed: {e}")
 
 
+def job_longterm_entry_alerts():
+    """Fire when price reaches a level the Long-Term engine planned to buy.
+
+    Reads the plans from the research library (entry levels are moving
+    averages and shelves — they move a fraction of a percent a day) and
+    fetches live prices for only the names carrying a resting order. See
+    core.longterm.entry_alerts for why the two halves need different
+    freshness. Market-hours guarded like the other monitors: a level
+    "reached" on a stale after-hours print is not an order to work.
+    """
+    now = datetime.now(ET)
+    if now.weekday() >= 5 or not ((9, 30) <= (now.hour, now.minute) <= (16, 0)):
+        return
+    from stockanalysis.core.longterm import entry_alerts as EA
+    from stockanalysis.webapp import api
+    try:
+        new_alerts = EA.scan_for_alerts(api.longterm()["rows"])
+        if new_alerts:
+            _log(f"🎯 {len(new_alerts)} entry level(s) reached: "
+                 + ", ".join(a["ticker"] or "?" for a in new_alerts))
+    except Exception as e:
+        _log(f"Long-term entry alert scan failed: {e}")
+
+
 def job_news_alerts():
     """Breaking-news headline scan — split out of job_watchlist_alerts so the
     Automation page can schedule it independently (it's also the Alerts
@@ -853,6 +877,7 @@ SCHEDULED_JOBS: dict[str, callable] = {
     "earnings_alerts":   job_earnings_alerts,
     "premarket_brief":   job_premarket_brief,
     "watchlist_alerts":  job_watchlist_alerts,
+    "longterm_entry_alerts": job_longterm_entry_alerts,
     "news_alerts":       job_news_alerts,
     "swing_premarket":   job_swing_premarket,
     "calls_premarket":   job_calls_premarket,

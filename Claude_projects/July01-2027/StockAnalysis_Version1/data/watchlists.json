@@ -21,7 +21,8 @@
   "GOOGL",
   "HOOD",
   "AMZN",
-  "TSM"
+  "TSM",
+  "WDC"
  ],
  "watchlist": [
   "NVDA",
@@ -47,7 +48,6 @@
   "APH",
   "CRDO",
   "GLW",
-  "DRAM",
   "MSFT",
   "ORCL",
   "ADBE",
@@ -100,19 +100,7 @@
   "MP",
   "USAR",
   "IREN",
-  "SMH",
-  "DTCR",
-  "GRID",
-  "CIBR",
-  "NLR",
-  "MTUM",
-  "VTI",
-  "VXUS",
-  "QUAL",
-  "VTV",
-  "SPY",
-  "QQQ",
-  "DIA"
+  "DTCR"
  ],
  "AI": {
   "_tickers": [
@@ -160,7 +148,8 @@
    "ONTO",
    "TER",
    "ENTG",
-   "UCTT"
+   "UCTT",
+   "ARM"
   ],
   "Networking": [
    "CRDO",
@@ -1316,18 +1305,15 @@
  ],
  "ALERT_TICKERS": [
   "AAOI",
-  "AAPL",
   "ADP",
   "AFL",
   "AJG",
   "ALAB",
   "ALL",
   "AMCR",
-  "AMD",
   "ANET",
   "APH",
   "ARM",
-  "AVGO",
   "AXON",
   "AXP",
   "BAX",
@@ -1358,7 +1344,6 @@
   "HUM",
   "INOD",
   "IONQ",
-  "IREN",
   "KMX",
   "LITE",
   "LLY",
@@ -1385,9 +1370,12 @@
   "STX",
   "TECH",
   "TPR",
+  "TSLA",
+  "UNH",
   "USAR",
   "V",
   "VST",
+  "VTV",
   "WDAY",
   "WDC",
   "WRB",

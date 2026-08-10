@@ -386,24 +386,44 @@ def compute_trend(row: dict) -> dict:
     # rather than failing":
     #
     #   price back above the 200 MA with the averages still crossed —
-    #   a golden cross pending (Palantir before its slopes were scanned)
+    #   a golden cross pending (Palantir)
     #
     #   the 50 MA turning UP while the 200 MA still falls — the intermediate
     #   trend leading the long-term one, which is how every recovery starts
     #   (Microsoft at -2.01% / +0.91%, Robinhood at -3.84% / +9.81%)
+    #
+    # `repairing` requires the 50/200 inversion to still be PRESENT, but no
+    # longer requires it to be the ONLY structural failure.
+    #
+    # The exact-match it used to use (`== ["50 MA above 200 MA"]`) quietly
+    # stopped matching the very case it was written for: once Palantir's
+    # slopes were scanned, "200 MA rising" started failing too, the list
+    # comparison broke, and the name fell through to BROKEN. A falling 200 MA
+    # is not separate evidence against a recovery — it is the footprint of
+    # the decline being recovered FROM, and demanding it be absent means
+    # demanding the recovery already be over.
+    #
+    # The inversion itself must stay in the test, though, because dropping it
+    # collapses two opposite shapes into one. Price above the 200 MA with the
+    # 50 MA ALSO above it and only the long-term slope failing is a healthy
+    # structure just beginning to roll over — deterioration, not repair — and
+    # that shape must keep falling through to BROKEN.
     repairing = (above200 is True
-                 and structural_failed == ["50 MA above 200 MA"])
+                 and "50 MA above 200 MA" in structural_failed)
     turning_up = (slope200 is not None and slope200 < 0
                   and slope50 is not None and slope50 > 0)
 
     if structural_failed:
-        # A breakdown is BOTH averages pointing down. A falling 200 MA with
-        # the 50 MA already turning up is a recovery in progress, and
-        # calling it broken reads the slower average as the whole story.
-        if slope200_known and slope200 < 0 and not turning_up:
-            state = "BROKEN"
-        elif repairing or turning_up:
+        # Checked BEFORE the breakdown test, so "price has reclaimed the 200
+        # MA" wins over "the 200 MA is still falling" — the second is true of
+        # every recovery and cannot be what disqualifies one.
+        if repairing or turning_up:
             state = "RECOVERING"
+        # A breakdown is price beneath a measurably falling 200 MA. With the
+        # 50 MA already turning up it is a recovery in progress, and calling
+        # it broken reads the slower average as the whole story.
+        elif slope200_known and slope200 < 0:
+            state = "BROKEN"
         else:
             state = "IMPAIRED"
     elif structural_unknown:

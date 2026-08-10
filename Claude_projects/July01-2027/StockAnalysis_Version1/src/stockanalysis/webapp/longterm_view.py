@@ -27,6 +27,7 @@ from __future__ import annotations
 import string
 from urllib.parse import urlencode
 
+from stockanalysis.core.longterm import position_sizing as PS
 from stockanalysis.core.longterm.engine import ACTION_ICONS
 
 from .views import badge, card, empty, esc, tv_url
@@ -421,6 +422,221 @@ def _entries_panel(r):
             f'</div>')
 
 
+def _kv(label, value, strong=False, colour="#0b0b0b"):
+    weight = "600" if strong else "400"
+    return (f'<tr><td style="padding:3px 14px 3px 0;color:#898781;'
+            f'white-space:nowrap">{esc(label)}</td>'
+            f'<td style="padding:3px 0;font-weight:{weight};color:{colour};'
+            f'white-space:nowrap">{value}</td></tr>')
+
+
+def _pending_plan(plan) -> str:
+    """The trade priced, for a name the engine has not cleared.
+
+    Everything §4 says to always display — entry, stop, stop distance,
+    risk/share — plus the ratio, and deliberately nothing that implies a
+    position: no share count, no position value, no dollar risk. Those are
+    the figures that read as permission.
+    """
+    entry, stop = plan.get("entry") or {}, plan.get("stop") or {}
+    z, target = plan.get("sizing") or {}, plan.get("target") or {}
+    if not entry.get("price") or not stop.get("price"):
+        return ""
+    rows = (_kv("Entry if it triggers", f'${entry["price"]:,.2f}', strong=True)
+            + _kv("Entry type", esc(entry.get("type") or "")
+                  + (f' <span style="color:#898781">· {esc(entry["level_name"])}</span>'
+                     if entry.get("level_name") else ""))
+            + _kv("Stop would be", f'${stop["price"]:,.2f}', strong=True)
+            + _kv("Stop basis", f'{esc(stop.get("source") or "")} '
+                                f'<span style="color:#898781">'
+                                f'({esc(stop.get("method") or "")})</span>')
+            + _kv("Risk / share", f'${z.get("risk_per_share", 0):,.2f}')
+            + _kv("Stop distance", f'{z.get("stop_distance_pct", 0):.1f}%'))
+    if target.get("rr") is not None:
+        rows += _kv("R:R to first target",
+                    f'{target["rr"]:.2f}R '
+                    f'<span style="color:#898781">'
+                    f'(${target["price"]:,.2f} {esc(target.get("name") or "")})</span>')
+    return (f'<div style="margin-top:14px;padding-top:12px;'
+            f'border-top:0.5px solid #f1efea">'
+            f'<div style="{_PANEL_H}">The plan, if it clears</div>'
+            f'<table style="border-collapse:collapse;font-size:11px">{rows}</table>'
+            f'<div style="font-size:10px;color:#898781;margin-top:6px">'
+            f'Prices shown so you know what to watch for. No share count '
+            f'until the blocking condition above clears.</div></div>')
+
+
+def _sizing_panel(r):
+    """§9 — the whole sizing calculation, shown as arithmetic.
+
+    Every intermediate is on screen (risk-based shares, allocation-limited
+    shares, which one won) because the useful question is almost never "how
+    many shares" but "why that many" — and a lone final number cannot answer
+    the follow-up, which is whether to loosen the cap or skip the trade.
+    """
+    plan = r.get("sizing_plan") or {}
+    s = plan.get("settings") or {}
+    if not s:
+        return ""
+
+    account = (
+        '<table style="border-collapse:collapse;font-size:11px">'
+        + _kv("Trading capital", f'${s["capital"]:,.0f}')
+        + _kv("Risk / trade", f'{s["risk_pct"]:g}%')
+        + _kv("Maximum risk", f'${s["max_dollar_risk"]:,.0f}', strong=True)
+        + _kv("Max allocation", f'{s["max_allocation_pct"]:g}% '
+                                f'(${s["max_position_value"]:,.0f})')
+        + '</table>')
+
+    status = plan.get("status") or "NOT_ACTIONABLE"
+    icon, label, tone = PS.STATUS.get(status, PS.STATUS["NOT_ACTIONABLE"])
+
+    if not plan.get("ok"):
+        # The refusal IS the output. Saying "N/A" without the reason is what
+        # makes an engine look broken rather than disciplined.
+        na = (f'<div style="font-size:13px;font-weight:600;margin-bottom:4px">'
+              f'POSITION SIZE: N/A</div>'
+              f'<div style="font-size:11px;color:#633806">'
+              f'{icon} {esc(label)} — {esc(plan.get("reason") or "")}</div>'
+              f'<div style="font-size:11px;color:#898781;margin-top:8px">'
+              f'A size is withheld rather than computed from the risk budget '
+              f'alone: ${s["max_dollar_risk"]:,.0f} of allowable loss is not '
+              f'a reason to take a trade the engine has not cleared.</div>')
+        # A blocked name still has a priced plan, and showing it is the
+        # difference between "no read on this" and "here is the trade, and
+        # here is what has to happen first".
+        pending = _pending_plan(plan) if plan.get("pending") else ""
+        return card("💰 Position sizing",
+                    na + pending + '<div style="margin-top:12px">'
+                    + account + '</div>', "")
+
+    entry, stop = plan["entry"], plan["stop"]
+    z, target = plan["sizing"], plan.get("target") or {}
+
+    # §"quality but trend not present": the banner sits ABOVE the numbers,
+    # because it changes how every figure under it should be read.
+    override = ""
+    if plan.get("quality_override"):
+        override = (
+            f'<div style="background:#FAEEDA;border:0.5px solid #e8d5aa;'
+            f'border-radius:9px;padding:10px 13px;margin-bottom:12px;'
+            f'font-size:11px;color:#633806">'
+            f'⚠ <b>Quality override — trend not present.</b> '
+            f'{esc(plan.get("warning") or "")}'
+            f'<div style="margin-top:6px">The engine would normally withhold '
+            f'a size here. It is shown because the business clears the '
+            f'LQuality {PS.QUALITY_OVERRIDE_MIN}+ bar, so treat it as "where '
+            f'I would buy this if the chart repaired" rather than a trade to '
+            f'put on today.</div></div>')
+
+    plan_tbl = (
+        '<table style="border-collapse:collapse;font-size:11px">'
+        + _kv("Entry", f'${entry["price"]:,.2f}', strong=True)
+        + _kv("Entry type", esc(entry["type"])
+              + (f' <span style="color:#898781">· {esc(entry["level_name"])}</span>'
+                 if entry.get("level_name") else ""))
+        + _kv("Stop", f'${stop["price"]:,.2f}', strong=True)
+        + _kv("Stop basis", f'{esc(stop["source"] or "")} '
+                            f'<span style="color:#898781">({esc(stop["method"] or "")})</span>')
+        + _kv("Risk / share", f'${z["risk_per_share"]:,.2f}')
+        + _kv("Stop distance", f'${z["stop_distance"]:,.2f} · '
+                               f'{z["stop_distance_pct"]:.1f}%')
+        + '</table>')
+
+    # The two candidate sizes side by side, with the binding one in bold —
+    # this is the panel's whole argument.
+    bound = z["bound_by"]
+    size_tbl = (
+        '<table style="border-collapse:collapse;font-size:11px">'
+        + _kv("Risk-based shares", f'{z["risk_shares"]:,}',
+              strong=bound == "risk",
+              colour="#0b0b0b" if bound == "risk" else "#898781")
+        + _kv("Allocation-limited", f'{z["allocation_shares"]:,}',
+              strong=bound == "allocation",
+              colour="#0b0b0b" if bound == "allocation" else "#898781")
+        + _kv("Final position", f'{z["shares"]:,} shares', strong=True)
+        + _kv("Position value", f'${z["position_value"]:,.0f}')
+        + _kv("Allocation", f'{z["allocation_pct"]:.1f}% of capital')
+        + _kv("Actual risk", f'${z["actual_risk"]:,.0f} '
+                             f'({z["actual_risk_pct"]:.1f}%)', strong=True)
+        + '</table>'
+        + f'<div style="font-size:10px;color:#898781;margin-top:6px">'
+          f'Bound by <b>{esc(bound)}</b> — '
+          + esc("the allocation cap cut the risk-based size"
+                if bound == "allocation"
+                else "risk sizing came in under the allocation cap")
+        + '</div>')
+
+    # ── R-multiple (§10) ────────────────────────────────────────────────────
+    if target.get("rr") is not None:
+        # The chosen rung is bold; the ones the target steps over are greyed.
+        # Seeing WHICH levels the trade has to get through is the point of
+        # showing the ladder at all.
+        rungs = ""
+        for lv in (target.get("ladder") or []):
+            chosen = lv["price"] == target["price"]
+            style = ("font-weight:600" if chosen else "color:#898781")
+            rungs += (
+                f'<tr style="{style}">'
+                f'<td style="padding:2px 12px 2px 0">${lv["price"]:,.2f}</td>'
+                f'<td style="padding:2px 12px 2px 0">{esc(lv["name"] or "")}</td>'
+                f'<td style="padding:2px 12px 2px 0">{lv["rr"]:.2f}R</td>'
+                f'<td style="padding:2px 0">'
+                f'${z["shares"] * lv["profit_per_share"]:,.0f}</td></tr>')
+        rr_colour = ("#0F6E56" if target["rr"] >= 2.0
+                     else "#8a6d1a" if target["rr"] >= 1.5 else "#A32D2D")
+        if target.get("reached_min_rr") is False:
+            why = (f'Nothing on this chart reaches {PS.TARGET_MIN_RR:g}R — '
+                   f'this is the best available, not a chosen target.')
+        elif target.get("skipped"):
+            why = (f'First level clearing {PS.TARGET_MIN_RR:g}R. '
+                   f'{target["skipped"]} nearer level(s) are resistance the '
+                   f'trade has to get through, not targets worth taking.')
+        else:
+            why = f'First level above the entry, and it clears {PS.TARGET_MIN_RR:g}R.'
+        reward = (
+            f'<div style="font-size:12px">'
+            f'Risk <b>${z["actual_risk"]:,.0f}</b> · '
+            f'Potential profit <b>${plan.get("potential_profit") or 0:,.0f}</b> · '
+            f'<b style="color:{rr_colour}">{target["rr"]:.2f}R</b> '
+            f'<span style="color:#898781">{esc(target.get("label") or "")}</span>'
+            f'</div>'
+            f'<div style="font-size:10px;color:#898781;margin-top:4px">'
+            f'{esc(why)}</div>'
+            f'<table style="border-collapse:collapse;font-size:11px;margin-top:8px">'
+            f'<tr style="color:#898781"><th style="text-align:left;padding-right:12px">Target</th>'
+            f'<th style="text-align:left;padding-right:12px">Level</th>'
+            f'<th style="text-align:left;padding-right:12px">R</th>'
+            f'<th style="text-align:left">Profit</th></tr>{rungs}</table>')
+    else:
+        reward = empty("No tracked level above the entry — R:R is not "
+                       "calculated rather than assumed.")
+
+    assessment = (
+        f'<div style="font-size:12px">{icon} <b>{esc(label)}</b> — '
+        f'{esc(plan.get("reason") or "")}</div>'
+        f'<div style="font-size:11px;color:#898781;margin-top:6px">'
+        f'Position grade <b>{esc(plan.get("grade") or "—")}</b> — this rates '
+        f'the SETUP, not the company. LQuality is the business; a great one '
+        f'with a wide stop still earns a small position.</div>')
+
+    grid = (
+        override
+        + '<div style="display:grid;'
+        'grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px">'
+        f'<div><div style="{_PANEL_H}">Account</div>{account}</div>'
+        f'<div><div style="{_PANEL_H}">The trade</div>{plan_tbl}</div>'
+        f'<div><div style="{_PANEL_H}">Sizing</div>{size_tbl}</div>'
+        f'<div><div style="{_PANEL_H}">Reward</div>{reward}</div>'
+        '</div>'
+        f'<div style="margin-top:12px">{assessment}</div>')
+    return card("💰 Position sizing", grid, "")
+
+
+_PANEL_H = ('font-size:10px;text-transform:uppercase;letter-spacing:.06em;'
+            'color:#898781;margin-bottom:5px')
+
+
 def _detail(r):
     q, v, t = r["quality"], r["valuation"], r["trend"]
     gate = _GATE_LABEL.get(r["gate"], r["gate"])
@@ -437,6 +653,9 @@ def _detail(r):
     grid = (
         '<div style="display:grid;grid-template-columns:1fr;gap:14px;'
         'margin-top:12px">'
+        # Sizing first: it is the only panel that says what to DO, and the
+        # eight that follow are why.
+        f'<div>{_sizing_panel(r)}</div>'
         f'<div>{card("Business quality — LQuality", _quality_panel(q), "💎")}</div>'
         f'<div>{card("Valuation", _valuation_panel(v), "⚖️")}</div>'
         f'<div>{card("Long-term trend", _trend_panel(t), "📈")}</div>'
@@ -555,8 +774,12 @@ _RULE_JS = r"""
 })();
 """
 
-_TABLE_JS = r"""
-(function () {
+TABLE_JS = r"""
+// A named function rather than a bare IIFE because the Dashboard's Scan &
+// Analyze panel injects this same table after the page has loaded, and has
+// to bind sorting/reordering to markup that did not exist at DOMContentLoaded.
+// The call below covers the Long-Term page, where the table is server-rendered.
+function initLtTable() {
   var table = document.getElementById('lt-table');
   if (!table) return;
   var KEY = 'lt.cols.v1', SORTKEY = 'lt.sort.v1';
@@ -663,7 +886,36 @@ _TABLE_JS = r"""
     }
   }
 
+  // The pinned columns never move and nothing may be placed left of them:
+  // they are `position:sticky`, so away from the left edge they would float
+  // on top of whichever column they now overlap. Counts the LEADING run, so
+  // a stray .lt-pin further right (which should not happen) is ignored
+  // rather than treated as part of the frozen group.
+  function pinned() {
+    var n = 0;
+    while (head.cells[n] && head.cells[n].classList.contains('lt-pin')) n++;
+    return n;
+  }
+
+  // Each pinned column starts where the previous one ends. Measured rather
+  // than hardcoded: the ticker column's width follows the longest company
+  // name on screen, which changes with every filter.
+  function layoutPins() {
+    var n = pinned(), offset = 0;
+    for (var i = 0; i < n; i++) {
+      var key = head.cells[i].dataset.col;
+      var cells = table.querySelectorAll('[data-col="' + key + '"]');
+      for (var j = 0; j < cells.length; j++) {
+        cells[j].style.left = offset + 'px';
+        cells[j].classList.toggle('lt-pin-last', i === n - 1);
+      }
+      offset += head.cells[i].getBoundingClientRect().width;
+    }
+  }
+
   function moveColumn(from, to) {
+    var floor = pinned();
+    if (from < floor || to < floor) return;
     if (from === to) return;
     var rows = [head].concat(Array.prototype.filter.call(body.rows, function (r) {
       return r.dataset.main;                 // detail rows are one colspan cell
@@ -678,19 +930,36 @@ _TABLE_JS = r"""
   }
 
   // Restore a saved order by moving each column into place, left to right.
+  // Orders saved before the column was pinned can list it anywhere, so the
+  // pinned key is dropped from the saved order rather than honoured — the
+  // alternative is restoring a layout the current rules forbid.
   try {
     var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (Array.isArray(saved)) {
-      saved.forEach(function (key, target) {
+      var floor = pinned();
+      saved.filter(function (key) {
+        return !(floor && key === head.cells[0].dataset.col);
+      }).forEach(function (key, i) {
         var now = colKeys().indexOf(key);
-        if (now > -1 && now !== target) moveColumn(now, target);
+        if (now > -1 && now !== i + floor) moveColumn(now, i + floor);
       });
     }
   } catch (e) {}
 
+  // After the restore, so the offsets are measured against the layout the
+  // user will actually see. Column widths are content-driven, so anything
+  // that reflows the table can move the seam — a window resize, or webfonts
+  // arriving after first paint.
+  layoutPins();
+  window.addEventListener('resize', layoutPins);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(layoutPins).catch(function () {});
+  }
+
   var dragFrom = null;
   Array.prototype.forEach.call(head.cells, function (th) {
-    th.draggable = true;
+    // Sorting still works on the pinned column; only reordering is off.
+    th.draggable = !th.classList.contains('lt-pin');
     th.addEventListener('dragstart', function (e) {
       dragFrom = Array.prototype.indexOf.call(head.cells, th);
       th.style.opacity = '.4';
@@ -704,6 +973,10 @@ _TABLE_JS = r"""
       });
     });
     th.addEventListener('dragover', function (e) {
+      // The pinned column shows no drop indicator: moveColumn would refuse
+      // the drop anyway, and offering a target that silently does nothing is
+      // worse than offering none.
+      if (th.classList.contains('lt-pin')) { e.dataTransfer.dropEffect = 'none'; return; }
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       var over = Array.prototype.indexOf.call(head.cells, th);
@@ -757,7 +1030,8 @@ _TABLE_JS = r"""
       location.reload();
     });
   }
-})();
+}
+initLtTable();
 """
 _TD = 'padding:8px;border-bottom:0.5px solid #f1efea;font-size:12px;vertical-align:top'
 
@@ -859,6 +1133,154 @@ def _swing_cell(r):
             f'{esc(sub)}</div>', score)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# POSITION SIZING CELLS
+# ─────────────────────────────────────────────────────────────────────────────
+# Four dense columns answering §14's questions without opening the panel:
+# where do I enter, where is the stop, how many shares, how much can I lose,
+# what is the reward. Each stacks two related figures rather than spending a
+# column on each — the alternative was twelve columns and a horizontal
+# scrollbar past the Action column the table exists to show.
+
+_SIZE_STATUS_COLOR = {"NORMAL": "#0F6E56", "HIGH_ALLOCATION": "#8a6d1a",
+                      "OVERSIZED": "#A32D2D", "NO_STOP": "#A32D2D",
+                      "INVALID_SETUP": "#A32D2D", "NOT_ACTIONABLE": "#898781"}
+
+_SIZE_SORT = {"NORMAL": 4, "HIGH_ALLOCATION": 3, "OVERSIZED": 2,
+              "INVALID_SETUP": 1, "NO_STOP": 1, "NOT_ACTIONABLE": 0}
+
+
+def _dash(title=""):
+    return (f'<span style="color:#898781" title="{esc(title)}">—</span>', None)
+
+
+def _sub(text, colour="#898781"):
+    return (f'<div style="font-size:10px;color:{colour};white-space:nowrap">'
+            f'{esc(text)}</div>')
+
+
+def _entry_stop_cell(r):
+    """Entry over stop — the two prices the whole plan hangs on."""
+    plan = r.get("sizing_plan") or {}
+    entry, stop = plan.get("entry") or {}, plan.get("stop") or {}
+    if not entry.get("price"):
+        return _dash(plan.get("reason") or "no entry")
+    # A plan the engine has not cleared is greyed and italic — the same
+    # treatment derived support levels get, and for the same reason. The
+    # prices are real and worth knowing; they are what you are WAITING for,
+    # not an instruction to act.
+    pending = plan.get("pending")
+    head_style = ("color:#898781;font-style:italic" if pending
+                  else "color:#0b0b0b")
+    at_market = entry.get("at_market")
+    # A market entry and a resting order at a level are different
+    # instructions; the label is what tells them apart at a glance.
+    head = (f'<strong style="{head_style}">${entry["price"]:,.2f}</strong>'
+            f'<span style="font-size:9px;color:#898781"> '
+            f'{esc("mkt" if at_market else entry.get("type", "").replace(" Entry", "").replace(" Pullback", ""))}'
+            f'</span>')
+    if not stop.get("price"):
+        return (head + _sub("no stop", "#A32D2D"),
+                entry["price"])
+    sizing = plan.get("sizing") or {}
+    pct = sizing.get("stop_distance_pct")
+    return (head + _sub(f'stop ${stop["price"]:,.2f}'
+                        + (f' · {pct:.1f}%' if pct is not None else ""),
+                        "#898781" if pending else "#52514e"),
+            entry["price"])
+
+
+def _position_cell(r):
+    """Shares, then what they cost — with the risk status as the colour.
+
+    Sorted by status rather than by share count: "is this position sane" is
+    the question the column is here to answer, and 500 shares of a $4 stock
+    ranking above 50 of a $400 one would answer a different one.
+    """
+    plan = r.get("sizing_plan") or {}
+    status = plan.get("status") or "NOT_ACTIONABLE"
+    sizing = plan.get("sizing") or {}
+    if not plan.get("ok") or not sizing.get("shares"):
+        icon = {"NO_STOP": "🔴", "INVALID_SETUP": "🔴"}.get(status, "⚪")
+        label = {"NO_STOP": "no stop", "INVALID_SETUP": "invalid",
+                 "NOT_ACTIONABLE": "N/A"}.get(status, "N/A")
+        return (f'<span style="color:#898781;font-size:11px" '
+                f'title="{esc(plan.get("reason") or "")}">{icon} {label}</span>',
+                _SIZE_SORT.get(status, 0))
+    # A position priced through a broken trend must not look like a clean
+    # one in the table. The panel carries the full argument, but the reader
+    # scanning the column has to see that this row is different without
+    # opening it — otherwise the warning only reaches people who already
+    # suspected they needed it.
+    if plan.get("quality_override"):
+        return (f'<strong style="color:#8a6d1a">⚠ {sizing["shares"]:,}</strong>'
+                f'<span style="font-size:9px;color:#898781"> sh</span>'
+                + _sub(f'${sizing["position_value"]:,.0f} · quality, no trend',
+                       "#8a6d1a"),
+                # Ranked below every ordinary position: sorting by Position
+                # should not put a broken-trend name above a clean one.
+                sizing["position_value"])
+    colour = _SIZE_STATUS_COLOR.get(status, "#898781")
+    return (f'<strong style="color:{colour}">{sizing["shares"]:,}</strong>'
+            f'<span style="font-size:9px;color:#898781"> sh</span>'
+            + _sub(f'${sizing["position_value"]:,.0f} · '
+                   f'{sizing["allocation_pct"]:.1f}%'),
+            _SIZE_SORT.get(status, 0) * 1_000_000 + sizing["position_value"])
+
+
+def _risk_cell(r):
+    """Dollars at risk, and that as a share of the account."""
+    plan = r.get("sizing_plan") or {}
+    sizing = plan.get("sizing") or {}
+    if not plan.get("ok") or not sizing:
+        return _dash(plan.get("reason") or "")
+    status = plan.get("status")
+    warn = status in ("OVERSIZED", "HIGH_ALLOCATION")
+    return (f'<strong>${sizing["actual_risk"]:,.0f}</strong>'
+            + _sub(f'{sizing["actual_risk_pct"]:.1f}% of capital'
+                   + (" · capped" if status == "OVERSIZED" else ""),
+                   "#8a6d1a" if warn else "#898781"),
+            sizing["actual_risk"])
+
+
+def _rr_cell(r):
+    """R:R to the first target, with the sizing grade beside it.
+
+    The grade is the QUALITY of the position — ratio, whether the allocation
+    cap had to rescue it, whether anyone has defended the stop — and is
+    deliberately not the company's LQuality. Seeing an Elite business carry a
+    D position is the point.
+    """
+    plan = r.get("sizing_plan") or {}
+    target = plan.get("target") or {}
+    rr = target.get("rr")
+    if rr is None:
+        return _dash("no target above the entry")
+    # "≤" marks a ratio that is the best the chart offers rather than the
+    # first level worth trading to — without it, 1.7R on a name where nothing
+    # clears 2R reads as a chosen target instead of a ceiling.
+    capped = target.get("reached_min_rr") is False
+    mark = "≤" if capped else ""
+    tip = (f'best available — no tracked level reaches '
+           f'{PS.TARGET_MIN_RR:g}R' if capped else
+           f'first level clearing {PS.TARGET_MIN_RR:g}R'
+           + (f", past {target['skipped']} nearer level(s)"
+              if target.get("skipped") else ""))
+    # A ratio on a plan the engine has not cleared is still a fact about the
+    # chart, so it is shown — muted, because the trade is not on offer.
+    if plan.get("pending"):
+        return (f'<span style="color:#898781;font-style:italic" '
+                f'title="{esc(tip)}">{mark}{rr:.1f}R</span>'
+                + _sub(f'T ${target["price"]:,.2f}'), rr)
+    colour = ("#0F6E56" if rr >= 2.0 else "#8a6d1a" if rr >= 1.5 else "#A32D2D")
+    grade = plan.get("grade") or "—"
+    return (f'<strong style="color:{colour}" title="{esc(tip)}">'
+            f'{mark}{rr:.1f}R</strong>'
+            f'<span style="font-size:9px;color:#898781"> {esc(grade)}</span>'
+            + _sub(f'T ${target["price"]:,.2f}'),
+            rr)
+
+
 def _status_cell(view, style_map):
     """A status badge with its score underneath — the company verdict and
     the timing verdict shown as two separate answers."""
@@ -951,6 +1373,13 @@ _COLUMNS = (
     ("swing", "Technical", "left", "num"),
     ("investment", "Investment", "left", "num"),
     ("entry_score", "Entry", "left", "num"),
+    # Sizing sits immediately before Action: the verdict and what it would
+    # cost you are one thought, and putting the account impact after the
+    # decision is how a 40%-of-capital position gets taken without noticing.
+    ("entry_stop", "Entry · Stop", "right", "num"),
+    ("position", "Position", "right", "num"),
+    ("risk", "Risk", "right", "num"),
+    ("rr", "R:R", "right", "num"),
     ("action", "Action", "left", "num"),
 )
 _HEADERS = tuple(c[1] for c in _COLUMNS)
@@ -1022,14 +1451,38 @@ def _cells(r):
         "market": (market, r["regime"]),
         "lt": (f'<strong>{r["lt_score"] if r["lt_score"] is not None else "—"}</strong>',
                r["lt_score"]),
+        "entry_stop": _entry_stop_cell(r),
+        "position": _position_cell(r),
+        "risk": _risk_cell(r),
+        "rr": _rr_cell(r),
         "action": (
             _action_pill(r["action"], r["icon"])
             + (f'<div style="font-size:10px;color:#898781">'
                f'{r["tranche_pct"]}% of target</div>'
-               if r.get("tranche_pct") else ""),
+               if r.get("tranche_pct") else "")
+            + _action_sizing_line(r),
             _ACTION_RANK.get(r["action"])),
     }
     return out
+
+
+def _action_sizing_line(r) -> str:
+    """§11: the trade in one line under the verdict.
+
+    Only for actions that are actually offering an entry — printing
+    "150 shares · $18,500" under AVOID would read as an instruction.
+    """
+    plan = r.get("sizing_plan") or {}
+    action = str(r.get("action") or "")
+    if not plan.get("ok") or not action.startswith("BUY"):
+        return ""
+    sizing, target = plan["sizing"], plan.get("target") or {}
+    bits = [f'{sizing["shares"]:,} sh', f'${sizing["position_value"]:,.0f}',
+            f'${sizing["actual_risk"]:,.0f} risk']
+    if target.get("rr") is not None:
+        bits.append(f'{target["rr"]:.1f}R')
+    return (f'<div style="font-size:10px;color:#52514e;white-space:nowrap">'
+            f'{esc(" · ".join(bits))}</div>')
 
 
 def _row(r, open_detail: bool = False, order=None):
@@ -1040,7 +1493,8 @@ def _row(r, open_detail: bool = False, order=None):
     for key in order:
         html, sort_value = cells.get(key, ("", None))
         sort_attr = "" if sort_value is None else esc(str(sort_value))
-        tds.append(f'<td data-col="{key}" data-sort="{sort_attr}" '
+        pin = ' class="lt-pin"' if key in PINNED_COLUMNS else ""
+        tds.append(f'<td data-col="{key}"{pin} data-sort="{sort_attr}" '
                    f'style="{_TD};text-align:{align.get(key, "left")}">'
                    f'{html}</td>')
 
@@ -1052,6 +1506,75 @@ def _row(r, open_detail: bool = False, order=None):
             f'color:#185FA5;padding:2px 0">Show the reasoning</summary>'
             f'<div style="padding:8px 0 4px">{_detail(r)}</div>'
             f'</details></td></tr>')
+
+
+# Identity and price are anchors, not data columns: at nineteen columns the
+# table scrolls well past its own left edge, and a row of numbers with no
+# ticker attached is unreadable. Price earns the second slot because nearly
+# every other cell — entry, stop, allocation, the MA distances — is a
+# statement ABOUT the price, and reading them against a number that has
+# scrolled away is guesswork.
+#
+# Pinned rather than merely sticky: they are also removed from drag-reorder
+# below, because a sticky cell that is not leftmost renders on top of
+# whatever it now overlaps. They stay leftmost, and in this order.
+PINNED_COLUMNS = ("ticker", "price")
+
+# `left` is set by initLtTable(), not here: the second pinned column has to
+# begin exactly where the first ends, and the ticker column's width depends
+# on the longest company name in the current result set. A hardcoded offset
+# would be right for one page load and wrong for the next.
+#
+# background is load-bearing — without it the scrolling cells show THROUGH
+# the pinned ones. The seam goes on the LAST pinned column only; on every
+# pinned cell it would draw a line between ticker and price, which are one
+# frozen group rather than two.
+PIN_CSS = """
+<style>
+#lt-table td.lt-pin, #lt-table th.lt-pin {
+  position: sticky; z-index: 2; background: #fff;
+}
+#lt-table th.lt-pin { z-index: 3; cursor: pointer; }
+#lt-table td.lt-pin-last, #lt-table th.lt-pin-last {
+  box-shadow: 1px 0 0 #e1e0d9;
+}
+</style>"""
+
+
+def analysis_table(rows, open_detail: bool = False,
+                   empty_msg: str = "Nothing matches this filter.") -> str:
+    """The engine's table for an arbitrary set of evaluated rows.
+
+    Both the Long-Term page and the Dashboard's Scan & Analyze panel render
+    through here, so a name reads identically wherever it is shown. A
+    simplified second table for the Dashboard would be a second thing to keep
+    in step with the engine's columns, and the first one to go stale.
+
+    min-width matters: without it `width:100%` makes the browser compress the
+    columns to fit the card instead of overflowing, and Action — the one the
+    table exists to show — is what gets crushed.
+    """
+    headers = ""
+    for key, label, align, stype in _COLUMNS:
+        pinned = key in PINNED_COLUMNS
+        headers += (
+            f'<th data-col="{key}" data-type="{stype}" data-dir=""'
+            + (' class="lt-pin"' if pinned else "")
+            + f' title="{"Click to sort · pinned left" if pinned else "Click to sort · drag to reorder"}"'
+            + f' style="{_TH};text-align:{align}">{esc(label)}'
+              f'<span class="lt-arrow"></span></th>')
+    body_rows = "".join(_row(r, open_detail=open_detail) for r in rows) or (
+        f'<tr><td colspan="{len(_COLUMNS)}" style="padding:24px;'
+        f'text-align:center">{empty(empty_msg)}</td></tr>')
+    # border-collapse:separate — `collapse` drops the borders of a sticky
+    # cell as it scrolls, which left the pinned column's seam flickering in
+    # and out. border-spacing:0 keeps the layout identical to collapse.
+    return (PIN_CSS
+            + '<div style="overflow-x:auto">'
+            '<table id="lt-table" style="width:100%;min-width:1180px;'
+            'border-collapse:separate;border-spacing:0">'
+            f'<thead><tr>{headers}</tr></thead>'
+            f'<tbody>{body_rows}</tbody></table></div>')
 
 # Ticker characters that survive the round trip to yfinance and TradingView:
 # letters and digits, plus the separators share classes and indices use
@@ -1322,6 +1845,120 @@ def _rule_builder(conds, rule_op, link, stats, n_matched, n_total,
 <script>window.LT_FIELDS = {_json.dumps(meta)};</script>"""
 
 
+RISK_JS = r"""
+async function saveRiskSettings(form) {
+  const fd = new FormData(form);
+  try {
+    const res = await fetch('/api/risk/save', { method: 'POST',
+      body: new URLSearchParams(fd) });
+    const data = await res.json();
+    toast(data.message || (data.ok ? 'Saved' : 'Failed'), data.ok ? 'ok' : 'err');
+    // Every share count on the page was computed against the old account, so
+    // a partial update would leave the table disagreeing with its own header.
+    if (data.ok) setTimeout(() => location.reload(), 400);
+  } catch (e) { toast('Save failed: ' + e, 'err'); }
+  return false;
+}
+"""
+
+
+def _risk_settings_form(s: dict) -> str:
+    """§1 — the four inputs the whole engine sizes against."""
+    def field(name, label, value, step, suffix=""):
+        return (f'<label style="font-size:10px;text-transform:uppercase;'
+                f'letter-spacing:.06em;color:#898781">{esc(label)}'
+                f'<input name="{name}" type="number" step="{step}" min="0" '
+                f'value="{value:g}" style="display:block;width:110px;'
+                f'margin-top:3px;padding:6px 8px;font-size:12px">'
+                f'</label>{suffix}')
+    return (
+        '<form onsubmit="event.preventDefault();saveRiskSettings(this);return false" '
+        'style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">'
+        + field("capital", "Trading capital $", s["capital"], "1000")
+        + field("risk_pct", "Risk / trade %", s["risk_pct"], "0.1")
+        + field("max_allocation_pct", "Max allocation %",
+                s["max_allocation_pct"], "1")
+        + field("atr_multiplier", "ATR stop ×", s["atr_multiplier"], "0.1")
+        + '<button class="btn" style="padding:8px 16px">Apply</button>'
+        + f'<div style="font-size:11px;color:#898781;padding-bottom:7px">'
+          f'Max risk <b>${s["max_dollar_risk"]:,.0f}</b> · '
+          f'max position <b>${s["max_position_value"]:,.0f}</b></div>'
+        + '</form>')
+
+
+def _risk_dashboard(summary: dict, s: dict) -> str:
+    """§13 — what the setups currently on screen would commit, in aggregate.
+
+    Every figure is PLANNED, not open: most of these entries are resting
+    orders that have not triggered, and several are alternatives to each
+    other. The card says so rather than presenting the sum as a portfolio,
+    because "Planned risk $7,250" read as open risk is the kind of number
+    that changes behaviour on a false premise.
+    """
+    def tile(label, value, sub="", tone=""):
+        colour = {"good": "#0F6E56", "watch": "#8a6d1a",
+                  "bad": "#A32D2D"}.get(tone, "#0b0b0b")
+        return (f'<div style="min-width:118px">'
+                f'<div style="font-size:10px;color:#898781;text-transform:uppercase;'
+                f'letter-spacing:.06em">{esc(label)}</div>'
+                f'<div style="font-size:16px;font-weight:600;color:{colour}">'
+                f'{value}</div>'
+                + (f'<div style="font-size:10px;color:#898781">{esc(sub)}</div>'
+                   if sub else "")
+                + '</div>')
+
+    n = summary["n_actionable"]
+    if not n:
+        body = (_risk_settings_form(s)
+                + '<div style="margin-top:12px">'
+                + empty("No sizeable setups in this view — nothing here has "
+                        "both an entry and a defensible stop.") + '</div>')
+        return card("Portfolio risk", body, "🛡️")
+
+    # Committing more than the whole account across simultaneous entries is
+    # arithmetically possible and worth flagging; so is stacking more than a
+    # few maximum-risk trades at once.
+    cap_tone = ("bad" if summary["planned_capital_pct"] > 100 else
+                "watch" if summary["planned_capital_pct"] > 75 else "good")
+    risk_tone = ("bad" if summary["planned_risk_pct"] > 10 else
+                 "watch" if summary["planned_risk_pct"] > 6 else "good")
+    rr = summary.get("avg_rr")
+    rr_tone = ("good" if rr and rr >= 2 else "watch" if rr and rr >= 1.5
+               else "bad" if rr else "")
+
+    tiles = (
+        tile("Capital", f'${s["capital"]:,.0f}',
+             f'{s["risk_pct"]:g}% / trade · {s["max_allocation_pct"]:g}% max')
+        + tile("Actionable", f'{n}', "with entry + stop")
+        + tile("Planned capital", f'${summary["planned_capital"]:,.0f}',
+               f'{summary["planned_capital_pct"]:.0f}% of account', cap_tone)
+        + tile("Planned risk", f'${summary["planned_risk"]:,.0f}',
+               f'{summary["planned_risk_pct"]:.2f}% of account', risk_tone)
+        + tile("Average R:R", f'{rr:.2f}R' if rr else "—",
+               "across sized setups", rr_tone)
+        + tile("Largest position",
+               f'{summary["max_allocation"]["pct"]:.1f}%',
+               summary["max_allocation"]["ticker"])
+        + tile("Largest risk", f'${summary["max_risk"]["dollars"]:,.0f}',
+               summary["max_risk"]["ticker"])
+        + (tile("Top sector", f'{summary["top_sector_pct"]:.0f}%',
+                summary["top_sector"] or "")
+           if summary.get("top_sector") else ""))
+
+    note = (
+        '<div style="font-size:10px;color:#898781;margin-top:10px">'
+        'These are <b>planned</b> figures for setups that mostly have not '
+        'triggered, and several are alternatives to each other — read them as '
+        'a concentration check, not as open risk. Sector concentration is the '
+        'cheapest available proxy for correlated risk and a weak one: two AI '
+        'semiconductor names in different GICS sectors will draw down '
+        'together and this will not see it.</div>')
+
+    return card("Portfolio risk", _risk_settings_form(s)
+                + '<div style="display:flex;gap:22px;flex-wrap:wrap;'
+                  'margin-top:14px">' + tiles + '</div>' + note, "🛡️")
+
+
 def longterm_page(query: dict | None = None) -> tuple[str, str]:
     from . import api
 
@@ -1346,6 +1983,11 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
 
     data = api.longterm(regime_override)
     rows, cov = data["rows"], data["coverage"]
+    # A result set that arrived without sizing (an older cache, a caller that
+    # evaluated the engine directly) still renders: the sizing cells degrade
+    # to dashes and the risk card shows its empty state. Sizing is a lens on
+    # the verdict, and losing the lens should not lose the verdict.
+    settings = data.get("settings") or PS.normalize_settings()
 
     def link(**params):
         """A URL carrying the page's whole state, so no control silently
@@ -1496,23 +2138,21 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     elif action_filter:
         shown = [r for r in base if r["action"] == action_filter]
     total_matching = len(shown)
+    # Aggregated over everything the filters left, not just the first page —
+    # a concentration figure that changed when you clicked "show all" would
+    # be describing the pagination rather than the portfolio.
+    risk_summary = PS.portfolio_summary(shown, settings)
     # An explicit search or a chosen list is never truncated — asking for
     # eight tickers, or for "daytrade", and being shown the first six
     # silently would be worse than a long page.
     shown = shown if (wanted or list_name) else shown[:limit]
 
-    if shown:
-        # One result means the reasoning IS the answer, so don't make the
-        # user click again to reach it.
-        expand = len(shown) == 1
-        body_rows = "".join(_row(r, open_detail=expand) for r in shown)
-    else:
-        msg = ("Nothing matches this filter."
-               if not wanted else
-               f"None of those {len(base)} tickers are "
-               f"{_ACTION_SHORT.get(action_filter, action_filter)}.")
-        body_rows = (f'<tr><td colspan="10" style="padding:24px;'
-                     f'text-align:center">{empty(msg)}</td></tr>')
+    # One result means the reasoning IS the answer, so don't make the user
+    # click again to reach it.
+    empty_msg = ("Nothing matches this filter."
+                 if not wanted else
+                 f"None of those {len(base)} tickers are "
+                 f"{_ACTION_SHORT.get(action_filter, action_filter)}.")
 
     more = ""
     if total_matching > len(shown):
@@ -1524,22 +2164,8 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     regime_pill = {"FAVORABLE": "good", "SELECTIVE": "watch",
                    "DEFENSIVE": "bad"}.get(data["regime"], "muted")
 
-    # min-width matters: without it `width:100%` makes the browser compress
-    # ten columns to fit the card instead of overflowing, and the Action
-    # column — the one the whole page exists to show — is what gets crushed.
-    headers = "".join(
-        f'<th data-col="{key}" data-type="{stype}" data-dir="" '
-        f'title="Click to sort · drag to reorder" '
-        f'style="{_TH};text-align:{align}">{esc(label)}'
-        f'<span class="lt-arrow"></span></th>'
-        for key, label, align, stype in _COLUMNS)
-
-    table = (
-        '<div style="overflow-x:auto">'
-        '<table id="lt-table" style="width:100%;min-width:1180px;'
-        'border-collapse:collapse">'
-        f'<thead><tr>{headers}</tr></thead>'
-        f'<tbody>{body_rows}</tbody></table></div>{more}')
+    table = analysis_table(shown, open_detail=len(shown) == 1,
+                           empty_msg=empty_msg) + more
 
     body = f"""
 <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;
@@ -1562,6 +2188,7 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
 </div>
 
 {warn}
+{_risk_dashboard(risk_summary, settings)}
 {search}
 {notfound}
 {_preset_bar(link, rule_texts, cov["needs_rescan"], preset_counts)}
@@ -1599,4 +2226,70 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
   proxies, marked ⚠ where the evidence is thinner than the weight.
 </div>
 """
-    return body, _TABLE_JS + _RULE_JS
+    return body, TABLE_JS + _RULE_JS + RISK_JS
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DASHBOARD PANEL — the same analysis, for one scope, without leaving home
+# ─────────────────────────────────────────────────────────────────────────────
+
+def analysis_panel(data: dict) -> str:
+    """The Scan & Analyze result for one scope, as an HTML fragment.
+
+    Returned as HTML rather than JSON for the same reason /api/regime is: the
+    caller is a div on the Dashboard, not a client with its own opinion about
+    how a valuation band should look. Shipping rows as JSON would mean
+    reimplementing fifteen cell renderers and the reasoning grid in
+    JavaScript, and the two copies would disagree the first time a column
+    changed.
+    """
+    if data.get("error"):
+        return (f'<div style="background:#FCEBEB;color:#791F1F;font-size:12px;'
+                f'padding:10px 13px;border-radius:9px">'
+                f'{esc(data["error"])}</div>')
+
+    rows = data.get("rows") or []
+    missing = data.get("missing") or []
+    matched = data.get("matched", len(rows))
+    regime_pill = {"FAVORABLE": "good", "SELECTIVE": "watch",
+                   "DEFENSIVE": "bad"}.get(data.get("regime"), "muted")
+
+    # "60 of 552 scored" would be a lie — all 552 were scored, 60 are shown.
+    count = (f"{matched} name(s) scored" if len(rows) == matched
+             else f"showing {len(rows)} of {matched} scored")
+    head = (
+        f'<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;'
+        f'margin-bottom:10px">'
+        f'<div style="font-size:13px;font-weight:600">{esc(data.get("label") or "")}</div>'
+        f'<div style="font-size:11px;color:#898781">{esc(count)}'
+        + (f' · {len(missing)} not yet scanned' if missing else '')
+        + f'</div>'
+        f'<div style="margin-left:auto">{badge(data.get("regime", "—"), regime_pill)}</div>'
+        f'</div>')
+
+    # Named, not silently dropped: a ticker the engine has never scored looks
+    # identical to one it scored badly if it simply isn't in the table, and
+    # the fix — run the scan above — is only obvious once it's said.
+    notes = ""
+    if missing:
+        shown = ", ".join(missing[:12]) + ("…" if len(missing) > 12 else "")
+        notes += (
+            f'<div style="background:#FAEEDA;border:0.5px solid #f0dfc0;'
+            f'color:#633806;font-size:11px;padding:9px 12px;border-radius:9px;'
+            f'margin-bottom:10px">'
+            f'<b>{len(missing)}</b> ticker(s) have no research page yet — the '
+            f'engine only scores what a scan has covered: {esc(shown)}. '
+            f'Run <b>Scan &amp; refresh research</b> above and they will '
+            f'appear here.</div>')
+    if matched > len(rows):
+        notes += (
+            f'<div style="font-size:11px;color:#898781;margin-bottom:10px">'
+            f'Capped at the first {len(rows)} — each row carries its full '
+            f'reasoning grid, so all {matched} at once is several megabytes of '
+            f'page. Narrow the scope, or '
+            f'<a href="{esc(data.get("full_link") or "/longterm")}">'
+            f'open the Long-Term page →</a></div>')
+
+    return head + notes + analysis_table(
+        rows, open_detail=len(rows) == 1,
+        empty_msg="Nothing to analyse in this scope yet — run a scan first.")

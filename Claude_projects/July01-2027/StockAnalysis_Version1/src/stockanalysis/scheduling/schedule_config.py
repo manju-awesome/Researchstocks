@@ -52,6 +52,14 @@ JOB_DEFS: dict[str, dict] = {
                        "\"Scan Watchlist Now\".",
         "default": {"enabled": True, "type": "interval", "minutes": 10},
     },
+    "longterm_entry_alerts": {
+        "label": "Long-term entry monitor",
+        "description": "Alert + its own email (\"Longterm swing trades\") when price comes "
+                       "within 1% of a level the Long-Term Buy Engine planned to buy at; "
+                       "market hours only. Same as the Alerts page's \"Check Entry Levels "
+                       "Now\".",
+        "default": {"enabled": True, "type": "interval", "minutes": 15},
+    },
     "news_alerts": {
         "label": "Breaking-news scan",
         "description": "Headline scan over the watchlist for market-moving news categories; "

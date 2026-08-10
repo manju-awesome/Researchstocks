@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -45,8 +46,65 @@ MAX_LOG = 500
 
 PRIORITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW")
 _PRIORITY_RANK = {p: i for i, p in enumerate(PRIORITIES)}
+# Categories that own their own notification channel and must not also
+# appear in the general digest. core.longterm.entry_alerts sends its own mail
+# under a fixed subject ("Longterm swing trades") so a standing list of
+# orders to work stays filterable; without this exclusion the same alert
+# would arrive twice under two different subjects.
+SELF_EMAILING_CATEGORIES = ("longterm_entry",)
+
 EMAIL_PRIORITIES = ("CRITICAL", "HIGH")  # tiers worth interrupting a workday for —
                                           # also gates the Telegram push digest below
+
+# ── Notification mute ────────────────────────────────────────────────────────
+# Which categories may PUSH (email + Telegram). Empty by default: the digest
+# was the bulk of the inbox, and the three things worth interrupting a day for
+# each own a dedicated channel that does not route through here —
+#
+#     Pre-Market Brief    core/premarket_brief.py
+#     Market Movers       scanners/market_movers.email_movers()
+#     Longterm swing …    core/longterm/entry_alerts.send_entry_email()
+#
+# This mutes the PUSH only. Every alert still lands on the Alerts page in
+# full, still dedups, still logs — muting is about the inbox, not about
+# throwing away the signal, and a category re-enabled below immediately
+# starts pushing again with no other change.
+#
+# ALERT_NOTIFY_CATEGORIES overrides: a comma-separated list of categories,
+# or "all" for the previous behaviour.
+DEFAULT_NOTIFY_CATEGORIES: tuple[str, ...] = ()
+
+
+def notify_categories() -> set[str] | None:
+    """Categories allowed to push; None means "no restriction".
+
+    Read per call rather than captured at import so the env var can be
+    changed while the workstation is running — the scheduler lives in a
+    long-running process and a restart to unmute would be a poor trade.
+    """
+    raw = os.environ.get("ALERT_NOTIFY_CATEGORIES")
+    if raw is None:
+        return set(DEFAULT_NOTIFY_CATEGORIES)
+    if raw.strip().lower() == "all":
+        return None
+    return {c.strip() for c in raw.split(",") if c.strip()}
+
+
+def notifiable(alerts: list[dict]) -> list[dict]:
+    """The alerts a push channel is allowed to send, in one place so email
+    and Telegram cannot drift on what counts as urgent or muted."""
+    allowed = notify_categories()
+    out = []
+    for a in alerts:
+        category = a.get("category")
+        if category in SELF_EMAILING_CATEGORIES:
+            continue                      # has its own channel — would double
+        if a.get("priority") not in EMAIL_PRIORITIES:
+            continue
+        if allowed is not None and category not in allowed:
+            continue
+        out.append(a)
+    return out
 
 
 def priority_rank(p: str) -> int:
@@ -181,7 +239,7 @@ def send_alert_emails(alerts: list[dict]) -> bool:
     groups (Earnings / News Catalyst / Day Trade / Swing Trades / Long-Term
     Investment / Options Setups). Returns False without raising if there's
     nothing to send or no RESEND_API_KEY — callers can proceed either way."""
-    urgent = [a for a in alerts if a["priority"] in EMAIL_PRIORITIES]
+    urgent = notifiable(alerts)
     if not urgent:
         return False
 
@@ -240,7 +298,7 @@ def send_alert_telegram(alerts: list[dict]) -> bool:
     send_alert_emails, so both channels agree on what's urgent enough to
     interrupt. Returns False without raising if there's nothing to send or
     no TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID — callers can proceed either way."""
-    urgent = [a for a in alerts if a["priority"] in EMAIL_PRIORITIES]
+    urgent = notifiable(alerts)
     if not urgent:
         return False
 

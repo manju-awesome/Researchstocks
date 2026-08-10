@@ -7,6 +7,7 @@ Run with: python -m unittest tests.test_alerts
 """
 import sys
 import tempfile
+import os
 import unittest
 from pathlib import Path
 
@@ -25,6 +26,10 @@ def _alert(dedup_key, priority="MEDIUM", ticker="NVDA"):
 
 class AlertsStorageTestCase(unittest.TestCase):
     def setUp(self):
+        # super() first: this class is mixed with _UnmutedTestCase below, and
+        # a setUp that does not delegate silently drops every mixin after it
+        # in the MRO.
+        super().setUp()
         self._orig_state = alerts.ALERTS_STATE_PATH
         self._orig_log = alerts.ALERTS_LOG_PATH
         self._orig_watchlists = alerts.WATCHLISTS_PATH
@@ -37,6 +42,7 @@ class AlertsStorageTestCase(unittest.TestCase):
         alerts.ALERTS_STATE_PATH = self._orig_state
         alerts.ALERTS_LOG_PATH = self._orig_log
         alerts.WATCHLISTS_PATH = self._orig_watchlists
+        super().tearDown()
 
 
 class TestMakeAlert(unittest.TestCase):
@@ -65,7 +71,29 @@ class TestPriorityRank(unittest.TestCase):
         self.assertGreater(alerts.priority_rank("WHATEVER"), alerts.priority_rank("LOW"))
 
 
-class TestDedupLifecycle(AlertsStorageTestCase):
+class _UnmutedTestCase(unittest.TestCase):
+    """Push is muted by default (alerts.DEFAULT_NOTIFY_CATEGORIES is empty).
+
+    These cases are about the SENDERS — priority gating, digest grouping — so
+    they unmute for their duration. Without this they pass vacuously: the
+    gate drops every alert before the sender does any work, and "no email was
+    sent" would look like the assertion succeeding.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self._prev_notify = os.environ.get("ALERT_NOTIFY_CATEGORIES")
+        os.environ["ALERT_NOTIFY_CATEGORIES"] = "all"
+
+    def tearDown(self):
+        if self._prev_notify is None:
+            os.environ.pop("ALERT_NOTIFY_CATEGORIES", None)
+        else:
+            os.environ["ALERT_NOTIFY_CATEGORIES"] = self._prev_notify
+        super().tearDown()
+
+
+class TestDedupLifecycle(AlertsStorageTestCase, _UnmutedTestCase):
     def setUp(self):
         super().setUp()
         # avoid any real network/email/Telegram attempts during these tests
@@ -294,7 +322,7 @@ class TestDedupLifecycle(AlertsStorageTestCase):
         self.assertEqual(wl[alerts.ALERT_WATCHLIST_KEY], ["TSLA"])
 
 
-class TestEmailBatching(unittest.TestCase):
+class TestEmailBatching(_UnmutedTestCase):
     def test_only_critical_and_high_trigger_email(self):
         sent = {}
 
@@ -325,7 +353,7 @@ class TestEmailBatching(unittest.TestCase):
         self.assertFalse(alerts.send_alert_emails([_alert("A:x", priority="LOW")]))
 
 
-class TestTelegramBatching(unittest.TestCase):
+class TestTelegramBatching(_UnmutedTestCase):
     def test_only_critical_and_high_trigger_telegram(self):
         sent = {}
 

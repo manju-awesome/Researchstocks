@@ -1226,8 +1226,39 @@ class TestRecoveringTrend(unittest.TestCase):
         self.assertEqual(trend["state"], "IMPAIRED")
         self.assertIs(trend["pass"], False)
 
-    def test_a_falling_200ma_still_outranks_the_recovery_reading(self):
-        trend = T.compute_trend(self._pltr(**{"MA200_Slope%": -2.0}))
+    def test_a_falling_200ma_does_not_cancel_the_recovery_reading(self):
+        """A falling 200 MA is the footprint of the decline being recovered
+        from, not evidence against the recovery.
+
+        This asserted BROKEN until 2026-08-09. The reading was an accident of
+        an exact list comparison: `structural_failed == ["50 MA above 200
+        MA"]` matched only while the slopes were unscanned, so the moment
+        Palantir's 200 MA slope was measured, "200 MA rising" joined the
+        failed list and the branch written FOR Palantir stopped matching it.
+        Demanding the 200 MA already be rising is demanding the recovery be
+        over before calling it one.
+        """
+        trend = T.compute_trend(self._pltr(**{"MA200_Slope%": -2.0,
+                                              "MA50_Slope%": -0.49}))
+        self.assertEqual(trend["state"], "RECOVERING")
+        self.assertIn("50 MA above 200 MA", trend["structural_failed"])
+        self.assertIn("200 MA rising", trend["structural_failed"])
+
+    def test_the_inversion_must_be_present_for_a_recovery_reading(self):
+        """The other side of that boundary, which is what stops the widened
+        rule swallowing its opposite.
+
+        Price above the 200 MA with the 50 MA ALSO above it and only the
+        long-term slope failing is a healthy structure beginning to roll
+        over — deterioration, not repair. Dropping the inversion from the
+        test collapsed the two shapes into one and read a topping name as a
+        recovering one.
+        """
+        rolling_over = self._pltr(**{"50MA": 160.0,        # back above the 200
+                                     "MA200_Slope%": -2.0,
+                                     "MA50_Slope%": -0.1})
+        trend = T.compute_trend(rolling_over)
+        self.assertEqual(trend["structural_failed"], ["200 MA rising"])
         self.assertEqual(trend["state"], "BROKEN")
 
     def test_recovering_is_only_for_the_cross_not_any_failure(self):

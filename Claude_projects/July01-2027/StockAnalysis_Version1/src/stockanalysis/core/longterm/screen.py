@@ -145,6 +145,10 @@ LONGTERM_FIELDS: tuple[S.Field, ...] = (
     S.Field("volume_score", "Pullback volume", "Entry", NUM, "volume_score",
             "", UP, hint="Accumulation vs distribution", decimals=0),
     S.Field("reversal", "Bullish reversal", "Entry", BOOL, "reversal"),
+    S.Field("technical", "Technical score", "Entry", NUM, "technical", "", UP,
+            hint="Pure price and volume — shares no input with LQuality or "
+                 "valuation, which is what makes agreement mean something",
+            decimals=0),
 
     # ── Verdict ─────────────────────────────────────────────────────────────
     S.Field("action", "Action", "Verdict", ENUM, "action",
@@ -156,6 +160,36 @@ LONGTERM_FIELDS: tuple[S.Field, ...] = (
             hint="Ranks names that already passed the gates", decimals=0),
     S.Field("tranche", "Tranche size", "Verdict", NUM, "tranche", "%", UP,
             decimals=0),
+    S.Field("investment_status", "Investment", "Verdict", ENUM,
+            "investment_status", values=E.INVESTMENT_STATUSES,
+            hint="The COMPANY verdict — Core / Own / Watchlist / Reject. "
+                 "Routinely disagrees with Action, which is the ENTRY verdict"),
+    S.Field("investment_score", "Investment score", "Verdict", NUM,
+            "investment_score", "", UP,
+            hint="Quality and valuation only — no chart in it", decimals=0),
+
+    # ── Position (§ risk-based sizing) ───────────────────────────────────────
+    # Everything here is a property of the PLANNED TRADE rather than of the
+    # company, and every one of them is None until a scan has produced a
+    # sizeable plan — a rule on `rr` therefore also silently filters to names
+    # the sizing engine would act on, which is usually what is wanted and is
+    # worth knowing when it is not.
+    S.Field("rr", "Risk / reward", "Position", NUM, "rr", "R", UP,
+            hint="To the nearest target clearing 2R, measured from the "
+                 "planned entry — not from today's price", decimals=2),
+    S.Field("position_grade", "Position grade", "Position", ENUM,
+            "position_grade", values=("A", "B", "C", "D"),
+            hint="Rates the SETUP, not the company"),
+    S.Field("risk_status", "Risk status", "Position", ENUM, "risk_status",
+            values=("NORMAL", "HIGH_ALLOCATION", "OVERSIZED", "NO_STOP",
+                    "INVALID_SETUP", "NOT_ACTIONABLE"),
+            hint="Whether the position is a sane size"),
+    S.Field("allocation_pct", "Allocation", "Position", NUM, "allocation_pct",
+            "%", None, hint="Share of trading capital this position uses",
+            decimals=1),
+    S.Field("stop_pct", "Stop distance", "Position", NUM, "stop_pct", "%",
+            DOWN, hint="How far the stop sits below the planned entry",
+            decimals=1),
 
     # ── Context ─────────────────────────────────────────────────────────────
     S.Field("lt_price", "Price", "Context", NUM, "lt_price", "$", None,
@@ -179,8 +213,8 @@ LONGTERM_FIELD_BY_KEY = {f.key: f for f in LONGTERM_FIELDS}
 # NOT touch S.FIELDS — see the module docstring.
 S.FIELD_BY_KEY.update(LONGTERM_FIELD_BY_KEY)
 
-FIELD_GROUPS = ("Quality", "Valuation", "Trend", "Levels", "Entry", "Verdict",
-                "Context")
+FIELD_GROUPS = ("Quality", "Valuation", "Trend", "Levels", "Entry", "Position",
+                "Verdict", "Context")
 
 
 def _num(v):
@@ -208,6 +242,15 @@ def flatten(result: dict) -> dict:
     bz = p.get("buy_zone") or {}
     rz = p.get("resistance") or {}
     by = p.get("by_level") or {}
+    tech = result.get("technical") or {}
+    inv = result.get("investment") or {}
+    # Attached by api.longterm() after evaluation, so it is absent whenever
+    # the engine is run directly. Every position field then flattens to None
+    # rather than raising, which is the same treatment an unscanned column
+    # gets everywhere else in this module.
+    plan = result.get("sizing_plan") or {}
+    plan_size = plan.get("sizing") or {}
+    plan_target = plan.get("target") or {}
 
     def level_pct(key):
         return _num((by.get(key) or {}).get("distance_pct"))
@@ -265,10 +308,21 @@ def flatten(result: dict) -> dict:
         "volume_score": _num(vol.get("score")),
         "reversal": _reversal_flag(result),
 
+        "technical": _num(tech.get("score")),
+
         "action": result.get("action"),
         "gate": result.get("gate"),
         "lt_score": _num(result.get("lt_score")),
         "tranche": _num(result.get("tranche_pct")),
+        "investment_status": inv.get("status"),
+        "investment_score": _num(inv.get("score")),
+
+        "rr": _num(plan_target.get("rr")),
+        "position_grade": plan.get("grade") if plan.get("grade") in
+                          ("A", "B", "C", "D") else None,
+        "risk_status": plan.get("status"),
+        "allocation_pct": _num(plan_size.get("allocation_pct")),
+        "stop_pct": _num(plan_size.get("stop_distance_pct")),
 
         "lt_price": _num(result.get("price")),
         "lt_rs_rank": _num(rs.get("market_rank")),
@@ -458,6 +512,28 @@ PRESETS: tuple[dict, ...] = (
              "shape of institutions buying rather than retail selling.",
      "rules": ["volume_score:gte:60", "lt_rs_rank:gte:60",
                "lquality:gte:80"]},
+    {"key": "three_r_quality", "icon": "🏹", "name": "3R Setup in Quality",
+     "group": "When to buy",
+     "desc": "A good business whose chart agrees and whose priced trade pays "
+             "three to one. The three readings are independent — LQuality "
+             "reads the statements, Technical reads price and volume alone, "
+             "and R:R comes from the planned entry against its stop — so "
+             "requiring all three is a genuine triangulation rather than the "
+             "same fact counted three times. TSM is the shape: 91 / 79 / 9R.",
+     "rules": ["lquality:gte:80", "technical:gte:75", "rr:gte:3"]},
+    {"key": "both_engines_agree", "icon": "🤝", "name": "Business & Chart Agree",
+     "group": "When to buy",
+     "desc": "A name the company verdict wants to OWN and the pure-technical "
+             "score independently rates well. The disagreements are the "
+             "normal case, which is what makes the overlap worth a list.",
+     "rules": ["investment_status:eq:CORE", "technical:gte:70"]},
+    {"key": "asymmetric_sized", "icon": "📏", "name": "Sized and Asymmetric",
+     "group": "When to buy",
+     "desc": "3R or better on a stop tight enough that the position is worth "
+             "taking, and small enough that the allocation cap did not have "
+             "to rescue it. The setups where risk sizing and conviction point "
+             "the same way.",
+     "rules": ["rr:gte:3", "risk_status:eq:NORMAL", "lquality:gte:75"]},
 
     # ── What would stop me ──────────────────────────────────────────────────
     {"key": "priced_for_perfection", "icon": "🎈", "name": "Priced for Perfection",
@@ -485,6 +561,21 @@ PRESETS: tuple[dict, ...] = (
              "tiebreaker, never a thesis — it sits outside LQuality for "
              "exactly that reason.",
      "rules": ["lquality:gte:85", "insider:eq:Net buying"]},
+    {"key": "chart_disagrees", "icon": "📉", "name": "Chart Disagrees",
+     "group": "What would stop me",
+     "desc": "Businesses the statements rate highly and price action does "
+             "not. Technical shares no input with LQuality, so this is the "
+             "second opinion dissenting — either the market is early or the "
+             "fundamentals are stale, and it is worth deciding which before "
+             "the next tranche.",
+     "rules": ["lquality:gte:85", "technical:lte:45"]},
+    {"key": "conviction_no_trade", "icon": "🚧", "name": "Own It, Can't Trade It",
+     "group": "What would stop me",
+     "desc": "Names the company verdict rates Core or Own where the priced "
+             "trade does not pay — under 1.5R to the nearest target worth "
+             "taking. Conviction and entry are different questions, and this "
+             "is the list where they part company.",
+     "rules": ["investment_status:eq:CORE", "rr:lt:1.5"]},
     {"key": "earnings_clear", "icon": "📅", "name": "Clear of Earnings",
      "group": "What would stop me", "desc": "Quality names with no report inside two weeks — the gap risk "
              "that no amount of setup quality offsets.",
