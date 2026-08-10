@@ -10,6 +10,7 @@ jobstore.Progress; it never touches HTTP request/response objects directly.
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from . import jobstore
 
@@ -148,6 +149,47 @@ def job_ai_sentiment(progress: jobstore.Progress) -> str:
     return f"AI sentiment {s['score']}/100 — {s['label']}"
 
 
+def job_stockdaytrade(limit: int, at_time, min_grade: str, risk_pct: float | None,
+                      profile: str, progress: jobstore.Progress) -> str:
+    """Run the stock day-trade scan and replace the page's snapshot.
+
+    Writes the snapshot via core.daytrade.store — the same file and the
+    same serialiser the CLI's --save uses, so a scan run from a terminal
+    and one run from the page leave the page in identical states.
+
+    `min_grade` filters what is stored, not what is scored — a name is
+    ranked against the full candidate set and then hidden, so the counts in
+    the header stay honest about how selective the run was.
+    """
+    from stockanalysis.core.daytrade import plan as dt_plan
+    from stockanalysis.core.daytrade import scan as dt_scan
+    from stockanalysis.core.daytrade import store as dt_store
+
+    settings = dt_plan.load_settings({"risk_pct": risk_pct})
+    result = dt_scan.run(limit=limit, at_time=at_time, settings=settings,
+                         profile=profile,
+                         progress_cb=lambda m: progress.stage(m))
+
+    scored = len(result["rows"])
+    if min_grade != "ALL":
+        order = ["A+", "A", "B+", "B", "C"]
+        keep = set(order[:order.index(min_grade) + 1]) if min_grade in order else None
+        if keep is not None:
+            hidden = [r for r in result["rows"] if r.get("grade") not in keep]
+            if hidden:
+                result["notes"].append(
+                    f"{len(hidden)} of {scored} scored rows below grade "
+                    f"{min_grade} were not stored")
+            result["rows"] = [r for r in result["rows"] if r.get("grade") in keep]
+
+    progress.stage("saving snapshot")
+    dt_store.save(result)
+    actionable = sum(1 for r in result["rows"] if r.get("grade") in ("A+", "A"))
+    progress.stage("done")
+    return (f"{len(result['rows'])} candidates stored from {scored} scored · "
+            f"{actionable} actionable · session {result.get('asof')}")
+
+
 def job_earnings_analysis(ticker: str, progress: jobstore.Progress) -> str:
     """Run the deterministic earnings-sentiment engine for one ticker and
     write the result to data/output/earnings/<TICKER>.json — served as a
@@ -265,6 +307,27 @@ def job_watchlist_scan(progress: jobstore.Progress) -> str:
     progress.stage("done")
     return (f"{len(new_alerts)} new alert(s) from {len(rows)} ticker(s); "
            f"research library refreshed for {len(written)}")
+
+
+def job_longterm_entry_alerts(progress: jobstore.Progress) -> str:
+    """On-demand "Check Entry Levels Now" — the same scan the market-hours
+    background job runs, without its clock guard so it can be exercised at
+    any time."""
+    from stockanalysis.core.longterm import entry_alerts as EA
+
+    progress.stage("evaluating the long-term engine")
+    rows = longterm()["rows"]
+    watching = EA.candidates(rows)
+    progress.stage(f"fetching live prices for {len(watching)}", 0, len(watching))
+    prices = EA.live_prices(watching)
+    progress.stage("checking entry proximity", len(prices), len(watching))
+    new_alerts = EA.scan_for_alerts(rows, prices=prices)
+    progress.stage("done")
+    if not watching:
+        return "no resting entries to watch — nothing has both a level and a size"
+    return (f"{len(new_alerts)} new entry alert(s) from {len(prices)} live "
+            f"quote(s) across {len(watching)} resting order(s)"
+            + (" — emailed 'Longterm swing trades'" if new_alerts else ""))
 
 
 def job_52_week(universes: list[str], near_high: float, near_low: float,
@@ -565,7 +628,13 @@ def dispatch_run(action: str, form: dict) -> str:
                 tickers = list(DAY_TRADE_TICKERS)
         elif not tickers:
             return f"watchlist(s) {', '.join(watchlists)!r} empty or unknown"
-        label = (f"research refresh: {'+'.join(watchlists)}" if watchlists else
+        # The ALL sentinel is a wire value, not a name anyone recognises —
+        # spelling it into the job tray as "__all__" tells the user nothing
+        # about what is being refreshed.
+        scope = "+".join("all watchlists" if n == ALL_UNIVERSES_SENTINEL else n
+                         for n in watchlists)
+        label = (f"research refresh: {scope} ({len(tickers)} tickers)"
+                 if watchlists else
                  "research refresh: " + ", ".join(tickers[:12])
                  + ("…" if len(tickers) > 12 else ""))
         return jobstore.start("research", label,
@@ -676,6 +745,40 @@ def dispatch_run(action: str, form: dict) -> str:
         return jobstore.start("ai_sentiment", "AI sentiment refresh",
                               lambda p: job_ai_sentiment(p))
 
+    # "smallcap" is the former action name, still accepted so a browser tab
+    # left open across the rename does not post into a void.
+    if action in ("stockdaytrade", "smallcap"):
+        from datetime import datetime as _dt
+        try:
+            limit = max(5, min(60, int(first("limit", "25") or 25)))
+        except ValueError:
+            return "candidates must be a whole number"
+        raw_at = first("at_time").strip()
+        at_time = None
+        if raw_at:
+            try:
+                at_time = _dt.strptime(raw_at, "%H:%M").time()
+            except ValueError:
+                return f"as-of time must be HH:MM, got {raw_at!r}"
+        raw_risk = first("risk_pct").strip()
+        try:
+            risk_pct = float(raw_risk) if raw_risk else None
+        except ValueError:
+            return "risk % must be a number"
+        if risk_pct is not None and not (0 < risk_pct <= 5):
+            return "risk % must be between 0 and 5"
+        min_grade = first("min_grade", "C") or "C"
+        profile = first("profile", "small") or "small"
+        if profile not in ("small", "mid", "large", "auto"):
+            return f"unknown profile {profile!r}"
+        label = (f"{profile}-cap scan: top {limit}"
+                 + (f" as of {raw_at} ET" if raw_at else "")
+                 + (f", grade {min_grade}+" if min_grade != "ALL" else ""))
+        return jobstore.start(
+            "stockdaytrade", label,
+            lambda p: job_stockdaytrade(limit, at_time, min_grade, risk_pct,
+                                        profile, p))
+
     if action == "earnings_analysis":
         ticker = first("ticker").strip().upper()
         if not ticker:
@@ -708,6 +811,11 @@ def dispatch_run(action: str, form: dict) -> str:
     if action == "watchlist_scan":
         return jobstore.start("watchlist_scan", "Watchlist alert scan (manual)",
                               lambda p: job_watchlist_scan(p))
+
+    if action == "longterm_entry_scan":
+        return jobstore.start("longterm_entry_scan",
+                              "Long-term entry levels (manual)",
+                              lambda p: job_longterm_entry_alerts(p))
 
     if action == "news_scan":
         return jobstore.start("news_scan", "Breaking news scan (manual)",
@@ -1472,22 +1580,92 @@ def longterm_lists() -> dict:
             for name, tickers in lists.items() if tickers}
 
 
-def longterm(regime_override: str | None = None) -> dict:
+# ─────────────────────────────────────────────────────────────────────────────
+# RISK SETTINGS — the account the sizing engine sizes against
+# ─────────────────────────────────────────────────────────────────────────────
+
+RISK_SETTINGS_PATH = PROJECT_ROOT / "data" / "risk_settings.json"
+
+
+def load_risk_settings() -> dict:
+    """Trading capital, risk per trade, allocation cap and ATR multiplier.
+
+    Falls back to the environment defaults (the same ACCOUNT_SIZE /
+    RISK_PER_TRADE_PCT / MAX_POSITION_PCT the HTML dashboard's sizing reads)
+    whenever the file is missing OR unreadable. Unlike saved searches, there
+    is nothing to lose here by substituting defaults: these are four numbers
+    the user can retype, not work they created, and a page that will not
+    render because a settings file got truncated is the worse failure.
+    """
+    from stockanalysis.core.longterm import position_sizing as PS
+    import json
+    raw = {}
+    if RISK_SETTINGS_PATH.exists():
+        try:
+            loaded = json.loads(RISK_SETTINGS_PATH.read_text())
+            if isinstance(loaded, dict):
+                raw = loaded
+        except (ValueError, OSError) as e:
+            print(f"[Risk] settings unreadable, using defaults ({e})")
+    return PS.normalize_settings(raw)
+
+
+def save_risk_settings(form: dict) -> dict:
+    """Persist the four sizing inputs. Values are normalized and CLAMPED
+    before they touch disk, so a typo can never be stored as a setting."""
+    from stockanalysis.core.longterm import position_sizing as PS
+    import json
+
+    def first(key):
+        return (form.get(key) or [""])[0]
+
+    settings = PS.normalize_settings({
+        "capital": first("capital"),
+        "risk_pct": first("risk_pct"),
+        "max_allocation_pct": first("max_allocation_pct"),
+        "atr_multiplier": first("atr_multiplier"),
+    })
+    keep = {k: settings[k] for k in
+            ("capital", "risk_pct", "max_allocation_pct", "atr_multiplier")}
+    try:
+        RISK_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = RISK_SETTINGS_PATH.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(keep, indent=2))
+        tmp.replace(RISK_SETTINGS_PATH)
+    except OSError as e:
+        return {"ok": False, "message": f"could not save: {e}"}
+    return {"ok": True, "message": (
+        f"Sizing set to ${keep['capital']:,.0f} capital · "
+        f"{keep['risk_pct']:g}% risk · {keep['max_allocation_pct']:g}% max "
+        f"position"), "settings": settings}
+
+
+def longterm(regime_override: str | None = None,
+             risk_settings: dict | None = None) -> dict:
     """The whole Long-Term Buy Engine run, ready for the page.
 
     Returns {"rows", "counts", "regime", "regime_note", "risk_free_note",
-             "coverage", "universe"}. `coverage` reports how much of the
+             "coverage", "settings"}. `coverage` reports how much of the
     library carries the columns the engine needs, because a library scanned
     before core.longterm existed will produce WATCH for everything and the
     page has to say why rather than looking broken.
+
+    Position sizing is attached here rather than inside `evaluate()`: the
+    verdict belongs to the engine and the account belongs to the user, so
+    keeping them apart is what lets one evaluation be sized against two
+    different accounts without re-running the gates.
     """
     from stockanalysis.core.longterm import engine as E
+    from stockanalysis.core.longterm import position_sizing as PS
 
     rows = _longterm_universe()
     regime, regime_note = longterm_regime(regime_override)
     risk_free, risk_free_note = longterm_risk_free()
 
     results = E.evaluate_universe(rows, regime=regime, risk_free=risk_free)
+
+    settings = risk_settings or load_risk_settings()
+    PS.attach(results, {r.get("Ticker"): r for r in rows}, settings)
 
     counts = {}
     for r in results:
@@ -1511,4 +1689,72 @@ def longterm(regime_override: str | None = None) -> dict:
         "regime_note": regime_note,
         "risk_free_note": risk_free_note,
         "coverage": coverage,
+        "settings": settings,
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCAN & ANALYZE — the Long-Term engine narrowed to one scope, for the Dashboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+ANALYSIS_SCOPES = ("ticker", "watchlist", "daytrade", "all")
+
+# Enough rows to read a watchlist end to end, few enough that the reasoning
+# grid each row carries doesn't turn the Dashboard into a megabyte of HTML.
+ANALYSIS_LIMIT = 60
+
+
+def analysis(scope: str, value: str = "") -> dict:
+    """Long-Term engine rows for one scope — a ticker, a watchlist, the
+    day-trade list, or everything the library covers.
+
+    The whole universe is evaluated and THEN narrowed, never the reverse: the
+    engine ranks relative strength across the library, so scoring three
+    tickers on their own would quietly hand back different numbers than the
+    Long-Term page shows for the same three names.
+    """
+    from .longterm_view import parse_tickers
+
+    scope = (scope or "all").strip().lower()
+    if scope not in ANALYSIS_SCOPES:
+        return {"error": f"unknown scope {scope!r}"}
+
+    data = longterm()
+    rows = data["rows"]
+    by_ticker = {r["ticker"]: r for r in rows}
+    missing: list[str] = []
+    full_link = "/longterm"
+
+    if scope == "ticker":
+        wanted = parse_tickers(value)
+        if not wanted:
+            return {"error": "Type a ticker first — e.g. NVDA, or NVDA AMD MSFT."}
+        picked = []
+        for t in wanted:
+            (picked.append(by_ticker[t]) if t in by_ticker else missing.append(t))
+        # Input order, not engine ranking: someone comparing names they typed
+        # expects to read them back the way they wrote them.
+        rows = picked
+        label = "Ticker · " + ", ".join(wanted)
+        full_link = f"/longterm?q={quote_plus(' '.join(wanted))}"
+    elif scope in ("watchlist", "daytrade"):
+        name = "daytrade" if scope == "daytrade" else (value or "").strip()
+        lists = longterm_lists()
+        members = lists.get(name)
+        if members is None:
+            return {"error": f"no such list: {name or '(none picked)'}"}
+        rows = [by_ticker[t] for t in members if t in by_ticker]
+        missing = [t for t in members if t not in by_ticker]
+        label = ("Day trade list" if scope == "daytrade"
+                 else f"Watchlist · {name}")
+        full_link = f"/longterm?list={quote_plus(name)}"
+    else:
+        label = "All tickers"
+
+    return {"rows": rows[:ANALYSIS_LIMIT], "missing": missing, "label": label,
+            # `matched` counts what the scope resolved to before the display
+            # cap, so the panel can say "showing 60 of 552" rather than
+            # implying the other 492 went unscored.
+            "matched": len(rows), "scope_total": len(rows) + len(missing),
+            "full_link": full_link, "regime": data["regime"],
+            "regime_note": data["regime_note"]}

@@ -164,6 +164,135 @@ closes a position.
 
 ---
 
+## Day-trade scanner — `core/daytrade/` · page `/stockdaytrade`
+
+An intraday momentum engine: unusual volume, a fresh catalyst, a defined
+structure to risk against, and — separately — whether the price in front of
+you is worth paying. It reads **no fundamentals at all** — no EPS, ROE,
+valuation or fair value — because none of them bear on the next ninety
+minutes. A stock can be `AVOID` in `core/longterm` and enterable here
+without either being wrong; they answer different questions.
+
+```bash
+python -m stockanalysis.scanners.scan_daytrade                   # today's movers
+python -m stockanalysis.scanners.scan_daytrade --profile large   # megacap calibration
+python -m stockanalysis.scanners.scan_daytrade --limit 40 --scorecards
+python -m stockanalysis.scanners.scan_daytrade --tickers RCEL VATE --profile auto
+python -m stockanalysis.scanners.scan_daytrade --at-time 10:15   # as-of replay
+python -m stockanalysis.scanners.scan_daytrade --save            # §16 table + JSON
+```
+
+### One engine, three market-cap profiles — `profiles.py`
+
+The pipeline is identical for a $200M biotech and a $2T megacap; what the
+numbers *mean* is not. RVOL 1.3 is noise on a small-cap runner and a real
+institutional footprint on a megacap; a 6M float is the whole thesis on the
+first and an irrelevant fact about the second. So thresholds and weights
+live in a profile the engine reads (`small` / `mid` / `large`, or `auto` to
+judge each name against its own cap band) rather than as constants across
+eight modules.
+
+Three shifts, all in the same direction as market cap: **scarcity gives way
+to participation** (supply 15 → 5, float stops being a confirmation and
+becomes a liquidity check), **the stock gives way to its context**
+(relative strength + regime 15 → 45, because a megacap fighting QQQ, its
+sector and SPY is fighting all three), and **volatility stops being the
+point** (ATR% bar 4.0 → 1.5). Weights sum to 100 in every profile and cover
+the same eight blocks, so the arithmetic is identical and only the
+calibration differs — but scores are never comparable *across* profiles,
+which is why the profile travels with each row.
+
+### Opportunity, setup, entry — three questions, not one
+
+The engine's central distinction: *is this stock moving* and *is this a
+good trade at this price* are independent, and the second decays through
+the session while the first holds still.
+
+| Score | Answers | Stability |
+|---|---|---|
+| **CScore** (confluence) | is this stock worth trading today | stable all session |
+| **Setup** | is there a valid structure | changes with structure |
+| **Entry** (§20) | should I buy *at this price, now* | decays every bar |
+| **Tradeability** | can I get in and out | a gate, not a weight |
+
+`entry.py` measures extension in 5-minute ATRs — the same unit the stop is
+denominated in, so they compare directly — and adds a **Chase Score**: six
+independent ways of being late, counted rather than averaged, because being
+2 ATR above VWAP is disqualifying on its own and blending it against five
+healthy readings is exactly how a chase gets rationalised.
+
+**The execution gate (§2).** A+ requires *every* execution condition to
+hold: spread, room ≥ 0.5× the expected move, R:R ≥ 2, stop within 1.5× the
+5-min ATR, dollar volume, entry not extended, and liquidity sufficient for
+the position. Fail one and the label becomes `SETUP OK — WAIT FOR BETTER
+ENTRY`; unmeasurable ones are reported apart as `EXECUTION UNVERIFIED`,
+since on a real order "unknown" and "bad" have the same consequence.
+
+Every column on the page sorts — click to sort descending, click again to
+reverse, and the `#` column restores the engine's own ranking. Cells carry
+their raw value rather than their formatted text (or `$9.4M` would sort
+above `$215.2M`), blanks stay last in *both* directions because unknown is
+not zero, and Action sorts by urgency rather than alphabetically. The rank
+and ticker columns freeze to the left, so scrolling right to read R:R or
+Chase never leaves you looking at a row of numbers without knowing which
+stock they belong to.
+
+**The action, not the grade, is the headline.** `🔥 ENTER NOW`,
+`🟢 WAIT FOR BREAKOUT`, `🟢 WAIT FOR PULLBACK`, `🟡 SETUP OK — WAIT`,
+`🟠 MISSED ENTRY — DO NOT CHASE`, `🟠 EXTENDED`, `🔴 AVOID`. Rows rank by
+actionability first, so a 92-confluence name you must not chase sits below
+an 80 you can enter. A setup whose trigger has already fired and run can
+never read as a fresh entry.
+
+The universe is not a fixed list — today's candidates were on no list
+yesterday — so `datafeed.screen_movers()` uses `yf.screen()` to filter the
+whole US market server-side by market cap, price, volume and % change, in
+both directions. Everything downstream is a pure function of bars already
+in memory.
+
+**Three numbers, and two of them are gates.** Confluence is the §10
+weighted 100 (volatility 20 · float/supply 15 · catalyst 15 · volume 15 ·
+setup 25 · market 10). Setup and tradeability are reported separately, and
+tradeability is a *gate*: an unexitable position is not improved by a
+better chart, so a failure there caps the result at `WATCH — NOT TRADEABLE`
+whatever the other 90 points say. Room-to-run gates the same way —
+significant resistance immediately ahead refuses A+/A rather than
+subtracting from it. Grades additionally require a count of independent
+confirmations, because 85 points from two huge factors and 85 from eight
+modest ones are the same number and very different trades.
+
+**Sizing is risk-first, and size never scales with score.** Maximum
+acceptable loss sets the share count; every other limit can only reduce it
+(allocation cap, 1% of average volume, 25% of a minute's dollar volume, a
+micro-float floor). Real risk is `|entry − stop| + slippage`, where
+slippage is half the spread each way, an intraday-volatility floor, and
+market impact once the position exceeds ~10% of a minute's dollar volume —
+so the account's true exposure is not understated. Execution risk shrinks
+the position rather than only printing a warning beside a full-size one.
+Capital and the allocation cap come from `data/risk_settings.json`;
+day-trade risk % is its own knob, since 2% on an intraday breakout is not
+the same bet as 2% on a swing.
+
+**What it refuses to estimate.** Borrow fee and shares-available-to-borrow
+have no source. Offerings, ATM programmes, warrants and reverse-split risk
+are not verifiable from yfinance, so every candidate carries an explicit
+`DILUTION: UNVERIFIED` note rather than an implied all-clear — check the
+latest S-1/S-3/424B5 before sizing. Market breadth (advance/decline) is
+reported as unavailable rather than proxied by "SPY is up", which is not
+breadth. Bid/ask spread is only scored while the market is open, because
+outside hours the resting quotes are meaningless (AVITA showed 5.71 × 8.96,
+a 44% "spread") and scoring them would reject every candidate on a
+fabricated basis.
+
+**Sessions.** Outside market hours the scan analyses the last *completed*
+session and says so on its first line — every level is that session's, and
+it is preparation, not a live scan. `--at-time HH:MM` replays a session as
+of a wall-clock time with nothing later visible, which is the only way to
+see the engine's real behaviour when the market is shut: read at the close,
+every candidate has already made its move and correctly scores a poor R:R.
+
+---
+
 ## Alert & notification system
 
 ### Priority alert engine — `core/alerts.py`

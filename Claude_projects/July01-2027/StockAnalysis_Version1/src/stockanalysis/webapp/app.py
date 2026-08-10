@@ -66,6 +66,13 @@ ROUTES = {
     "/daytrade":    ("daytrade",  "Day Trade", spy_pages.daytrade_page),
     "/daytrade/proposals": ("daytrade", "Day Trade · Proposals",
                             spy_pages.daytrade_proposals_page),
+    # Its own route rather than a /daytrade sub-page: that section is the SPY
+    # 0DTE options engine and this ranks equities across all three market-cap
+    # profiles. Nesting them would imply a shared model they do not have.
+    "/stockdaytrade": ("stockdaytrade", "StockDayTrade", pages.stockdaytrade_page),
+    # Former path, kept so existing bookmarks and any saved links still land
+    # on the page. It renders identically and lights up the same nav entry.
+    "/smallcap":      ("stockdaytrade", "StockDayTrade", pages.stockdaytrade_page),
     "/longterm":    ("longterm",  "Long-Term Buy Engine", pages.longterm_page),
     "/automation":  ("automation","Automation",pages.automation_page),
 }
@@ -121,6 +128,24 @@ class WorkstationHandler(SimpleHTTPRequestHandler):
         if path == "/api/search":
             q = (query.get("q") or [""])[0]
             self._send_json(api.search_tickers(q))
+            return
+
+        if path == "/api/analysis":
+            # HTML, not JSON — same reasoning as /api/regime below: the
+            # Dashboard panel shows the Long-Term engine's own cells and
+            # reasoning grid, and a JSON contract here would mean a second
+            # copy of fifteen cell renderers in JavaScript.
+            from stockanalysis.webapp import longterm_view
+            scope = (query.get("scope") or ["all"])[0]
+            value = (query.get("value") or [""])[0]
+            try:
+                panel = longterm_view.analysis_panel(api.analysis(scope, value))
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                panel = longterm_view.analysis_panel(
+                    {"error": f"analysis failed: {e}"})
+            self._send_html(panel.encode())
             return
 
         if path == "/api/screener/meta":
@@ -238,6 +263,10 @@ class WorkstationHandler(SimpleHTTPRequestHandler):
 
         if self.path == "/api/etf/theme":
             self._send_json(api.etf_set_theme(form))
+            return
+
+        if self.path == "/api/risk/save":
+            self._send_json(api.save_risk_settings(form))
             return
 
         if self.path == "/api/schedule/save":

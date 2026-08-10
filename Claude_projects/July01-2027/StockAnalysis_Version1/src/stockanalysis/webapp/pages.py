@@ -166,18 +166,173 @@ function runRegime() {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SCAN & ANALYZE — refresh the research library, then read the engine's verdict
+# ─────────────────────────────────────────────────────────────────────────────
+# Two halves of one loop, deliberately in one card: the scan is what fills the
+# research library, and the analysis is only ever as current as the last scan
+# that touched those names. Splitting them across two pages is what made
+# "why does NVDA say WATCH" hard to answer — the missing step was invisible.
+
+ANALYZE_JS = r"""
+// Which scope the panel is currently showing, so a research job finishing can
+// refresh it in place. Null until the user asks for an analysis — the
+// Dashboard's default reload-on-finish must survive untouched otherwise.
+let _analysisScope = null;
+
+function anScopeChanged() {
+  const scope = document.getElementById('an-scope').value;
+  document.getElementById('an-ticker').style.display =
+    scope === 'ticker' ? '' : 'none';
+  document.getElementById('an-list').style.display =
+    scope === 'watchlist' ? '' : 'none';
+}
+
+// {scope, value} for the current picker state, or null after complaining.
+function anParams() {
+  const scope = document.getElementById('an-scope').value;
+  if (scope === 'ticker') {
+    const raw = document.getElementById('an-ticker').value.trim();
+    if (!raw) { toast('Type a ticker first — e.g. NVDA', 'err'); return null; }
+    return { scope: scope, value: raw };
+  }
+  if (scope === 'watchlist') {
+    const name = document.getElementById('an-list').value;
+    if (!name) { toast('Pick a watchlist first', 'err'); return null; }
+    return { scope: scope, value: name };
+  }
+  return { scope: scope, value: '' };
+}
+
+async function loadAnalysis() {
+  const params = anParams();
+  if (!params) return;
+  const out = document.getElementById('analysis-out');
+  out.innerHTML = '<div style="font-size:12px;color:#898781;padding:14px 0">'
+    + 'Running the engine over the library…</div>';
+  try {
+    const res = await fetch('/api/analysis?scope=' + encodeURIComponent(params.scope)
+      + '&value=' + encodeURIComponent(params.value));
+    out.innerHTML = await res.text();
+    _analysisScope = params;
+    // The table was injected after load, so its sort/reorder handlers have
+    // to be bound now rather than at DOMContentLoaded.
+    if (typeof initLtTable === 'function') initLtTable();
+  } catch (e) {
+    out.innerHTML = '<div style="font-size:12px;color:#791F1F">'
+      + 'Analysis failed: ' + e + '</div>';
+  }
+}
+
+// The scan half: refresh_research runs the full per-ticker pipeline, which is
+// what repopulates the fields the engine reads. Posting through /run means it
+// shows up in the job tray and toasts like every other job.
+async function runScanAnalyze() {
+  const params = anParams();
+  if (!params) return;
+  const body = { action: 'research' };
+  if (params.scope === 'ticker') body.tickers = params.value;
+  else if (params.scope === 'daytrade') body.watchlist = 'daytrade';
+  else if (params.scope === 'watchlist') body.watchlist = params.value;
+  // The sweep-everything sentinel comes from the server rather than being
+  // spelled again here — two copies of a wire constant is one to forget.
+  else body.watchlist = document.getElementById('an-scope').dataset.all;
+  try {
+    const res = await fetch('/run', { method: 'POST',
+      body: new URLSearchParams(body) });
+    const data = await res.json();
+    toast(data.message || (data.ok ? 'Started' : 'Failed to start'),
+          data.ok ? 'ok' : 'err');
+    if (data.ok) { _analysisScope = params; _justSubmitted.add('research'); }
+  } catch (e) { toast('Request failed: ' + e, 'err'); }
+  pollJobs();
+}
+
+// A research job the panel is waiting on refreshes the panel; anything else
+// keeps the Dashboard's old reload-when-a-job-lands behaviour. Reloading here
+// instead would throw away the analysis the user just asked for.
+function onJobFinished(j) {
+  if (j.kind === 'research' && _analysisScope) { loadAnalysis(); return; }
+  setTimeout(() => location.reload(), 1200);
+}
+"""
+
+
+def _scan_analyze_card() -> str:
+    """The scope picker, the two buttons, and the empty panel they fill."""
+    from stockanalysis.webapp.api import ALL_UNIVERSES_SENTINEL
+    try:
+        from stockanalysis.reporting.research import (
+            load_watchlists, tree_ordered_names, SUBLIST_SEP)
+        watchlists = {n: t for n, t in load_watchlists().items() if t}
+    except Exception as e:
+        print(f"[Dashboard] watchlists unavailable ({e})")
+        watchlists, SUBLIST_SEP, tree_ordered_names = {}, ": ", list
+
+    def _opt(name: str) -> str:
+        """Sublists indent under their parent by leaf name; the value stays
+        the full "AI: Power" the backend resolves."""
+        nested = SUBLIST_SEP in name
+        label = name.split(SUBLIST_SEP, 1)[1] if nested else name
+        pad = "&nbsp;&nbsp;└ " if nested else ""
+        return (f'<option value="{esc(name)}">{pad}{esc(label)} '
+                f'({len(watchlists[name])})</option>')
+
+    list_opts = ('<option value="">Pick a watchlist…</option>' + "".join(
+        _opt(n) for n in tree_ordered_names(sorted(watchlists))))
+    n_all = len({t for v in watchlists.values() for t in v})
+    n_day = len(watchlists.get("daytrade") or [])
+
+    ctl = "padding:8px 10px;font-size:12px;border:0.5px solid #e1e0d9;border-radius:8px"
+    body = f"""
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="an-scope" onchange="anScopeChanged()"
+              data-all="{esc(ALL_UNIVERSES_SENTINEL)}" style="{ctl}">
+        <option value="ticker" selected>Single ticker</option>
+        <option value="daytrade">Day trade list ({n_day})</option>
+        <option value="watchlist">Watchlist…</option>
+        <option value="all">All tickers ({n_all})</option>
+      </select>
+      <input id="an-ticker" placeholder="NVDA, or NVDA AMD MSFT"
+             autocomplete="off" style="{ctl};min-width:220px">
+      <select id="an-list" style="{ctl};display:none;max-width:240px">
+        {list_opts}
+      </select>
+      <button class="btn secondary" onclick="runScanAnalyze()">
+        Scan &amp; refresh research</button>
+      <button class="btn" onclick="loadAnalysis()">Show analysis</button>
+    </div>
+    <div style="font-size:11px;color:#898781;margin-top:8px">
+      <b>Scan &amp; refresh research</b> re-fetches each ticker and rewrites its
+      research page — a few seconds per name, so a whole-library scan is a
+      coffee break, not a click. <b>Show analysis</b> reads what the last scan
+      stored and runs the Long-Term Buy Engine over it: same gates, scores and
+      per-row reasoning as the
+      <a href="/longterm">Long-Term</a> page. The panel refreshes itself when
+      a scan started here finishes.
+    </div>
+    <div id="analysis-out" style="margin-top:14px"></div>"""
+    return card("Scan & Analyze", body, "🔬",
+                right='<a href="/longterm" style="font-size:11px">'
+                      'Full engine →</a>')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # DASHBOARD (home)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def dashboard_page() -> tuple[str, str]:
+    from . import longterm_view
+
     snap = _read_json(OUTPUT_DIR / "snapshot.json")
     if not snap:
-        # The overall-trend read is independent of scan output, so it stays
-        # available even before the first scan has ever run.
-        return _regime_card() + card("", empty(
-            "No scan yet. Click “+ New Scan” above to run your first scan — "
-            "this page fills in with market status, opportunities, and alerts "
-            "once a scan completes."), pad="40px"), REGIME_JS
+        # The overall-trend read and the Scan & Analyze card are independent of
+        # scan output, so both stay available before the first scan has ever
+        # run — this empty state is exactly when someone needs to start one.
+        return (_regime_card() + _scan_analyze_card() + card("", empty(
+            "No scan yet. Click “+ New Scan” above, or use Scan & Analyze, to "
+            "run your first scan — this page fills in with market status, "
+            "opportunities, and alerts once a scan completes."), pad="40px"),
+            REGIME_JS + ANALYZE_JS + longterm_view.TABLE_JS)
 
     regime = snap.get("regime") or {}
     opp = snap.get("opportunity") or {}
@@ -314,6 +469,7 @@ def dashboard_page() -> tuple[str, str]:
         + card("Portfolio", pf_body, "💼", right='<a href="/portfolio" style="font-size:11px">View all →</a>')
         + card("Today's Opportunities", opp_cols, "🎯",
               right='<a href="/scanner" style="font-size:11px">Run new scan →</a>')
+        + _scan_analyze_card()
         + f"""<div style="display:flex;gap:16px;flex-wrap:wrap">
              <div style="flex:1;min-width:260px">{card("Recent Alerts", alerts_html, "🔔")}
                 {card("Turnaround Watch", rec_html, "🔧")}</div>
@@ -322,9 +478,9 @@ def dashboard_page() -> tuple[str, str]:
                 {card("Recent Dashboards", dash_html, "📊")}</div>
            </div>"""
     )
-    extra_js = ("function onJobFinished(j) { setTimeout(() => location.reload(), 1200); }"
-                + REGIME_JS)
-    return body, extra_js
+    # onJobFinished lives in ANALYZE_JS: it has to know whether the panel is
+    # showing an analysis before deciding to reload the page out from under it.
+    return body, REGIME_JS + ANALYZE_JS + longterm_view.TABLE_JS
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -807,6 +963,17 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     query string because its filters and regime override live in the URL."""
     from . import longterm_view
     return longterm_view.longterm_page(query)
+
+
+def stockdaytrade_page() -> tuple[str, str]:
+    """The stock day-trade scanner — see webapp/stockdaytrade_view.py.
+
+    Distinct from /daytrade, which is the SPY 0DTE engine in spydaytrader.
+    Both are intraday and they share nothing: that one trades one index's
+    options off a signal engine, this one ranks equities on §10 confluence
+    across small/mid/large-cap profiles and reads no fundamentals at all."""
+    from stockanalysis.webapp import stockdaytrade_view
+    return stockdaytrade_view.stockdaytrade_page()
 
 
 def screener_page() -> tuple[str, str]:
@@ -3582,6 +3749,7 @@ def alerts_page() -> tuple[str, str]:
 
     toolbar = (
         _toolbar_form("watchlist_scan", "Scan Watchlist Now")
+        + _toolbar_form("longterm_entry_scan", "Check Entry Levels Now")
         + _toolbar_form("news_scan", "Scan News Now")
         + _toolbar_form("earnings_scan", "Check Earnings Now")
         # runs the scheduler's day-session init (movers merge) on demand and
@@ -3593,6 +3761,23 @@ def alerts_page() -> tuple[str, str]:
            f'Init Day Universe Now</button></form> ')
         + _toolbar_form("premarket_brief", "Generate Brief Now", primary=True)
     )
+
+    # A mute you can only detect by NOT receiving mail is a bad mute. Said
+    # here, next to the alerts it applies to, rather than only in a comment.
+    allowed = alerts_mod.notify_categories()
+    if allowed is None:
+        mute_note = ""
+    else:
+        kept = (", ".join(sorted(allowed)) if allowed else "none")
+        mute_note = (
+            f'<div style="font-size:11px;padding:9px 13px;border-radius:9px;'
+            f'margin-bottom:12px;background:#E6F1FB;color:#0C447C;'
+            f'border:0.5px solid #cfe0f2">🔕 <b>Email/Telegram muted</b> for '
+            f'the alert digest — pushing categories: <b>{esc(kept)}</b>. '
+            f'Alerts below are unaffected: they still fire, dedup and log. '
+            f'The Pre-Market Brief, Market Movers and “Longterm swing trades” '
+            f'emails have their own channels and still send. Set '
+            f'<code>ALERT_NOTIFY_CATEGORIES=all</code> to unmute.</div>')
 
     if not active_alerts:
         active_html = empty("No active alerts — conditions are being checked every 10 minutes "
@@ -3643,19 +3828,21 @@ def alerts_page() -> tuple[str, str]:
         f'border-radius:8px;padding:10px 14px">{_premarket_brief_html(brief)}</div>')
 
     body = (
-        card("Active Alerts", active_html, "🔔", right=toolbar)
+        card("Active Alerts", mute_note + active_html, "🔔", right=toolbar)
         + card("Latest Pre-Market Brief", brief_html, "📰")
         + card("Recent Alert Log", log_html, "🗒️")
     )
     extra_js = (
         "function onJobFinished(j) { if (['watchlist_scan', 'news_scan', 'earnings_scan', "
-        "'premarket_brief'].includes(j.kind) || j.kind.startsWith('cron:')) "
+        "'longterm_entry_scan', 'premarket_brief'].includes(j.kind) "
+        "|| j.kind.startsWith('cron:')) "
         "setTimeout(() => location.reload(), 1200); }\n"
         "const ALERT_LOG_ROWS = " + log_json + ";\n"
         + """
     const ALERT_CAT_LABELS = {earnings: 'Earnings', news: 'News Catalyst',
       watchlist: 'Technical', put_setup: 'Put Setup', call_setup: 'Call Setup',
-      a_plus_setup: 'A+ Setup', other: 'Other'};
+      a_plus_setup: 'A+ Setup', longterm_entry: 'Entry Reached',
+      other: 'Other'};
     function alertCards() {
       return Array.from(document.querySelectorAll('#active-alerts-box .alert-card'));
     }

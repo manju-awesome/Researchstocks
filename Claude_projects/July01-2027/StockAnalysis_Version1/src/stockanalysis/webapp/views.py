@@ -37,12 +37,16 @@ def tv_url(ticker: str, interval: str | None = None) -> str:
     url = f"https://www.tradingview.com/chart/?symbol={str(ticker).replace('-', '.')}"
     return f"{url}&interval={interval}" if interval else url
 
+# Ordered by how the day actually runs: the two decision engines first
+# (intraday, then long-term), then the pipeline that feeds them
+# (scan → screen → research), then everything that reviews or configures.
 NAV = (("dashboard", "/", "🏠", "Dashboard"),
-       ("ai-sentiment", "/ai-sentiment", "🤖", "AI Sentiment"),
+       ("stockdaytrade", "/stockdaytrade", "🔥", "StockDayTrade"),
+       ("longterm",  "/longterm", "🏛️", "Long-Term"),
        ("scanner",   "/scanner", "📡", "Scanner"),
        ("screener",  "/screener", "🔬", "Screener"),
        ("research",  "/research", "🔎", "Research"),
-       ("longterm",  "/longterm", "🏛️", "Long-Term"),
+       ("ai-sentiment", "/ai-sentiment", "🤖", "AI Sentiment"),
        ("portfolio", "/portfolio", "💼", "Portfolio"),
        ("journal",   "/journal", "📓", "Journal"),
        ("alerts",    "/alerts", "🔔", "Alerts"),
