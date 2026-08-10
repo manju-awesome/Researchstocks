@@ -127,6 +127,22 @@ def _score_cell(v, good=75, watch=55):
     return f'<span style="color:{colour};font-weight:600">{int(v)}</span>'
 
 
+def _direction_badge(direction: str | None) -> str:
+    """LONG / SHORT, stated outright.
+
+    The engine has always known the direction — a short is picked up from
+    BELOW_VWAP, PDL_BREAKDOWN and friends — but the page only ever showed
+    it buried in the structure line, so a Bloom Energy short read as a bug:
+    "why is STOP greater than entry". It is not a bug, and this is the
+    label that says so.
+    """
+    if direction == "short":
+        return badge("▼ SHORT", "bad", "small")
+    if direction == "long":
+        return badge("▲ LONG", "good", "small")
+    return badge(DASH, "muted", "small")
+
+
 def _extension_cell(dist_atr, price, vwap_):
     """How far price sits from VWAP, in ATR — §4's entry-quality ladder.
 
@@ -213,25 +229,84 @@ def _age_note(generated: str | None) -> tuple[str, str]:
 
 # ── header ───────────────────────────────────────────────────────────────────
 
-def _controls(settings: dict, selected_profile: str = "small") -> str:
-    """§1 scan controls. `at` is the as-of replay, which is the only way to
-    read this page usefully outside market hours."""
+SCREEN_OPTION = ""       # empty value = screen the market rather than a list
+
+
+def _universe_options(selected: str = SCREEN_OPTION) -> str:
+    """Market screen plus every watchlist on disk.
+
+    `daytrade` leads the list because it is this page's natural companion —
+    the names you already decided are worth watching intraday — and burying
+    it under an alphabetical run of sector lists would make the common case
+    the slowest to reach.
+    """
+    try:
+        from stockanalysis.reporting.research import (
+            load_watchlists, tree_ordered_names)
+        lists = load_watchlists()
+    except Exception:                       # a broken watchlists.json must
+        lists, tree_ordered_names = {}, None    # not take the page down
+    named = [n for n, t in (lists or {}).items() if t]
+    ordered = []
+    if "daytrade" in named:
+        ordered.append("daytrade")
+    rest = [n for n in named if n != "daytrade"]
+    try:
+        rest = tree_ordered_names(rest) if tree_ordered_names else sorted(rest)
+    except Exception:
+        rest = sorted(rest)
+    ordered += rest
+
+    sel = ' selected' if not selected else ''
+    out = [f'<option value="{SCREEN_OPTION}"{sel}>Market screen</option>']
+    for name in ordered:
+        n = len(lists.get(name) or [])
+        out.append(f'<option value="{esc(name)}"'
+                   f'{" selected" if name == selected else ""}>'
+                   f'{esc(name)} ({n})</option>')
+    # A watchlist that has since been renamed or deleted would otherwise
+    # silently fall back to "Market screen" — say so instead.
+    if selected and selected not in ordered:
+        out.append(f'<option value="{esc(selected)}" selected>'
+                   f'{esc(selected)} (no longer in watchlists.json)</option>')
+    return "".join(out)
+
+
+def _controls(settings: dict, selected_profile: str = "small",
+              selected_universe: str = SCREEN_OPTION) -> str:
+    """§1 scan controls, preselected to the scan that produced the snapshot
+    on screen. `at` is the as-of replay, which is the only way to read this
+    page usefully outside market hours."""
     risk = (settings or {}).get("risk_pct") or 1.0
     return (
         '<form onsubmit="return submitJob(event, this)" '
         'style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">'
         '<input type="hidden" name="action" value="stockdaytrade">'
+        + _field("Universe",
+                 f'<select name="watchlist" style="max-width:190px">'
+                 f'{_universe_options(selected_universe)}</select>',
+                 "screen the whole market for movers, or run a watchlist you "
+                 "already curate")
         + _field("Profile",
                  '<select name="profile">'
                  + "".join(
                      f'<option value="{k}"{" selected" if k == selected_profile else ""}>'
                      f'{PR.PROFILES[k]["label"]}</option>'
                      for k in ("small", "mid", "large"))
+                 # Auto only makes sense for a list: a screen is bounded to
+                 # one cap band by construction, so there is nothing to
+                 # decide per name. A watchlist is usually mixed-cap and
+                 # this is the option that makes it coherent.
+                 + f'<option value="auto"'
+                   f'{" selected" if selected_profile == "auto" else ""}>'
+                   f'Auto (per stock)</option>'
                  + "</select>",
-                 "market-cap calibration — weights and thresholds differ by class")
+                 "market-cap calibration — weights and thresholds differ by "
+                 "class; Auto judges each name against its own cap band")
         + _field("Candidates", '<input name="limit" type="number" min="5" max="60" '
                  'value="25" style="width:70px">',
-                 "how many screened names get full analysis")
+                 "how many names get the full fundamentals pass, ranked by "
+                 "move × liquidity")
         + _field("As of (ET)", '<input name="at_time" type="text" placeholder="live" '
                  'pattern="[0-9]{2}:[0-9]{2}" style="width:76px">',
                  "replay the session at HH:MM; blank = latest")
@@ -378,7 +453,14 @@ def _detail(row: dict) -> str:
 
     # ENTRY / STOP / TARGETS
     if pl.get("actionable"):
-        plan_html = _kv("Trigger", esc(pl.get("trigger") or DASH))
+        # Direction first. On a short the stop sits ABOVE the entry and the
+        # targets below it, which reads as a bug unless the page has said
+        # which way the trade goes — and it never did.
+        plan_html = _kv("Direction", _direction_badge(row.get("direction"))
+                        + ('<span style="color:#898781;margin-left:8px">'
+                           'stop sits above entry, targets below</span>'
+                           if row.get("direction") == "short" else ""))
+        plan_html += _kv("Trigger", esc(pl.get("trigger") or DASH))
         if pl.get("triggered"):
             plan_html += _kv("", '<span style="color:#8a6d1a">already through the '
                                  'trigger — reference price, not a fresh entry</span>')
@@ -547,6 +629,7 @@ _COLS = (
     ("RVOL", "right", "volume vs the same clock time on prior sessions (§3)"),
     ("ATR %", "right", "daily ATR as a share of price (§3)"),
     ("$Vol", "right", "dollar volume traded this session"),
+    ("Dir", "left", "long or short — on a short the stop is ABOVE the entry"),
     ("Pattern", "left", "primary intraday structure (§6)"),
     ("RS", "right", "relative strength vs SPY (§7)"),
     ("VWAP", "right", "distance from VWAP in 5-min ATRs (§4)"),
@@ -670,6 +753,8 @@ def _table(rows: list[dict]) -> str:
             _td(_n(vol.get("rvol")), "right", vol.get("rvol")),
             _td(_n(vol.get("atr_pct"), ".1f", "%"), "right", vol.get("atr_pct")),
             _td(_money(vol.get("dollar_volume")), "right", vol.get("dollar_volume")),
+            _td(_direction_badge(r.get("direction")), "left",
+                r.get("direction") or ""),
             _td(esc((r.get("patterns") or {}).get("primary") or DASH), "left",
                 (r.get("patterns") or {}).get("primary"), ";color:#444441"),
             _td(_n((r.get("strength") or {}).get("vs_spy"), "+.1f", "pp"), "right",
@@ -795,6 +880,7 @@ def _decision_cards(rows: list[dict]) -> str:
             f'<span style="font-weight:700;font-size:14px;color:#0b0b0b">'
             f'{esc(r["ticker"])}</span>'
             f'<span style="font-size:11px;color:#898781">{esc(r.get("name") or "")}</span>'
+            f'{_direction_badge(r.get("direction"))}'
             f'{badge(action, _ACTION_STATUS.get(action, "muted"), "small")}'
             f'{badge(grade, _GRADE_STATUS.get(grade, "muted"), "small")}'
             f'<span style="font-size:11px;color:#898781">'
@@ -871,8 +957,13 @@ def stockdaytrade_page() -> tuple[str, str]:
           f'{len(rows)} candidates · session {esc(data.get("asof"))} · '
           f'captured {esc(age_text)}</span></div>'
         + notes + ('<div style="height:8px"></div>' if notes else "")
+        # What was requested, not what the rows resolved to — see store.py.
+        # Falls back to the first row's profile for snapshots written before
+        # the request was recorded.
         + _controls(data.get("settings") or {},
-                    (rows[0].get("profile") if rows else "small") or "small"),
+                    data.get("profile_requested")
+                    or (rows[0].get("profile") if rows else "small") or "small",
+                    data.get("universe") or SCREEN_OPTION),
         "🔥", right=badge(age_text, age_status))
 
     body = header + _regime_card(regime)

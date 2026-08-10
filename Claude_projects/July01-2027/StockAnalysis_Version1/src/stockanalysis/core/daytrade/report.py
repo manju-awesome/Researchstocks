@@ -229,6 +229,11 @@ def render_decision(r: dict) -> str:
 
     L.append("")
     L.append("  WHAT CONFIRMS THE ENTRY")
+    # Direction stated outright: on a short the stop is above the entry and
+    # the targets below, which reads as a bug when the side is left implicit.
+    L.append(f"    Direction: {direction.upper()}"
+             + ("  (stop sits ABOVE entry, targets below)"
+                if direction == "short" else ""))
     L.append(f"    Trigger: {pl.get('trigger')}")
     if pl.get("triggered"):
         L.append(f"    Already through the trigger — reference price is {_n(pl.get('entry'))}, "

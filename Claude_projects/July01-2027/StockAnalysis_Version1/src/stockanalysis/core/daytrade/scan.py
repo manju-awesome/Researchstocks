@@ -38,6 +38,38 @@ from stockanalysis.core.daytrade._common import f, sessions_in, truncate_at
 log = logging.getLogger(__name__)
 
 
+def _bar_rank(bars_1m, day) -> float:
+    """Cheap ranking for a watchlist, computed from bars already fetched.
+
+    The screen path can rank before fetching anything because the screen
+    itself returns move and volume. A watchlist returns nothing — so a
+    476-name list would otherwise take the full `.info` + news pass on
+    every symbol, which Yahoo throttles into uselessness long before it
+    finishes. Bars are batch-downloaded and effectively free, so the
+    ranking is derived from them instead and the expensive per-ticker pass
+    only runs on the survivors.
+
+    Same shape as `_prescreen_rank`: move × liquidity, multiplicatively, so
+    neither a big move on no volume nor heavy turnover with no move
+    survives on its own.
+    """
+    from stockanalysis.core.daytrade._common import (
+        MARKET_CLOSE, MARKET_OPEN, session_slice)
+    if bars_1m is None or bars_1m.empty:
+        return 0.0
+    sess = session_slice(bars_1m, day, MARKET_OPEN, MARKET_CLOSE)
+    if sess.empty or len(sess) < 2:
+        return 0.0
+    first, last = float(sess["Open"].iloc[0]), float(sess["Close"].iloc[-1])
+    if first <= 0:
+        return 0.0
+    move = abs(last - first) / first * 100.0
+    dollar_vol = float((sess["Close"] * sess["Volume"]).sum())
+    if dollar_vol < 1_000_000:
+        return 0.0
+    return move * min(dollar_vol, 5e8) ** 0.5
+
+
 def _prescreen_rank(row: dict) -> float:
     """Cheap ordering from screen data alone: move × dollar liquidity.
 
@@ -125,6 +157,19 @@ def run(limit: int = 25, asof=None, settings: dict | None = None,
         notes.append(f"as-of replay: session truncated at {at_time.strftime('%H:%M')} ET — "
                      "nothing after that time was visible to the scan")
 
+    # ── prune a watchlist down before the expensive pass ────────────────
+    # Only for explicit ticker lists; the screen path already pruned on the
+    # screen's own move/volume data before any fetch happened.
+    if tickers and len(symbols) > limit:
+        ranked = sorted(symbols, key=lambda s: _bar_rank(bars_1m.get(s), asof),
+                        reverse=True)
+        dropped = len(symbols) - limit
+        symbols = ranked[:limit]
+        by_ticker = {t: by_ticker[t] for t in symbols}
+        notes.append(f"{dropped} of the list's names dropped before the "
+                     f"fundamentals pass — deepest analysis run on the top "
+                     f"{limit} by move × liquidity")
+
     # ── info, news, then context ────────────────────────────────────────
     progress("fetching fundamentals and headlines…")
     infos, news = {}, {}
@@ -167,10 +212,13 @@ def run(limit: int = 25, asof=None, settings: dict | None = None,
             rows.append(result)
 
     rows.sort(key=E.rank_key)
+    # Echoed back so the caller and the page can show what was requested
+    # rather than re-deriving it from the rows.
+    profile_requested = profile or "small"
 
     live = any(r.get("is_live") for r in rows)
     if not live and rows:
         notes.insert(0, f"market closed — this is the completed {asof} session, "
                         "not a live scan; every level is that session's close")
     return {"rows": rows, "regime": regime, "asof": asof, "notes": notes,
-            "settings": settings}
+            "settings": settings, "profile_requested": profile_requested}

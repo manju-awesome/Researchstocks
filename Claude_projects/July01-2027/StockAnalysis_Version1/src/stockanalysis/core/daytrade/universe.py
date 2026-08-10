@@ -63,7 +63,8 @@ def spread_pct(info: dict, is_live: bool) -> tuple[float | None, str]:
 
 
 def passes_universe(row: dict, info: dict, sess: dict,
-                    profile: dict | None = None) -> tuple[bool, list[str]]:
+                    profile: dict | None = None,
+                    market_cap: float | None = None) -> tuple[bool, list[str]]:
     """§1's hard filter. Returns (passed, reasons for rejection).
 
     Only three things reject outright: market cap over the ceiling, price
@@ -85,7 +86,11 @@ def passes_universe(row: dict, info: dict, sess: dict,
     """
     p = profile or PR.DEFAULT
     reasons = []
-    mcap = f(row.get("market_cap")) or f(info.get("marketCap"))
+    # Prefer the caller's derived cap: on a watchlist name `.info` often has
+    # no marketCap at all, and reading it here directly would skip the band
+    # check entirely for exactly the rows most likely to be misfiled.
+    mcap = market_cap if market_cap is not None else (
+        f(row.get("market_cap")) or f(info.get("marketCap")))
     price = f(sess.get("price")) or f(row.get("price"))
     dollar_vol = f(sess.get("dollar_volume"))
 

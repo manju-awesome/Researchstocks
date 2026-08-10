@@ -59,6 +59,13 @@ def serialisable(result: dict) -> dict:
         "notes": list(result.get("notes") or []),
         "regime": native(result.get("regime")),
         "settings": native(result.get("settings")),
+        # What was ASKED for, not what the rows resolved to. The page
+        # preselects its controls from these, and inferring them from the
+        # rows instead showed "Large cap / Market screen" after an auto
+        # scan of the daytrade list — so hitting Run again would silently
+        # have run a different scan than the one on screen.
+        "profile_requested": result.get("profile_requested"),
+        "universe": result.get("universe") or "",
         "rows": [],
     }
     for r in result.get("rows", []):

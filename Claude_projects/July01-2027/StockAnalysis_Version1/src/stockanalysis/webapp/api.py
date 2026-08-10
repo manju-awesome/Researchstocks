@@ -150,7 +150,9 @@ def job_ai_sentiment(progress: jobstore.Progress) -> str:
 
 
 def job_stockdaytrade(limit: int, at_time, min_grade: str, risk_pct: float | None,
-                      profile: str, progress: jobstore.Progress) -> str:
+                      profile: str, progress: jobstore.Progress,
+                      tickers: list[str] | None = None,
+                      universe: str = "") -> str:
     """Run the stock day-trade scan and replace the page's snapshot.
 
     Writes the snapshot via core.daytrade.store — the same file and the
@@ -167,7 +169,7 @@ def job_stockdaytrade(limit: int, at_time, min_grade: str, risk_pct: float | Non
 
     settings = dt_plan.load_settings({"risk_pct": risk_pct})
     result = dt_scan.run(limit=limit, at_time=at_time, settings=settings,
-                         profile=profile,
+                         profile=profile, tickers=tickers,
                          progress_cb=lambda m: progress.stage(m))
 
     scored = len(result["rows"])
@@ -182,6 +184,9 @@ def job_stockdaytrade(limit: int, at_time, min_grade: str, risk_pct: float | Non
                     f"{min_grade} were not stored")
             result["rows"] = [r for r in result["rows"] if r.get("grade") in keep]
 
+    # The scan knows the ticker list but not which watchlist it came from,
+    # so the name is attached here for the page's Universe control.
+    result["universe"] = universe or ""
     progress.stage("saving snapshot")
     dt_store.save(result)
     actionable = sum(1 for r in result["rows"] if r.get("grade") in ("A+", "A"))
@@ -771,13 +776,26 @@ def dispatch_run(action: str, form: dict) -> str:
         profile = first("profile", "small") or "small"
         if profile not in ("small", "mid", "large", "auto"):
             return f"unknown profile {profile!r}"
-        label = (f"{profile}-cap scan: top {limit}"
+
+        # An empty watchlist field means "screen the market" — the page's
+        # default and the only way to find names that were on no list
+        # yesterday. A named list skips the §1 screen entirely.
+        wl = first("watchlist").strip()
+        tickers = None
+        if wl:
+            tickers = watchlist_tickers([wl])
+            if not tickers:
+                return f"watchlist {wl!r} is empty or unknown"
+
+        scope = f"{wl} ({len(tickers)})" if wl else f"{profile}-cap screen"
+        label = (f"day-trade scan: {scope}, top {limit}"
                  + (f" as of {raw_at} ET" if raw_at else "")
                  + (f", grade {min_grade}+" if min_grade != "ALL" else ""))
         return jobstore.start(
             "stockdaytrade", label,
             lambda p: job_stockdaytrade(limit, at_time, min_grade, risk_pct,
-                                        profile, p))
+                                        profile, p, tickers=tickers,
+                                        universe=wl))
 
     if action == "earnings_analysis":
         ticker = first("ticker").strip().upper()

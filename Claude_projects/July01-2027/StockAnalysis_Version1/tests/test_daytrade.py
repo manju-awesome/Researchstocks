@@ -309,6 +309,41 @@ class CatalystTests(unittest.TestCase):
         out = C.compute(news)
         self.assertTrue(out["dilution_headline"])
 
+    def test_regression_another_companys_headline_is_not_this_stocks_catalyst(self):
+        """Was: yfinance's `.news` for BE returned one Bloom Energy story
+        followed by GE Vernova, OR Royalties, Realty Income and SoFi, with
+        no ticker attribution anywhere in the payload. "OR Royalties Q2
+        Earnings" (Earnings, 75) outscored Bloom's own product story (Other
+        news, 40) and became BE's catalyst — 15% of confluence and a §12
+        confirmation, driven by a different company."""
+        news = (self._news("OR Royalties Q2 Earnings Call Highlights", 2)
+                + self._news("Bloom Energy (BE) Expands Into AI Power", 3))
+        loose = C.compute(news)
+        self.assertEqual(loose["type"], "Earnings")          # the old bug
+        tight = C.compute(news, ticker="BE", company="Bloom Energy Corporation")
+        self.assertIn("Bloom Energy", tight["headline"])
+        self.assertEqual(tight["unattributed"], 1)
+
+    def test_attribution_matches_ticker_or_name_in_title_or_summary(self):
+        def item(title, summary=""):
+            return {"title": title, "summary": summary, "published": None}
+        ok = lambda t, s="": C.attributable(item(t, s), "BE", "Bloom Energy Corporation")
+        self.assertTrue(ok("Bloom Energy tops estimates"))
+        self.assertTrue(ok("Analyst raises target on BE"))
+        self.assertTrue(ok("Top AI power plays", "…including Bloom Energy…"))
+        self.assertFalse(ok("Realty Income Q2 Earnings Call Highlights"))
+        # The English word "be" must not match the ticker.
+        self.assertFalse(ok("This could be the best trade of the year"))
+        # Corporate suffixes are not distinctive.
+        self.assertFalse(C.attributable(item("Acme Corporation Holdings news"),
+                                        "BE", "Bloom Energy Corporation"))
+
+    def test_unattributable_news_reports_the_move_as_unexplained(self):
+        out = C.compute(self._news("Realty Income Q2 Earnings", 2),
+                        ticker="BE", company="Bloom Energy Corporation")
+        self.assertEqual(out["score"], float(C.UNIDENTIFIED_SCORE))
+        self.assertIn("none about this company", out["detail"])
+
     def test_epoch_timestamps_are_understood(self):
         ts = (datetime.now(timezone.utc) - timedelta(hours=2)).timestamp()
         out = C.compute([{"title": "FDA approval granted", "published": ts}])
@@ -431,6 +466,21 @@ class PlanTests(unittest.TestCase):
         pl = P.build(sess, pat, "long", vol, room, _daily(DAY))
         self.assertGreater(abs(pl["target1"] - pl["entry"]),
                            pl["risk_per_share"] * P.BREAKOUT_ZONE_R)
+
+    def test_regression_risk_percent_is_positive_on_a_short(self):
+        """Was: the signed form put the stop above the entry on a short and
+        reported "risk 2.297 (-1.1% of entry)" — risk as a negative number,
+        which reads as a gain."""
+        down = _bars(DAY, n=60, price=12.0, step=-0.02)
+        sess = ST.build_session(down, _bars(DAY, freq="5min"), _daily(DAY, close=14.0))
+        pat = ST.detect_patterns(sess)
+        vol = V.compute(sess, _daily(DAY), _bars(DAY, freq="5min"))
+        room = RM.compute(sess, _daily(DAY), "short", vol["expected_move_pct"])
+        pl = P.build(sess, pat, "short", vol, room, _daily(DAY))
+        if pl.get("actionable"):
+            self.assertGreater(pl["stop"], pl["entry"])       # short: stop above
+            self.assertGreater(pl["risk_pct_of_price"], 0)
+            self.assertGreater(pl["risk_per_share"], 0)
 
     def test_blended_rr_sits_between_the_two_targets(self):
         sess, pat, vol, room = self._ctx()
@@ -802,6 +852,27 @@ class ProfileTests(unittest.TestCase):
                         if c["name"].startswith("RVOL"))
         self.assertTrue(rvol_ok(PR.LARGE_CAP))    # 1.6 clears 1.3
         self.assertFalse(rvol_ok(PR.SMALL_CAP))   # 1.6 does not clear 3.0
+
+    def test_regression_market_cap_derived_when_info_omits_it(self):
+        """Was: `.info` returns no marketCap at all for some symbols — WDC
+        came back with 14 fields and none of them the cap — so a $442 stock
+        was filed as a small cap and rejected for being "outside $2-$30"."""
+        cap, basis = PR.infer_market_cap(None, None, 340_620_000, 442.59)
+        self.assertGreater(cap, 100e9)
+        self.assertIn("lower bound", basis)
+        self.assertEqual(PR.for_market_cap(cap)["key"], "large")
+
+    def test_market_cap_sources_are_preferred_in_order(self):
+        self.assertEqual(PR.infer_market_cap(5e9, 1e9, 1e9, 50.0)[1], "reported")
+        self.assertEqual(PR.infer_market_cap(None, 1e9, 9e9, 50.0)[0], 5e10)
+        self.assertIsNone(PR.infer_market_cap(None, None, None, 50.0)[0])
+
+    def test_float_floor_can_only_promote_never_demote(self):
+        """Float <= shares outstanding, so the floor understates the cap.
+        A genuine small cap can never be promoted into the looser
+        large-cap thresholds by it."""
+        cap, _ = PR.infer_market_cap(None, None, 5_000_000, 4.0)   # $20M floor
+        self.assertEqual(PR.for_market_cap(cap)["key"], "small")
 
     def test_universe_band_follows_the_profile(self):
         sess = {"price": 150.0, "dollar_volume": 9e8}

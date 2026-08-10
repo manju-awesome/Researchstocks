@@ -47,6 +47,8 @@ rather than logic.
 
 from __future__ import annotations
 
+from stockanalysis.core.daytrade._common import f
+
 # Block weights. The eight keys match engine.evaluate's scored blocks.
 #
 #   volatility  ATR%, RVOL, gap, dollar volume            (§3)
@@ -147,6 +149,36 @@ def by_key(key: str | None) -> dict:
     slip through the small-cap gates.
     """
     return PROFILES.get((key or "").lower(), DEFAULT)
+
+
+def infer_market_cap(market_cap, shares_outstanding, float_shares,
+                     price) -> tuple[float | None, str]:
+    """Market cap, and where the number came from.
+
+    `.info` omits `marketCap` outright for some symbols — Western Digital
+    came back with 14 fields and no cap at all — and the missing-value
+    fallback then classified a $442 stock as a small cap, which rejected it
+    for being "outside $2-$30". A nonsense reason for a real name.
+
+    So the cap is derived rather than abandoned, from reported numbers only:
+
+      shares outstanding x price   exact
+      float x price                a LOWER BOUND, since float <= shares out
+
+    The lower bound is safe in the one direction that matters. It can only
+    ever move a stock UP a band, never down, so a genuine small cap can
+    never be promoted into the looser large-cap thresholds by it — while
+    WDC's 340.6M float at $442 puts its floor at $150B, which settles the
+    classification beyond doubt.
+    """
+    mc, so, fs, px = f(market_cap), f(shares_outstanding), f(float_shares), f(price)
+    if mc and mc > 0:
+        return mc, "reported"
+    if so and px and so > 0 and px > 0:
+        return so * px, "shares outstanding × price"
+    if fs and px and fs > 0 and px > 0:
+        return fs * px, "float × price (lower bound)"
+    return None, "unavailable"
 
 
 def for_market_cap(market_cap: float | None) -> dict:

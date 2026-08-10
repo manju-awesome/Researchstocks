@@ -374,8 +374,13 @@ def evaluate(ticker: str, row: dict, info: dict, news: list, bars_1m: pd.DataFra
     sess = ST.build_session(bars_1m, bars_5m, daily, asof=asof)
     if sess is None:
         return None
-    prof = profile or PR.for_market_cap(
-        f(row.get("market_cap")) or f(info.get("marketCap")))
+    # The screen supplies a market cap; a watchlist supplies nothing, so it
+    # is derived from whatever `.info` did return. See infer_market_cap.
+    market_cap, cap_basis = PR.infer_market_cap(
+        f(row.get("market_cap")) or f(info.get("marketCap")),
+        info.get("sharesOutstanding"), info.get("floatShares"),
+        f(sess.get("price")) or f(row.get("price")))
+    prof = profile or PR.for_market_cap(market_cap)
     sess["is_live"] = _is_live(sess["asof"])
 
     # Catalyst age is measured from the session under examination, not from
@@ -390,7 +395,7 @@ def evaluate(ticker: str, row: dict, info: dict, news: list, bars_1m: pd.DataFra
         if bars is not None and not bars.empty:
             now = bars.index[-1].to_pydatetime()
 
-    passed, reject_reasons = U.passes_universe(row, info, sess, prof)
+    passed, reject_reasons = U.passes_universe(row, info, sess, prof, market_cap)
 
     pat = ST.detect_patterns(sess)
     setup = ST.score_setup(sess, pat)
@@ -398,7 +403,8 @@ def evaluate(ticker: str, row: dict, info: dict, news: list, bars_1m: pd.DataFra
 
     vol = V.compute(sess, daily, bars_5m)
     sup = SU.compute(info, avg_volume=f(info.get("averageVolume")))
-    cat = C.compute(news, now=now)
+    cat = C.compute(news, now=now, ticker=ticker,
+                    company=info.get("longName") or row.get("name"))
     vc = VOL.compute(sess, rvol_accel=vol.get("rvol_accel"))
     etf = sector_etf(info.get("sector"), info.get("industry"))
     rs = S.compute(sess, context, etf)
@@ -517,6 +523,7 @@ def evaluate(ticker: str, row: dict, info: dict, news: list, bars_1m: pd.DataFra
         "ticker": ticker,
         "name": info.get("longName") or row.get("name"),
         "profile": prof["key"], "profile_label": prof["label"],
+        "market_cap": market_cap, "market_cap_basis": cap_basis,
         "weights": weights,
         "asof": sess["asof"], "is_live": sess["is_live"],
         "price": sess.get("price"), "session": sess,

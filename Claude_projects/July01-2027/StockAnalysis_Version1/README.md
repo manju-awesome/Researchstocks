@@ -250,6 +250,13 @@ whole US market server-side by market cap, price, volume and % change, in
 both directions. Everything downstream is a pure function of bars already
 in memory.
 
+The page can also run a **watchlist** instead of the screen (the `daytrade`
+list leads the picker), which pairs with the `auto` profile since a
+watchlist is usually mixed-cap. A list is pruned to `limit` *after* bars
+are fetched and before the per-ticker `.info`/news pass — bars are batched
+and effectively free, so a 476-name list costs one round of downloads
+rather than 476 throttled requests.
+
 **Three numbers, and two of them are gates.** Confluence is the §10
 weighted 100 (volatility 20 · float/supply 15 · catalyst 15 · volume 15 ·
 setup 25 · market 10). Setup and tradeability are reported separately, and

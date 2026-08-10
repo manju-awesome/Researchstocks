@@ -18,6 +18,7 @@ No network: the store is pointed at fixtures on disk.
 Run with: python -m unittest tests.test_stockdaytrade_view
 """
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -313,6 +314,33 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn("Stock", labels)
         self.assertIn("confluence", dict((c[0], c[2]) for c in V._COLS)["CScore"])
         self.assertIn("CScore 82", body)
+
+    def test_universe_dropdown_lists_the_screen_and_watchlists(self):
+        opts = V._universe_options()
+        self.assertIn("Market screen", opts)
+        # daytrade leads the watchlists — burying this page's natural
+        # companion under a run of sector lists makes the common case the
+        # slowest to reach.
+        names = re.findall(r'<option value="([^"]*)"', opts)
+        if "daytrade" in names:
+            self.assertEqual(names[1], "daytrade")
+
+    def test_controls_preselect_what_was_actually_requested(self):
+        """Was: preselection was inferred from the rows, so an auto scan of
+        the daytrade list showed "Large cap / Market screen" — and hitting
+        Run again would silently have run a different scan."""
+        body = self._render(_snapshot([_row()], profile_requested="auto",
+                                      universe="daytrade"))
+        self.assertIn('value="auto" selected', body)
+        self.assertIn('value="daytrade" selected', body)
+
+    def test_controls_fall_back_for_snapshots_without_the_request(self):
+        body = self._render(_snapshot([_row()]))
+        self.assertIn("Market screen", body)
+
+    def test_deleted_watchlist_is_named_rather_than_silently_dropped(self):
+        opts = V._universe_options("a-list-that-was-renamed")
+        self.assertIn("no longer in watchlists.json", opts)
 
     def test_money_never_rounds_a_risk_figure_to_zero(self):
         """$450 of risk printed as "$0K" — the two numbers a sizing

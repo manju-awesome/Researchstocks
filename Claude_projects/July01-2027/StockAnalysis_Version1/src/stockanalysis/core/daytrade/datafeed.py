@@ -285,6 +285,10 @@ def fetch_news(ticker: str, limit: int = 12) -> list[dict]:
                      else item.get("publisher"))
         out.append({
             "title": title,
+            # Carried purely so catalyst.attributable can tell whether the
+            # story is about this company — yfinance returns a mixed feed
+            # with no ticker attribution, so the text is all there is.
+            "summary": content.get("summary") or content.get("description") or "",
             "publisher": publisher,
             "published": (content.get("pubDate") or content.get("displayTime")
                           or item.get("providerPublishTime")),

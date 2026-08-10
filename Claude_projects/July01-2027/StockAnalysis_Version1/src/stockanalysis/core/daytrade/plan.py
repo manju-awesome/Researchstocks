@@ -398,7 +398,10 @@ def build(sess: dict, pat: dict, direction: str, vol: dict,
         "stop_too_tight": stop.get("too_tight"),
         "stop_note": stop.get("note"),
         "risk_per_share": round(risk, 4),
-        "risk_pct_of_price": pct(entry, entry - sign * risk),
+        # Magnitude, not a signed change. On a short the stop sits ABOVE
+        # the entry, so the signed form returned "-1.1% of entry" — risk
+        # reported as a negative number, which reads as a gain.
+        "risk_pct_of_price": abs(risk / entry * 100.0) if entry else None,
         "target1": round(t1, 2), "target1_basis": t1_basis,
         "target2": round(t2, 2), "target2_basis": t2_basis,
         "expected_move_pct": vol.get("expected_move_pct"),

@@ -31,6 +31,7 @@ condition, not a measurement failure.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 
 from stockanalysis.core.daytrade._common import f
@@ -95,6 +96,62 @@ UNIDENTIFIED_SCORE = NO_CATALYST[1]
 LOOKAHEAD_TOLERANCE_H = 0.5
 
 
+# Corporate suffixes stripped before matching a company name in a headline.
+# "Bloom Energy Corporation" must match a headline that says "Bloom Energy".
+_NAME_NOISE = (
+    "corporation", "corp", "incorporated", "inc", "company", "co",
+    "limited", "ltd", "plc", "holdings", "holding", "group", "technologies",
+    "technology", "international", "industries", "systems", "solutions",
+    "the", "&", "sa", "nv", "ag", "class", "common", "stock",
+)
+
+
+def _name_tokens(company: str | None) -> list[str]:
+    """The distinctive words of a company name, longest first."""
+    if not company:
+        return []
+    words = re.findall(r"[A-Za-z][A-Za-z0-9'’-]+", company)
+    keep = [w for w in words if w.lower().strip(".") not in _NAME_NOISE]
+    return keep
+
+
+def attributable(item: dict, ticker: str | None, company: str | None) -> bool:
+    """Is this headline actually about the company we asked about?
+
+    yfinance's `.news` for a symbol is a mixed feed: for BE it returned one
+    Bloom Energy story followed by GE Vernova, OR Royalties, Realty Income
+    and SoFi. Nothing in the payload attributes an item to a ticker — the
+    only `finance` key is a premium-content flag — so attribution has to
+    come from the text.
+
+    That mattered because the engine scores the single best headline by
+    materiality × freshness, and "OR Royalties Q2 Earnings Call Highlights"
+    (Earnings, 75) beat Bloom Energy's own product story (Other news, 40).
+    A different company's earnings became BE's catalyst, and catalyst is
+    15% of confluence and one of §12's confirmations.
+
+    Matched against the title and summary: the ticker as an upper-case
+    standalone token — lower-cased so the English word "be" cannot match —
+    or any distinctive word of the company name.
+    """
+    if not ticker and not company:
+        return True
+    text = " ".join(str(item.get(k) or "") for k in ("title", "summary"))
+    if ticker and re.search(rf"\b{re.escape(ticker.upper())}\b", text):
+        return True
+    tokens = _name_tokens(company)
+    if not tokens:
+        return False
+    # A single distinctive token is enough ("Bloom"), but a one-word name
+    # that is also an ordinary word would over-match, so short generic
+    # tokens must appear alongside a second one.
+    lowered = text.lower()
+    hits = [t for t in tokens if re.search(rf"\b{re.escape(t.lower())}\b", lowered)]
+    if not hits:
+        return False
+    return len(hits) >= 2 or max(len(t) for t in hits) >= 5
+
+
 def _age_hours(published, now: datetime) -> float | None:
     """Hours since publication. Accepts epoch seconds or ISO-8601, which is
     what the two yfinance news shapes respectively return."""
@@ -133,7 +190,8 @@ def _decay(age_h: float | None) -> float:
     return STALE_FACTOR
 
 
-def compute(news: list[dict], now: datetime | None = None) -> dict:
+def compute(news: list[dict], now: datetime | None = None,
+            ticker: str | None = None, company: str | None = None) -> dict:
     """§2 catalyst score, 0-100.
 
     Scores the single best headline rather than summing them. Ten rewrites
@@ -151,11 +209,21 @@ def compute(news: list[dict], now: datetime | None = None) -> dict:
     news = [n for n in news
             if (_age_hours(n.get("published"), now) or 0) >= -LOOKAHEAD_TOLERANCE_H]
 
+    # Then drop anything not about this company. If nothing survives, the
+    # move is unexplained by company news — which is a finding, not a gap.
+    returned = len(news)
+    if ticker or company:
+        news = [n for n in news if attributable(n, ticker, company)]
+    unattributed = returned - len(news)
+
     if not news:
+        detail = ("no headlines found — move is unexplained" if not returned
+                  else f"{returned} headline(s) returned, none about this "
+                       f"company — move is unexplained")
         return {"score": float(UNIDENTIFIED_SCORE), "type": NO_CATALYST[0],
                 "headline": None, "age_hours": None, "fresh": False,
-                "detail": "no headlines found — move is unexplained",
-                "dilution_headline": False, "candidates": []}
+                "detail": detail, "dilution_headline": False,
+                "candidates": [], "unattributed": unattributed}
 
     scored = []
     for item in news:
@@ -195,4 +263,5 @@ def compute(news: list[dict], now: datetime | None = None) -> dict:
         "detail": detail,
         "dilution_headline": dilution,
         "candidates": scored[:5],
+        "unattributed": unattributed,
     }
