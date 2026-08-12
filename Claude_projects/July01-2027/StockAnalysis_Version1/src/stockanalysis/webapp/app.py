@@ -74,6 +74,10 @@ ROUTES = {
     # on the page. It renders identically and lights up the same nav entry.
     "/smallcap":      ("stockdaytrade", "StockDayTrade", pages.stockdaytrade_page),
     "/longterm":    ("longterm",  "Long-Term Buy Engine", pages.longterm_page),
+    # Its own route rather than a /longterm sub-page: it consumes that
+    # engine's company verdict wholesale, but adds an options layer with
+    # its own slow scan, its own snapshot and its own staleness rules.
+    "/csp":         ("csp",       "Cash-Secured Puts", pages.csp_page),
     "/automation":  ("automation","Automation",pages.automation_page),
 }
 

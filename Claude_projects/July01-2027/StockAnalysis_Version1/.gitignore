@@ -28,6 +28,13 @@ data/backups/
 data/spy/*.json
 !data/spy/.gitkeep
 
+# CSP scan output — half a megabyte, and every field in it is reproducible
+# by re-running the scan. data/csp/iv_history.json is deliberately NOT
+# ignored: it accumulates one ATM IV observation per ticker per run, yfinance
+# serves only the current surface, and so it cannot be backfilled. Losing it
+# resets IV Rank to "unavailable" for another thirty trading days.
+data/csp/csp_snapshot.json
+
 # OS
 .DS_Store
 Thumbs.db

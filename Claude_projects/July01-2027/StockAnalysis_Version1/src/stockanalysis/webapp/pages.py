@@ -965,6 +965,15 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     return longterm_view.longterm_page(query)
 
 
+def csp_page() -> tuple[str, str]:
+    """The Cash-Secured Put engine — see webapp/csp_view.py.
+
+    Renders the last stored scan. Distinct from /longterm, whose company
+    verdict it consumes rather than recomputes."""
+    from stockanalysis.webapp import csp_view
+    return csp_view.csp_page()
+
+
 def stockdaytrade_page() -> tuple[str, str]:
     """The stock day-trade scanner — see webapp/stockdaytrade_view.py.
 

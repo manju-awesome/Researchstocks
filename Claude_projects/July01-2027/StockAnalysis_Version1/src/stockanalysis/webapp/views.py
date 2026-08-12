@@ -43,6 +43,7 @@ def tv_url(ticker: str, interval: str | None = None) -> str:
 NAV = (("dashboard", "/", "🏠", "Dashboard"),
        ("stockdaytrade", "/stockdaytrade", "🔥", "StockDayTrade"),
        ("longterm",  "/longterm", "🏛️", "Long-Term"),
+       ("csp",       "/csp", "🪙", "CSP"),
        ("scanner",   "/scanner", "📡", "Scanner"),
        ("screener",  "/screener", "🔬", "Screener"),
        ("research",  "/research", "🔎", "Research"),

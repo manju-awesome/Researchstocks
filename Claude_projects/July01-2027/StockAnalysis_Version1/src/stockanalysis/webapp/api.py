@@ -256,6 +256,74 @@ def job_portfolio_risk(progress: jobstore.Progress) -> str:
             f"{len(violations)} limit breaches ({critical} critical)")
 
 
+def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
+                 limit: int, progress: jobstore.Progress) -> str:
+    """Cash-Secured Put scan over the long-term universe.
+
+    A job, not an inline render: the long-term evaluation is fast (it
+    reads the research library), but every company that survives the
+    eligibility gate then costs one option-chain round trip per expiry.
+    Twenty survivors across three expiries is a minute or more.
+
+    `limit` caps how many survivors get chain work. Rejected companies
+    are still evaluated and stored — the page shows what was rejected
+    and why, which is most of the value on a day when nothing qualifies.
+    """
+    from stockanalysis.core import csp
+    from stockanalysis.core.csp import store as csp_store
+
+    progress.stage("evaluating companies")
+    data = longterm()
+    rows_in = data["rows"]
+    regime = data["regime"]
+
+    from stockanalysis.core.csp import eligibility as EL
+    survivors = sum(1 for r in rows_in
+                    if EL.classify(r)["status"] != "CSP REJECTED")
+    progress.stage(f"{survivors} companies eligible — pulling chains", 0,
+                   min(survivors, limit))
+
+    done = {"n": 0}
+
+    def tick(_):
+        done["n"] += 1
+        progress.stage("pulling option chains", done["n"],
+                       min(survivors, limit))
+
+    risk_free, _ = longterm_risk_free()
+    rows = csp.evaluate_universe(rows_in, regime=regime, risk_free=risk_free,
+                                 min_dte=min_dte, max_dte=max_dte,
+                                 allow_earnings=allow_earnings, limit=limit,
+                                 raw_rows={r.get("Ticker"): r
+                                           for r in _longterm_universe()})
+
+    settings = load_risk_settings()
+    portfolio = csp.portfolio_view(rows, settings.get("capital"))
+
+    csp_store.save(rows, {
+        "regime": regime,
+        "regime_note": data.get("regime_note"),
+        "risk_free_note": data.get("risk_free_note"),
+        "min_dte": min_dte, "max_dte": max_dte,
+        "allow_earnings": allow_earnings,
+        "universe": len(rows_in), "eligible": survivors,
+        "portfolio": portfolio,
+        "settings": settings,
+    })
+
+    counts = {}
+    for r in rows:
+        k = (r.get("final") or {}).get("key") or "?"
+        counts[k] = counts.get(k, 0) + 1
+    return (f"{counts.get('SELL', 0)} sell · "
+            f"{counts.get('SELL_DIP', 0)} sell-on-dip · "
+            f"{counts.get('WAIT_IV', 0)} wait-IV · "
+            f"{counts.get('WAIT_LEVEL', 0)} wait-level · "
+            f"{counts.get('WATCH', 0)} watch · "
+            f"{counts.get('REJECT', 0)} reject "
+            f"(regime {regime}, {survivors}/{len(rows_in)} eligible)")
+
+
 def job_journal_review(trade_id: str, progress: jobstore.Progress) -> str:
     """Send one journal trade to the AI coach (core.trading_journal) and
     write its feedback back into data/journal_trades.json. Runs as a job
@@ -814,6 +882,24 @@ def dispatch_run(action: str, form: dict) -> str:
     if action == "portfolio_risk":
         return jobstore.start("portfolio_risk", "portfolio risk analysis",
                               lambda p: job_portfolio_risk(p))
+
+    if action == "csp_scan":
+        def _int(key, default):
+            try:
+                return int(first(key) or default)
+            except ValueError:
+                return default
+        min_dte, max_dte = _int("min_dte", 20), _int("max_dte", 45)
+        if min_dte >= max_dte:
+            return f"min DTE ({min_dte}) must be below max DTE ({max_dte})"
+        allow_earnings = first("allow_earnings") in ("1", "true", "on")
+        limit = max(1, min(60, _int("limit", 25)))
+        label = f"CSP scan: {min_dte}-{max_dte} DTE, top {limit} eligible"
+        if allow_earnings:
+            label += " (earnings allowed)"
+        return jobstore.start("csp_scan", label,
+                              lambda p: job_csp_scan(min_dte, max_dte,
+                                                     allow_earnings, limit, p))
 
     if action == "journal_review":
         trade_id = first("trade_id")
