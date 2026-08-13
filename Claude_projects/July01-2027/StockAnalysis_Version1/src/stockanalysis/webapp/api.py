@@ -257,7 +257,8 @@ def job_portfolio_risk(progress: jobstore.Progress) -> str:
 
 
 def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
-                 limit: int, progress: jobstore.Progress) -> str:
+                 limit: int, progress: jobstore.Progress,
+                 tickers: list[str] | None = None) -> str:
     """Cash-Secured Put scan over the long-term universe.
 
     A job, not an inline render: the long-term evaluation is fast (it
@@ -277,9 +278,26 @@ def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
     rows_in = data["rows"]
     regime = data["regime"]
 
+    # A named scan answers "what about THIS ticker", so it narrows the
+    # universe, keeps the full audit even for rejections, and merges into
+    # the stored snapshot instead of replacing it — scanning three names
+    # must not delete the other four hundred and ninety.
+    wanted = [str(t).upper() for t in (tickers or [])]
+    if wanted:
+        keep = set(wanted)
+        rows_in = [r for r in rows_in if str(r.get("ticker") or "").upper()
+                   in keep]
+
     from stockanalysis.core.csp import eligibility as EL
     survivors = sum(1 for r in rows_in
                     if EL.classify(r)["status"] != "CSP REJECTED")
+    if wanted:
+        missing = [t for t in wanted
+                   if t not in {str(r.get("ticker") or "").upper()
+                                for r in rows_in}]
+        if missing:
+            progress.stage("not in the research library: "
+                           + ", ".join(missing))
     progress.stage(f"{survivors} companies eligible — pulling chains", 0,
                    min(survivors, limit))
 
@@ -295,7 +313,11 @@ def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
                                  min_dte=min_dte, max_dte=max_dte,
                                  allow_earnings=allow_earnings, limit=limit,
                                  raw_rows={r.get("Ticker"): r
-                                           for r in _longterm_universe()})
+                                           for r in _longterm_universe()},
+                                 # A named scan is a question about those
+                                 # tickers, so a name with no qualifying
+                                 # contract still gets its chain attached.
+                                 reference_chain=bool(wanted))
 
     settings = load_risk_settings()
     portfolio = csp.portfolio_view(rows, settings.get("capital"))
@@ -309,7 +331,7 @@ def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
         "universe": len(rows_in), "eligible": survivors,
         "portfolio": portfolio,
         "settings": settings,
-    })
+    }, merge=bool(wanted), keep_full=wanted)
 
     counts = {}
     for r in rows:
@@ -894,12 +916,19 @@ def dispatch_run(action: str, form: dict) -> str:
             return f"min DTE ({min_dte}) must be below max DTE ({max_dte})"
         allow_earnings = first("allow_earnings") in ("1", "true", "on")
         limit = max(1, min(60, _int("limit", 25)))
-        label = f"CSP scan: {min_dte}-{max_dte} DTE, top {limit} eligible"
+        from stockanalysis.webapp.longterm_view import parse_tickers
+        tickers = parse_tickers(first("tickers"))
+        if tickers:
+            label = (f"CSP scan: {', '.join(tickers[:8])}"
+                     + ("…" if len(tickers) > 8 else ""))
+        else:
+            label = f"CSP scan: {min_dte}-{max_dte} DTE, top {limit} eligible"
         if allow_earnings:
             label += " (earnings allowed)"
         return jobstore.start("csp_scan", label,
                               lambda p: job_csp_scan(min_dte, max_dte,
-                                                     allow_earnings, limit, p))
+                                                     allow_earnings, limit, p,
+                                                     tickers))
 
     if action == "journal_review":
         trade_id = first("trade_id")

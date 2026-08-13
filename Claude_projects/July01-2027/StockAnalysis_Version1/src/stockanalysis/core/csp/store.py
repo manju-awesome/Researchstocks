@@ -75,7 +75,7 @@ _REJECT_KEEP = ("ticker", "name", "sector", "price", "final",
                 "no_trade_reason", "lt_action")
 
 
-def save(rows, meta) -> Path:
+def save(rows, meta, merge: bool = False, keep_full=()) -> Path:
     """Write the run.
 
     Two prunings, both about size rather than secrecy:
@@ -88,13 +88,35 @@ def save(rows, meta) -> Path:
     are ninety-odd percent of the universe, and the page renders each as
     a ticker in a grouped list — so the full audit was a megabyte of
     data nothing displayed.
+
+    `keep_full` exempts named tickers from that second pruning. When you
+    scan a ticker BY NAME you want the audit whether or not it was
+    rejected — "why was this thrown out" is the entire question being
+    asked, and the grouped one-word answer does not carry it.
+
+    `merge` unions the run into the stored snapshot by ticker instead of
+    replacing it. A three-ticker targeted scan must not delete the other
+    four hundred and ninety rows, which is exactly what a plain write
+    would do. Merged rows win over stored ones, so a re-scan refreshes
+    rather than duplicating.
     """
-    slim = []
-    for r in rows:
-        if (r.get("final") or {}).get("key") == "REJECT":
-            slim.append({k: r.get(k) for k in _REJECT_KEEP})
-        else:
-            slim.append({k: v for k, v in r.items() if k != "_lt"})
+    keep = {str(t).upper() for t in (keep_full or ())}
+
+    def prune(r):
+        if ((r.get("final") or {}).get("key") == "REJECT"
+                and str(r.get("ticker") or "").upper() not in keep):
+            return {k: r.get(k) for k in _REJECT_KEEP}
+        return {k: v for k, v in r.items() if k != "_lt"}
+
+    slim = [prune(r) for r in rows]
+
+    if merge:
+        stored = (load() or {}).get("rows") or []
+        fresh = {str(r.get("ticker") or "").upper() for r in slim}
+        # Stored rows first, then the fresh ones replacing their tickers,
+        # so ordering stays stable and the new rows are the survivors.
+        slim = [r for r in stored
+                if str(r.get("ticker") or "").upper() not in fresh] + slim
 
     payload = {
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),

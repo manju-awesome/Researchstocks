@@ -73,10 +73,94 @@ def _earnings_conflict(result, expiry, today=None) -> str | None:
     return None
 
 
+def _reference_chain(ticker, spot, r, min_dte, max_dte, today,
+                     atr=None, result=None) -> dict:
+    """Every put on the nearest qualifying expiry, priced and greeked.
+
+    Shown for a rejected company when it was asked about BY NAME. It
+    carries no verdict and no score: the point is to answer "what is
+    actually quoted here", not to relitigate the rejection. The best
+    premium is reported as the richest FILLABLE strike, because the
+    richest quote on the board is usually a 0.01-bid contract nobody
+    will trade.
+    """
+    from .store import market_open
+    quotes_live = market_open()
+
+    expiries = C.pick_expiries(C.expiries(ticker), min_dte, max_dte,
+                               limit=1, today=today)
+    if not expiries:
+        return {"available": False,
+                "why": f"no expiry in the {min_dte}-{max_dte} DTE window"}
+
+    expiry = expiries[0]
+    rows = C.fetch_puts(ticker, expiry)
+    if not rows:
+        return {"available": False, "why": "chain unavailable"}
+
+    t = C.year_fraction(expiry, today)
+    d = C.dte(expiry, today)
+    if not t or not d:
+        return {"available": False, "why": "expiry already passed"}
+
+    atm = C.atm_iv(rows, spot)
+    strikes = []
+    for row in rows:
+        if row["strike"] >= spot:          # cash-secured puts are OTM
+            continue
+        iv = row["iv"]
+        if iv is None and row.get("mid"):
+            iv = G.implied_vol(row["mid"], spot, row["strike"], t, r)
+        if iv is None:
+            continue
+        gk = G.put_greeks(spot, row["strike"], t, r, iv)
+        if gk["delta"] is None:
+            continue
+        limit = C.limit_price(row)
+        ret = SC.returns(row["strike"], limit, d)
+        liq = C.liquidity_score(row, quotes_live)
+        be = ret.get("breakeven")
+        strikes.append({
+            **row, **gk, "iv": iv, "expiry": expiry, "dte": d,
+            "limit_price": limit,
+            "liquidity": liq["score"], "liquidity_notes": liq["notes"],
+            "liquidity_tradable": liq["tradable"],
+            "spread_verdict": liq["spread_verdict"],
+            "delta_class": ST.classify_delta(gk["delta"]),
+            "breakeven": be,
+            "basis_vs_spot_pct": (round((be - spot) / spot * 100, 1)
+                                  if be and spot else None),
+            "distance_pct": round((row["strike"] - spot) / spot * 100, 1),
+            **{k: v for k, v in ret.items() if k != "breakeven"},
+        })
+
+    strikes.sort(key=lambda c: -c["strike"])
+
+    # "Best premium" means the richest one you could actually sell.
+    fillable = [c for c in strikes
+                if c.get("liquidity_tradable") is not False and c.get("bid")]
+    best = (max(fillable, key=lambda c: c.get("annualised") or 0)
+            if fillable else None)
+
+    hv = V.realised_vol(_closes(ticker))
+    return {
+        "available": True,
+        "expiry": expiry, "dte": d, "atm_iv": atm, "hv": hv,
+        "iv_vs_hv": V.iv_vs_hv(atm, hv),
+        "strikes": strikes,
+        "best": best,
+        "fillable": len(fillable),
+        "quotes_live": quotes_live,
+        "why": ("shown because you asked for this ticker by name — the "
+                "company failed the eligibility gate, so none of this is "
+                "a recommendation"),
+    }
+
+
 def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
              min_dte=DEFAULT_MIN_DTE, max_dte=DEFAULT_MAX_DTE,
              allow_earnings=False, today=None, raw=None,
-             quotes_live=None) -> dict:
+             quotes_live=None, reference_chain=False) -> dict:
     """One long-term engine result -> one full CSP verdict.
 
     `raw` is the scan row the result was built from. It carries ATR,
@@ -112,13 +196,27 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
         "_lt": result,
     }
 
-    # Step 1 is a gate. A rejected company never reaches an option chain.
+    # Step 1 is a gate. A rejected company never reaches an option chain
+    # on a bulk scan — that ordering is what makes it structurally
+    # impossible for a premium to rescue a name that failed on quality.
+    #
+    # `reference_chain` is the one exception, and it is narrow on
+    # purpose: when you ask about ONE ticker by name, "rejected" answers
+    # the recommendation but not the question "what is the market paying
+    # here anyway". So the chain is fetched and shown as REFERENCE — the
+    # verdict is untouched, the row never enters the ranked opportunity
+    # list, and nothing computed here can flip a REJECT.
     if elig["status"] == "CSP REJECTED":
-        return {**base, "chosen": None, "trade": None,
-                "final": {"action": "🔴 REJECT", "key": "REJECT",
-                          "why": elig["blockers"][0]},
-                "csp_score": None,
-                "no_trade_reason": elig["blockers"][0]}
+        out = {**base, "chosen": None, "trade": None,
+               "final": {"action": "🔴 REJECT", "key": "REJECT",
+                         "why": elig["blockers"][0]},
+               "csp_score": None,
+               "no_trade_reason": elig["blockers"][0]}
+        if reference_chain and spot:
+            out["reference"] = _reference_chain(
+                ticker, spot, r, min_dte, max_dte, today,
+                atr=atr, result=result)
+        return out
 
     if not spot:
         return {**base, "chosen": None, "trade": None, "csp_score": None,
@@ -239,7 +337,15 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
                  "rejections": []}
         final = SC.final_action(sinfo, elig, {"happy_to_own": None}, why,
                                 blocked_on=blocked)
+        # No qualifying contract is still a question about what the chain
+        # is paying — "no strike in the delta band" does not mean no
+        # strikes exist. Same reference treatment as a rejected company,
+        # and the same rule: it carries no verdict.
+        ref = (_reference_chain(ticker, spot, r, min_dte, max_dte, today,
+                                atr=atr, result=result)
+               if reference_chain else None)
         return {**base, "chosen": None, "trade": None, "csp_score": None,
+                "reference": ref,
                 "per_expiry": per_expiry, "skipped_expiries": skipped,
                 "stock_score": stock["score"], "option_score": None,
                 "score_detail": sinfo,
@@ -322,7 +428,7 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
 def evaluate_universe(results, regime="SELECTIVE", risk_free=None,
                       min_dte=DEFAULT_MIN_DTE, max_dte=DEFAULT_MAX_DTE,
                       allow_earnings=False, limit=None, today=None,
-                      raw_rows=None) -> list:
+                      raw_rows=None, reference_chain=False) -> list:
     """Every long-term result -> ranked CSP verdicts.
 
     Eligibility runs on all of them first and the chain work is done only
@@ -339,7 +445,8 @@ def evaluate_universe(results, regime="SELECTIVE", risk_free=None,
         raw = (raw_rows or {}).get(res.get("ticker"))
         if elig["status"] == "CSP REJECTED":
             out.append(evaluate(res, regime, risk_free, min_dte, max_dte,
-                                allow_earnings, today, raw))
+                                allow_earnings, today, raw,
+                                reference_chain=reference_chain))
             continue
         if limit is not None and fetched >= limit:
             continue

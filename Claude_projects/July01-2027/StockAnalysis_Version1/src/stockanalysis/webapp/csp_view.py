@@ -291,6 +291,94 @@ def _ideal_block(row):
         f'{esc(k)}</span><span>{v}</span></div>' for k, v in rows)
 
 
+def _reference_block(row):
+    """The chain for a name with no qualifying contract.
+
+    Carries no verdict on purpose. The engine already said REJECT or
+    "no strike qualifies"; this answers the different question of what
+    the market is actually paying, which the verdict alone does not.
+    Everything here is labelled reference so it cannot be mistaken for
+    the recommendation it deliberately is not.
+    """
+    ref = row.get("reference") or {}
+    if not ref:
+        return ""
+    if not ref.get("available"):
+        return _sub(ref.get("why") or "chain not available")
+
+    best = ref.get("best") or {}
+    ratio = (ref.get("iv_vs_hv") or {}).get("ratio")
+
+    head = (f'<div style="margin-bottom:6px">'
+            f'{badge("REFERENCE ONLY — not a recommendation", "bad")}</div>'
+            f'<div style="font-size:11px;color:#898781;margin-bottom:6px">'
+            f'{esc(ref.get("why") or "")}</div>'
+            f'<div style="font-size:11px">Expiry {esc(ref.get("expiry"))} '
+            f'({ref.get("dte")}d) · {len(ref.get("strikes") or [])} OTM '
+            f'strikes, {ref.get("fillable", 0)} fillable'
+            + (f' · IV/realised {ratio:.2f}×' if ratio else '')
+            + '</div>')
+
+    if best:
+        head += (
+            f'<div style="margin-top:8px;padding:8px;background:#fff;'
+            f'border:1px solid #eceae4;border-radius:8px;font-size:12px;'
+            f'line-height:1.7">'
+            f'<b>Best fillable premium</b><br>'
+            f'${_n(best.get("strike"))} put · limit <b>${_n(best.get("limit_price"))}</b> '
+            f'· {_n(best.get("yield_pct"), 2)}% '
+            f'<span style="color:#898781">({_n(best.get("annualised"), 1)}% ann.)</span><br>'
+            f'Δ {_n(best.get("delta"), 3)} '
+            f'<span style="color:#898781">{esc(best.get("delta_class") or "")}</span> '
+            f'· breakeven ${_n(best.get("breakeven"))} '
+            f'({_n(best.get("basis_vs_spot_pct"), 1)}% vs spot)<br>'
+            f'liquidity {best.get("liquidity")}/100</div>'
+            + _sub("the richest premium is always the strike closest to the "
+                   "money — read the delta class beside it, not the yield "
+                   "alone"))
+    else:
+        head += _sub("no strike on this expiry is fillable — every quote is "
+                     "either bidless or too wide to sell into", "#8a6d1a")
+
+    rows_html = []
+    for c in ref.get("strikes") or []:
+        tradable = c.get("liquidity_tradable")
+        colour = ("#b5b3ad" if tradable is False else "#0b0b0b")
+        is_best = best and c.get("strike") == best.get("strike")
+        bg = "#F1F7F4" if is_best else "transparent"
+        rows_html.append(
+            f"<tr style='background:{bg};color:{colour};text-align:right;"
+            f"font-size:11px'>"
+            f"<td style='text-align:left;font-weight:{700 if is_best else 400}'>"
+            f"${_n(c.get('strike'))}{' ←' if is_best else ''}</td>"
+            f"<td>{_n(c.get('delta'), 3)}</td>"
+            f"<td style='text-align:left;color:#898781'>"
+            f"{esc(c.get('delta_class') or '')}</td>"
+            f"<td>{_n(c.get('bid'))}</td>"
+            f"<td>{_n(c.get('ask'))}</td>"
+            f"<td>{_n(c.get('limit_price'))}</td>"
+            f"<td>{_n(c.get('yield_pct'), 2)}%</td>"
+            f"<td>{_n(c.get('annualised'), 1)}%</td>"
+            f"<td>${_n(c.get('breakeven'))}</td>"
+            f"<td>{_n(c.get('spread_pct'), 1)}%</td>"
+            f"<td>{_n(c.get('open_interest'), 0)}</td>"
+            f"<td>{c.get('liquidity') if c.get('liquidity') is not None else DASH}</td>"
+            f"</tr>")
+
+    head += (
+        f'<div style="overflow-x:auto;margin-top:8px">'
+        f'<table style="width:100%;border-collapse:collapse">'
+        f"<tr style='font-size:10px;color:#898781;text-align:right'>"
+        f"<th style='text-align:left'>Strike</th><th>Δ</th>"
+        f"<th style='text-align:left'>Class</th><th>Bid</th><th>Ask</th>"
+        f"<th>Limit</th><th>Yield</th><th>Ann.</th><th>Breakeven</th>"
+        f"<th>Spread</th><th>OI</th><th>Liq</th></tr>"
+        f'{"".join(rows_html)}</table></div>'
+        + _sub("greyed rows are not fillable — bidless, or quoted too wide "
+               "to sell into"))
+    return head
+
+
 def _detail(row):
     chosen = row.get("chosen") or {}
     elig = row.get("eligibility") or {}
@@ -375,8 +463,17 @@ def _detail(row):
               + panel("Score breakdown", _score_block(row))
               + panel("Strikes considered", _ladder_block(row)))
 
+    ref = _reference_block(row)
+    ref_html = (f'<div style="flex:1 1 100%;border-top:1px solid #eceae4;'
+                f'padding-top:10px;margin-top:2px">'
+                f'<div style="font-size:10px;font-weight:700;color:#898781;'
+                f'text-transform:uppercase;letter-spacing:.04em;'
+                f'margin-bottom:4px">What the chain is paying anyway</div>'
+                f'{ref}</div>') if ref else ""
+
     return (f'<div style="display:flex;flex-wrap:wrap;gap:18px;padding:12px 14px;'
-            f'background:#faf9f7;border-top:1px solid #eceae4">{panels}</div>')
+            f'background:#faf9f7;border-top:1px solid #eceae4">'
+            f'{panels}{ref_html}</div>')
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -533,13 +630,13 @@ def _rejected_block(rows):
             + _sub("hover a ticker for the exact rule that rejected it"))
 
 
-def _table(rows):
+def _table(rows, start=0):
     if not rows:
         return empty("No candidates in this snapshot.")
     head = "".join(f'<th style="padding:6px 8px;text-align:left;font-size:10px;'
                    f'color:#898781;text-transform:uppercase;'
                    f'letter-spacing:.04em">{esc(c)}</th>' for c in _COLUMNS)
-    body = "".join(_row(r, i) for i, r in enumerate(rows))
+    body = "".join(_row(r, start + i) for i, r in enumerate(rows))
     return (f'<div style="overflow-x:auto"><table style="width:100%;'
             f'border-collapse:collapse"><thead><tr>{head}</tr></thead>'
             f'<tbody>{body}</tbody></table></div>')
@@ -588,10 +685,25 @@ def _portfolio_block(pf):
         f'${_n(pf.get("total_premium"), 0)}</b></div>{warn}')
 
 
-def _controls(meta):
+def _controls(meta, typed=""):
+    """The scan form. The ticker box does double duty.
+
+    Typing names filters the stored snapshot instantly — no network, no
+    job — because most of the time the question is "what did the last
+    scan say about NEM" and re-scanning to answer it is absurd. Pressing
+    Run with names in the box scans only those, which is the answer to
+    the other question: "the snapshot is stale / this name was never
+    scanned, go look now."
+    """
     return (
         f'<form onsubmit="return cspRun(event)" '
         f'style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">'
+        f'<label style="font-size:11px;color:#898781;flex:1;min-width:240px">'
+        f'Tickers<br>'
+        f'<input name="tickers" value="{esc(typed)}" '
+        f'placeholder="NEM, RMD — blank scans the whole library" '
+        f'style="width:100%;padding:6px 9px;border:1px solid #d9d7ce;'
+        f'border-radius:6px;font-size:13px"></label>'
         f'<label style="font-size:11px;color:#898781">Min DTE<br>'
         f'<input name="min_dte" type="number" value="{meta.get("min_dte", 20)}" '
         f'style="width:70px;padding:5px;border:1px solid #d9d7ce;'
@@ -609,17 +721,79 @@ def _controls(meta):
         f'<input name="allow_earnings" type="checkbox" '
         f'{"checked" if meta.get("allow_earnings") else ""}> '
         f'allow expiries spanning earnings</label>'
-        f'<button type="submit" style="padding:7px 16px;border:0;'
-        f'border-radius:7px;background:#185FA5;color:#fff;font-weight:600;'
-        f'cursor:pointer">Run CSP scan</button>'
-        f'<span id="csp-msg" style="font-size:11px;color:#898781"></span>'
+        f'<button type="button" onclick="cspFilter()" class="btn secondary" '
+        f'style="padding:7px 14px">Filter</button>'
+        f'<button type="submit" class="btn" style="padding:7px 16px">'
+        f'Run CSP scan</button>'
+        + (f'<a href="/csp" class="btn secondary" style="text-decoration:none;'
+           f'padding:7px 14px">Clear</a>' if typed else "")
+        + f'<span id="csp-msg" style="font-size:11px;color:#898781"></span>'
         f'</form>')
 
 
-def csp_page() -> tuple[str, str]:
+def _lookup_block(typed, wanted, shown, slim_only, missing):
+    """What the snapshot can and cannot answer for the typed names."""
+    if not wanted:
+        return ""
+    bits = []
+    if shown:
+        bits.append(badge(f"{len(shown)} found", "good"))
+    if slim_only:
+        bits.append(badge(f"{len(slim_only)} rejected — audit not stored",
+                          "watch"))
+    if missing:
+        bits.append(badge(f"{len(missing)} not in the last scan", "bad"))
+
+    notes = []
+    if slim_only:
+        # Rejected rows are pruned on save, so the detail panel genuinely
+        # is not there to render. Say so rather than showing an empty one.
+        notes.append(
+            f'<b>{esc(", ".join(slim_only))}</b> — the last scan rejected '
+            f'these and stored only the rule that fired, not the full '
+            f'audit. Press <b>Run CSP scan</b> with them in the box to '
+            f're-scan and keep the whole reasoning.')
+    if missing:
+        notes.append(
+            f'<b>{esc(", ".join(missing))}</b> — not in the last scan. '
+            f'Either outside the research library, or past the scan\'s '
+            f'name cap. Press <b>Run CSP scan</b> to fetch chains for them '
+            f'now; it merges into the snapshot rather than replacing it.')
+
+    return (f'<div style="margin-top:8px;display:flex;gap:6px;'
+            f'flex-wrap:wrap">{"".join(bits)}</div>'
+            + "".join(f'<div style="font-size:11px;color:#898781;'
+                      f'margin-top:5px;line-height:1.6">{n}</div>'
+                      for n in notes))
+
+
+def csp_page(query: dict | None = None) -> tuple[str, str]:
+    from stockanalysis.webapp.longterm_view import parse_tickers
+
     snap = csp_store.load()
     meta = snap or {}
-    rows = (snap or {}).get("rows") or []
+    all_rows = (snap or {}).get("rows") or []
+
+    typed = ((query or {}).get("tickers") or [""])[0]
+    wanted = parse_tickers(typed)
+
+    rows = all_rows
+    slim_only, missing, shown = [], [], []
+    if wanted:
+        by_ticker = {str(r.get("ticker") or "").upper(): r for r in all_rows}
+        rows = []
+        for tk in wanted:
+            r = by_ticker.get(tk)
+            if r is None:
+                missing.append(tk)
+                continue
+            rows.append(r)
+            # `eligibility` is the marker, NOT `score_detail`. A rejected
+            # company never gets a score at all — evaluate() returns
+            # before scoring — so score_detail is absent on a FULL
+            # rejected row too, and using it reported every stored
+            # rejection as "audit not stored" when the audit was there.
+            (shown if r.get("eligibility") else slim_only).append(tk)
 
     age_text, age_status = csp_store.age_note(snap)
 
@@ -644,7 +818,9 @@ def csp_page() -> tuple[str, str]:
         f'margin-bottom:8px">'
         f'{badge(age_text, age_status)}'
         f'{badge("regime " + str(meta.get("regime") or "?"), "info")}'
-        f'{badge(eligible, "muted")}{pills}</div>')
+        + (badge(f"filtered to {len(rows)} of {len(all_rows)}", "info")
+           if wanted else badge(eligible, "muted"))
+        + f'{pills}</div>')
 
     thesis = (
         '<div style="font-size:11px;color:#898781;line-height:1.6;'
@@ -670,18 +846,29 @@ def csp_page() -> tuple[str, str]:
     rejected = [r for r in rows if (r.get("final") or {}).get("key") == "REJECT"]
 
     body = (
-        card("Cash-Secured Put Engine", header + thesis + _controls(meta),
+        card("Cash-Secured Put Engine",
+             header + thesis + _controls(meta, typed)
+             + _lookup_block(typed, wanted, shown, slim_only, missing),
              icon="🪙")
         + card("Opportunities", _table(live), icon="📋")
         + card("Collateral & concentration",
                _portfolio_block(meta.get("portfolio")), icon="🧮")
-        + card(f"Rejected ({len(rejected)})", _rejected_block(rejected),
+        + card(f"Rejected ({len(rejected)})",
+               # A named lookup gets the full table: you asked about this
+               # ticker, so "rejected, and here is the reading" is the
+               # answer, not a name in a grouped list.
+               _table(rejected, len(live)) if wanted
+               else _rejected_block(rejected),
                icon="🚫"))
 
     js = """
 function cspToggle(i){
   var el=document.getElementById('csp-d-'+i);
   if(el) el.style.display = el.style.display==='none' ? '' : 'none';
+}
+function cspFilter(){
+  var v=document.querySelector('input[name=tickers]').value.trim();
+  window.location = '/csp' + (v ? '?tickers=' + encodeURIComponent(v) : '');
 }
 function cspRun(e){
   e.preventDefault();
