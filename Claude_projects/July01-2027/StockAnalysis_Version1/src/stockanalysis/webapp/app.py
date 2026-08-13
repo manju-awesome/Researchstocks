@@ -78,6 +78,10 @@ ROUTES = {
     # engine's company verdict wholesale, but adds an options layer with
     # its own slow scan, its own snapshot and its own staleness rules.
     "/csp":         ("csp",       "Cash-Secured Puts", pages.csp_page),
+    # Both directions on one page. Not folded into /longterm because that
+    # engine answers "is this worth owning" and stops; this one treats its
+    # rejections as input rather than as a verdict.
+    "/shortside":   ("shortside", "Long / Short", pages.shortside_page),
     "/automation":  ("automation","Automation",pages.automation_page),
 }
 
