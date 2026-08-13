@@ -258,7 +258,9 @@ def job_portfolio_risk(progress: jobstore.Progress) -> str:
 
 def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
                  limit: int, progress: jobstore.Progress,
-                 tickers: list[str] | None = None) -> str:
+                 tickers: list[str] | None = None,
+                 earnings_policy: str = "AVOID", target_dte: int = 35,
+                 min_stock: int = 0, min_csp: int = 0) -> str:
     """Cash-Secured Put scan over the long-term universe.
 
     A job, not an inline render: the long-term evaluation is fast (it
@@ -312,12 +314,31 @@ def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
     rows = csp.evaluate_universe(rows_in, regime=regime, risk_free=risk_free,
                                  min_dte=min_dte, max_dte=max_dte,
                                  allow_earnings=allow_earnings, limit=limit,
+                                 earnings_policy=earnings_policy,
+                                 dte_prefs={"target": target_dte},
                                  raw_rows={r.get("Ticker"): r
                                            for r in _longterm_universe()},
                                  # A named scan is a question about those
                                  # tickers, so a name with no qualifying
                                  # contract still gets its chain attached.
                                  reference_chain=bool(wanted))
+
+    # Score floors are applied AFTER ranking, not as a scan filter. The
+    # point is to refuse to fill N slots with mediocre trades rather than
+    # to hide names — everything stays in the snapshot with its verdict,
+    # and only the Opportunities ranking honours the floor.
+    if min_stock or min_csp:
+        for r in rows:
+            sc, cs = r.get("stock_score"), r.get("csp_score")
+            below = ((min_stock and (sc is None or sc < min_stock))
+                     or (min_csp and (cs is None or cs < min_csp)))
+            if below and (r.get("final") or {}).get("key") in (
+                    "SELL", "SELL_DIP", "VERIFY"):
+                r["final"] = {
+                    "action": "🟠 WATCH", "key": "WATCH",
+                    "why": (f"below the score floor — stock {sc}, CSP {cs} "
+                            f"against {min_stock}/{min_csp} required")}
+                r["below_floor"] = True
 
     settings = load_risk_settings()
     portfolio = csp.portfolio_view(rows, settings.get("capital"))
@@ -327,7 +348,10 @@ def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
         "regime_note": data.get("regime_note"),
         "risk_free_note": data.get("risk_free_note"),
         "min_dte": min_dte, "max_dte": max_dte,
+        "target_dte": target_dte,
         "allow_earnings": allow_earnings,
+        "earnings_policy": earnings_policy,
+        "min_stock": min_stock, "min_csp": min_csp,
         "universe": len(rows_in), "eligible": survivors,
         "portfolio": portfolio,
         "settings": settings,
@@ -339,11 +363,13 @@ def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
         counts[k] = counts.get(k, 0) + 1
     return (f"{counts.get('SELL', 0)} sell · "
             f"{counts.get('SELL_DIP', 0)} sell-on-dip · "
+            f"{counts.get('EVENT_RISK', 0)} event-risk · "
             f"{counts.get('WAIT_IV', 0)} wait-IV · "
             f"{counts.get('WAIT_LEVEL', 0)} wait-level · "
             f"{counts.get('WATCH', 0)} watch · "
             f"{counts.get('REJECT', 0)} reject "
-            f"(regime {regime}, {survivors}/{len(rows_in)} eligible)")
+            f"(regime {regime}, {survivors}/{len(rows_in)} eligible, "
+            f"earnings {earnings_policy})")
 
 
 def job_journal_review(trade_id: str, progress: jobstore.Progress) -> str:
@@ -914,7 +940,12 @@ def dispatch_run(action: str, form: dict) -> str:
         min_dte, max_dte = _int("min_dte", 20), _int("max_dte", 45)
         if min_dte >= max_dte:
             return f"min DTE ({min_dte}) must be below max DTE ({max_dte})"
-        allow_earnings = first("allow_earnings") in ("1", "true", "on")
+        policy = (first("earnings_policy") or "AVOID").upper()
+        if policy not in ("AVOID", "CONTROLLED", "ACCEPT"):
+            return f"earnings policy must be AVOID/CONTROLLED/ACCEPT, got {policy!r}"
+        allow_earnings = policy != "AVOID"
+        target_dte = _int("target_dte", 35)
+        min_stock, min_csp = _int("min_stock", 0), _int("min_csp", 0)
         limit = max(1, min(60, _int("limit", 25)))
         from stockanalysis.webapp.longterm_view import parse_tickers
         tickers = parse_tickers(first("tickers"))
@@ -923,12 +954,14 @@ def dispatch_run(action: str, form: dict) -> str:
                      + ("…" if len(tickers) > 8 else ""))
         else:
             label = f"CSP scan: {min_dte}-{max_dte} DTE, top {limit} eligible"
-        if allow_earnings:
-            label += " (earnings allowed)"
+        if policy != "AVOID":
+            label += f" (earnings {policy})"
         return jobstore.start("csp_scan", label,
                               lambda p: job_csp_scan(min_dte, max_dte,
                                                      allow_earnings, limit, p,
-                                                     tickers))
+                                                     tickers, policy,
+                                                     target_dte, min_stock,
+                                                     min_csp))
 
     if action == "journal_review":
         trade_id = first("trade_id")

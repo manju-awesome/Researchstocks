@@ -325,7 +325,7 @@ OPTION_PASS = 60
 
 def final_action(score_info, elig, assign, no_trade_reason,
                  ret=None, iv_op=None, adq=None, liq=None,
-                 blocked_on=None) -> dict:
+                 blocked_on=None, earnings=None, risk=None) -> dict:
     """The six-way call — and, crucially, WHICH HALF fell short.
 
     🟢 SELL CSP
@@ -371,6 +371,17 @@ def final_action(score_info, elig, assign, no_trade_reason,
                 "why": (elig["softs"][0] if elig.get("softs") else
                         f"stock score {stock}/100 — the company or its price "
                         f"is not compelling here")}
+
+    # Event risk is its own state, not a rejection and not a premium
+    # problem. A contract whose window contains an earnings print is a
+    # different KIND of trade — the premium is rich precisely because
+    # the gap risk is real — so it is surfaced rather than folded into
+    # whichever adjacent bucket happened to fire.
+    if (earnings or {}).get("inside") and (earnings or {}).get("key") in (
+            "EXPOSED", "HIGH", "IMMINENT"):
+        return {"action": "🟠 EVENT RISK", "key": "EVENT_RISK",
+                "why": (f"{earnings['detail']} — the premium is rich "
+                        f"because of it, not in spite of it")}
 
     # From here the STOCK is approved; only the contract is in question.
     if option >= OPTION_PASS:

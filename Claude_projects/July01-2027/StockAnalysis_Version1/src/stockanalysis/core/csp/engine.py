@@ -32,6 +32,8 @@ from . import chain as C
 from . import eligibility as EL
 from . import greeks as G
 from . import premium as PR
+from . import requirements as RQ
+from . import risk as RK
 from . import score as SC
 from . import strike as ST
 from . import volatility as V
@@ -160,7 +162,8 @@ def _reference_chain(ticker, spot, r, min_dte, max_dte, today,
 def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
              min_dte=DEFAULT_MIN_DTE, max_dte=DEFAULT_MAX_DTE,
              allow_earnings=False, today=None, raw=None,
-             quotes_live=None, reference_chain=False) -> dict:
+             quotes_live=None, reference_chain=False,
+             earnings_policy=None, dte_prefs=None) -> dict:
     """One long-term engine result -> one full CSP verdict.
 
     `raw` is the scan row the result was built from. It carries ATR,
@@ -247,10 +250,16 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
     hv = V.realised_vol(_closes(ticker))
     best, per_expiry, skipped = None, [], []
 
+    earn_policy = (earnings_policy or
+                   ("CONTROLLED" if allow_earnings else "AVOID")).upper()
+
     for expiry in picked:
-        conflict = _earnings_conflict(result, expiry, today)
-        if conflict and not allow_earnings:
-            skipped.append({"expiry": expiry, "why": conflict})
+        d_check = C.dte(expiry, today)
+        dist = RK.earnings_distance(result.get("days_to_earnings"), d_check)
+        gate = RK.earnings_gate(dist, earn_policy)
+        if not gate["allow"]:
+            skipped.append({"expiry": expiry, "why": gate["why"],
+                            "earnings": dist})
             continue
 
         rows = C.fetch_puts(ticker, expiry)
@@ -306,8 +315,11 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
             })
 
         sel = ST.select(candidates, result, regime, spot)
+        sel["earnings"] = dist
+        sel["earnings_gate"] = gate
         per_expiry.append({"expiry": expiry, "dte": d, "atm_iv": atm,
-                           "selection": sel, "candidates": len(candidates)})
+                           "selection": sel, "candidates": len(candidates),
+                           "earnings": dist})
 
         if sel["chosen"] and (best is None or
                               (sel["chosen"]["fit"]["score"],
@@ -335,8 +347,44 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
         sinfo = {"score": None, "stock": stock, "option": {"score": None},
                  "components": [], "coverage": stock["coverage"],
                  "rejections": []}
-        final = SC.final_action(sinfo, elig, {"happy_to_own": None}, why,
-                                blocked_on=blocked)
+        # An expiry skipped for earnings is EVENT RISK, not a generic
+        # watch — the name is blocked by a date, and a date is the most
+        # actionable trigger there is.
+        skipped_earn = next((s2.get("earnings") for s2 in skipped
+                             if s2.get("earnings")), None)
+        if skipped_earn and skipped_earn.get("inside"):
+            final = {"action": "🟠 EVENT RISK", "key": "EVENT_RISK",
+                     "why": why}
+        else:
+            final = SC.final_action(sinfo, elig, {"happy_to_own": None}, why,
+                                    blocked_on=blocked)
+
+        # Expiries that avoid the print — and the direction here is the
+        # opposite of the obvious one. To keep earnings OUT of the
+        # contract the expiry must land BEFORE the print, not after it:
+        # every expiry longer than the earnings date necessarily spans
+        # it. So "wait for a post-earnings expiry" is not a thing you can
+        # sell today — the two real options are a shorter contract that
+        # closes before the print, or waiting for the print to pass.
+        clean, wait_days = [], None
+        edays = f(result.get("days_to_earnings"))
+        if edays is not None:
+            latest = edays - RK.DEFAULT_EARNINGS_BUFFER
+            for e in all_exp:
+                dd = C.dte(e, today)
+                if dd is not None and 0 < dd <= latest:
+                    clean.append(f"{e} ({dd}d)")
+                if len(clean) >= 3:
+                    break
+            if not clean:
+                # Nothing expires before the print, so the trigger is a
+                # date rather than a contract.
+                wait_days = round(edays)
+
+        no_reqs = RQ.build(final["key"], {
+            "result": result, "spot": spot, "dist": skipped_earn or {},
+            "clean_expiries": clean, "wait_days": wait_days,
+            "sel": next((p2["selection"] for p2 in per_expiry), None)})
         # No qualifying contract is still a question about what the chain
         # is paying — "no strike in the delta band" does not mean no
         # strikes exist. Same reference treatment as a rejected company,
@@ -346,6 +394,10 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
                if reference_chain else None)
         return {**base, "chosen": None, "trade": None, "csp_score": None,
                 "reference": ref,
+                "requirements": no_reqs,
+                "earnings_distance": skipped_earn,
+                "clean_expiries": clean,
+                "earnings_wait_days": wait_days,
                 "per_expiry": per_expiry, "skipped_expiries": skipped,
                 "stock_score": stock["score"], "option_score": None,
                 "score_detail": sinfo,
@@ -388,10 +440,45 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
     liq = chosen.get("_liq") or {}
     liq = {**liq, "spread_pct": chosen.get("spread_pct")}
 
+    # ── Risk: the third factor ──────────────────────────────────────────
+    prefs = dte_prefs or {}
+    dte_info = RK.dte_fit(chosen.get("dte"),
+                          target=prefs.get("target", RK.DEFAULT_TARGET_DTE),
+                          pref=(prefs.get("pref_low", RK.DEFAULT_PREF_LOW),
+                                prefs.get("pref_high", RK.DEFAULT_PREF_HIGH)),
+                          hard_max=prefs.get("hard_max", max_dte))
+    dist = sel.get("earnings") or RK.earnings_distance(
+        result.get("days_to_earnings"), chosen.get("dte"))
+    cushion = RK.move_cushion(spot, chosen.get("strike"),
+                              chosen.get("expected_move"))
+    assign_q = RK.assignment_score(elig, discount, assign, sel["levels"],
+                                   assign.get("basis"), spot, dist, cushion)
+    rinfo = RK.risk_score(dte_info, dist, cushion, assign_q,
+                          chosen.get("liquidity"))
+
     sinfo = SC.compute(result, elig, discount, chosen, ret, iv_op, liq,
                        regime, assign, fit_anchor=anchor, adq=adq, eff=eff)
+
+    # The earnings policy's penalty lands on the option score, not on the
+    # company's — the print is a property of the contract's window.
+    gate = sel.get("earnings_gate") or {}
+    pen_opt = gate.get("penalty_option") or 0
+    if pen_opt and sinfo.get("option", {}).get("score") is not None:
+        sinfo["option"]["score"] = max(0, sinfo["option"]["score"] - pen_opt)
+
+    stock_sc = (sinfo.get("stock") or {}).get("score")
+    option_sc = (sinfo.get("option") or {}).get("score")
+    sinfo["score"] = RK.combine(stock_sc, option_sc, rinfo.get("score"))
+    sinfo["risk"] = rinfo
+
     final = SC.final_action(sinfo, elig, assign, None, ret=ret, iv_op=iv_op,
-                            adq=adq, liq=liq, blocked_on=sel.get("blocked_on"))
+                            adq=adq, liq=liq, blocked_on=sel.get("blocked_on"),
+                            earnings=dist, risk=rinfo)
+
+    reqs = RQ.build(final["key"], {
+        "ret": ret, "req": req, "adq": adq, "iv_op": iv_op, "ratio": ratio,
+        "chosen": chosen, "sel": sel, "dist": dist, "liq": liq,
+        "result": result, "spot": spot})
 
     return {
         **base,
@@ -418,6 +505,13 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
         "csp_score": sinfo["score"],
         "stock_score": (sinfo.get("stock") or {}).get("score"),
         "option_score": (sinfo.get("option") or {}).get("score"),
+        "risk_score": rinfo.get("score"),
+        "risk": rinfo,
+        "dte_fit": dte_info,
+        "earnings_distance": dist,
+        "move_cushion": cushion,
+        "assignment_quality": assign_q,
+        "requirements": reqs,
         "score_detail": sinfo,
         "final": final,
         "headline": SC.headline(sinfo, final),
@@ -428,7 +522,8 @@ def evaluate(result: dict, regime: str = "SELECTIVE", risk_free=None,
 def evaluate_universe(results, regime="SELECTIVE", risk_free=None,
                       min_dte=DEFAULT_MIN_DTE, max_dte=DEFAULT_MAX_DTE,
                       allow_earnings=False, limit=None, today=None,
-                      raw_rows=None, reference_chain=False) -> list:
+                      raw_rows=None, reference_chain=False,
+                      earnings_policy=None, dte_prefs=None) -> list:
     """Every long-term result -> ranked CSP verdicts.
 
     Eligibility runs on all of them first and the chain work is done only
@@ -446,19 +541,23 @@ def evaluate_universe(results, regime="SELECTIVE", risk_free=None,
         if elig["status"] == "CSP REJECTED":
             out.append(evaluate(res, regime, risk_free, min_dte, max_dte,
                                 allow_earnings, today, raw,
-                                reference_chain=reference_chain))
+                                reference_chain=reference_chain,
+                                earnings_policy=earnings_policy,
+                                dte_prefs=dte_prefs))
             continue
         if limit is not None and fetched >= limit:
             continue
         fetched += 1
         try:
             out.append(evaluate(res, regime, risk_free, min_dte, max_dte,
-                                allow_earnings, today, raw))
+                                allow_earnings, today, raw,
+                                earnings_policy=earnings_policy,
+                                dte_prefs=dte_prefs))
         except Exception as e:                      # one bad chain, not a run
             print(f"[CSP] {res.get('ticker')}: evaluation failed ({e})")
 
-    rank_order = {"SELL": 0, "VERIFY": 1, "SELL_DIP": 2, "WAIT_IV": 3,
-                  "WAIT_LEVEL": 4, "WATCH": 5, "REJECT": 6}
+    rank_order = {"SELL": 0, "VERIFY": 1, "SELL_DIP": 2, "EVENT_RISK": 3,
+                  "WAIT_IV": 4, "WAIT_LEVEL": 5, "WATCH": 6, "REJECT": 7}
     out.sort(key=lambda r: (rank_order.get((r.get("final") or {}).get("key"), 9),
                             -(r.get("csp_score") or 0)))
     return out

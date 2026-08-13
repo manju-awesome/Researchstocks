@@ -38,8 +38,8 @@ from .views import badge, card, empty, esc, fmt_money, fmt_pct, tv_url
 DASH = "—"
 
 _FINAL_STATUS = {"SELL": "good", "SELL_DIP": "good", "VERIFY": "watch",
-                 "WAIT_IV": "watch", "WAIT_LEVEL": "watch",
-                 "WATCH": "info", "REJECT": "bad"}
+                 "EVENT_RISK": "watch", "WAIT_IV": "watch",
+                 "WAIT_LEVEL": "info", "WATCH": "info", "REJECT": "bad"}
 _ELIG_STATUS = {"CSP APPROVED": "good", "CSP WATCHLIST": "watch",
                 "CSP REJECTED": "bad"}
 _BAND_STATUS = {"UNDERVALUED": "good", "FAIR": "watch", "OVERVALUED": "bad"}
@@ -379,6 +379,88 @@ def _reference_block(row):
     return head
 
 
+def _score_or_dash(v):
+    return DASH if v is None else f"{v:.0f}"
+
+
+def _requirements_block(row):
+    """What would have to change, as numbers.
+
+    The most important panel on the page for anything that is not a
+    SELL. "Wait for IV expansion" is not actionable; "IV/realised 0.86x
+    -> 1.10x, or premium $0.95 -> $1.72" is a condition you can set an
+    alert on.
+    """
+    rq = row.get("requirements") or {}
+    reqs = rq.get("requirements") or []
+    if not reqs:
+        return _sub("no outstanding conditions")
+
+    out = []
+    if rq.get("summary"):
+        out.append(f'<div style="font-size:12px;font-weight:600;'
+                   f'margin-bottom:6px">{esc(rq["summary"])}</div>')
+    for r in reqs:
+        met = r.get("met")
+        mark, colour = (("✓", "#0F6E56") if met else
+                        ("○", "#8a6d1a" if r.get("kind") == "ALTERNATIVE"
+                         else "#A32D2D"))
+        tag = ("" if r.get("kind") != "BLOCKING" else
+               f' {badge("blocking", "bad", "small")}')
+        out.append(
+            f'<div style="padding:3px 0;font-size:11px">'
+            f'<span style="color:{colour};font-weight:700">{mark}</span> '
+            f'<b>{esc(r.get("field") or "")}</b>{tag}<br>'
+            f'<span style="color:#898781">now {esc(r.get("current") or "—")} '
+            f'→ needs {esc(r.get("needs") or "—")}</span>'
+            + (_sub(str(r.get("detail"))) if r.get("detail") else "")
+            + '</div>')
+    alts = [r for r in reqs if r.get("kind") == "ALTERNATIVE"]
+    if len(alts) > 1:
+        out.append(_sub("alternatives — any one of these is enough"))
+    return "".join(out)
+
+
+def _risk_block(row):
+    """The third factor, and which leg is weakest."""
+    rk = row.get("risk") or {}
+    if not rk.get("components"):
+        return _sub("risk not scored")
+    ed = row.get("earnings_distance") or {}
+    mc = row.get("move_cushion") or {}
+    dt = row.get("dte_fit") or {}
+    aq = row.get("assignment_quality") or {}
+
+    lines = [f'<div style="font-size:11px;line-height:1.7">'
+             f'Earnings {esc(ed.get("band") or "—")}'
+             + (f' <span style="color:#898781">({ed["ratio"]:.2f}× of the '
+                f'contract)</span>' if ed.get("ratio") else '') + '<br>'
+             f'Cushion {esc(mc.get("band") or "—")}'
+             + (f' <span style="color:#898781">{mc["ratio"]:.2f}× the '
+                f'expected move</span>' if mc.get("ratio") else '') + '<br>'
+             f'DTE {esc(dt.get("band") or "—")} '
+             f'<span style="color:#898781">{esc(dt.get("detail") or "")}</span>'
+             '<br>'
+             f'Assignment quality <b>{_score_or_dash(aq.get("score"))}</b>'
+             f'/100</div>']
+    for c in rk["components"]:
+        sc = c.get("score")
+        bar = "" if sc is None else (
+            f'<div style="height:4px;background:#eceae4;border-radius:2px;'
+            f'width:60px;display:inline-block;vertical-align:middle">'
+            f'<div style="height:4px;border-radius:2px;width:{sc}%;'
+            f'background:{"#0F6E56" if sc >= 70 else "#8a6d1a" if sc >= 45 else "#A32D2D"}">'
+            f'</div></div>')
+        lines.append(
+            f'<div style="display:flex;justify-content:space-between;gap:8px;'
+            f'font-size:11px;padding:2px 0">'
+            f'<span>{esc(c["name"].title())} '
+            f'<span style="color:#b5b3ad">{c["weight"]}%</span></span>'
+            f'<span>{bar} {"—" if sc is None else sc}</span></div>')
+    lines.append(_sub(rk.get("detail") or ""))
+    return "".join(lines)
+
+
 def _detail(row):
     chosen = row.get("chosen") or {}
     elig = row.get("eligibility") or {}
@@ -459,6 +541,8 @@ def _detail(row):
               + panel("Premium vs downside", _downside_block(row))
               + panel("The contract", contract)
               + panel("If assigned", _assignment_block(row))
+              + panel("What needs to change", _requirements_block(row))
+              + panel("Risk", _risk_block(row))
               + panel("Ideal CSP zone", _ideal_block(row))
               + panel("Score breakdown", _score_block(row))
               + panel("Strikes considered", _ladder_block(row)))
@@ -486,7 +570,8 @@ def _detail(row):
 _COLUMNS = ("Ticker", "Quality", "Valuation", "Margin", "Price",
             "Strike", "Δ", "Class", "Expiry", "DTE", "ER",
             "Limit", "Yield", "vs req.", "IV/RV", "Spread", "Basis",
-            "STOCK", "OPTION", "CSP", "Action")
+            "Earnings", "Cushion", "STOCK", "OPTION", "RISK", "CSP",
+            "Action")
 
 
 def _row(row, idx):
@@ -556,8 +641,14 @@ def _row(row, idx):
         iv_txt,
         sp_txt,
         (f"${_n(assign.get('basis'))}" if assign.get("basis") else DASH),
+        (esc((row.get("earnings_distance") or {}).get("band") or DASH)
+         + _sub(f"{(row.get('earnings_distance') or {}).get('days') or '—'}d")),
+        ((f"{(row.get('move_cushion') or {}).get('ratio'):.2f}×"
+          + _sub((row.get("move_cushion") or {}).get("band") or ""))
+         if (row.get("move_cushion") or {}).get("ratio") is not None else DASH),
         _score_cell(row.get("stock_score")),
         _score_cell(row.get("option_score")),
+        _score_cell(row.get("risk_score")),
         _score_cell(row.get("csp_score")),
         badge(final.get("action") or DASH,
               _FINAL_STATUS.get(final.get("key"), "muted")),
@@ -568,8 +659,11 @@ def _row(row, idx):
 
     head = row.get("headline")
     why = esc(final.get("why") or "")
+    need = (row.get("requirements") or {}).get("summary")
     summary = ((f'<b style="color:#0b0b0b">{esc(head)}</b> — ' if head else "")
-               + why)
+               + why
+               + (f' <b style="color:#8a6d1a">· {esc(need)}</b>' if need
+                  else ""))
     return (
         f'<tr onclick="cspToggle({idx})" style="cursor:pointer;'
         f'border-top:1px solid #eceae4">{tds}</tr>'
@@ -716,11 +810,33 @@ def _controls(meta, typed=""):
         f'<input name="limit" type="number" value="25" '
         f'style="width:70px;padding:5px;border:1px solid #d9d7ce;'
         f'border-radius:6px"></label>'
-        f'<label style="font-size:11px;color:#898781;display:flex;gap:5px;'
-        f'align-items:center;padding-bottom:6px">'
-        f'<input name="allow_earnings" type="checkbox" '
-        f'{"checked" if meta.get("allow_earnings") else ""}> '
-        f'allow expiries spanning earnings</label>'
+        f'<label style="font-size:11px;color:#898781">Target DTE<br>'
+        f'<input name="target_dte" type="number" '
+        f'value="{meta.get("target_dte", 35)}" '
+        f'style="width:70px;padding:5px;border:1px solid #d9d7ce;'
+        f'border-radius:6px"></label>'
+        # Three states, not a checkbox: "allow earnings" collapsed two
+        # different decisions into one bit — see the note under the form.
+        f'<label style="font-size:11px;color:#898781">Earnings<br>'
+        f'<select name="earnings_policy" style="padding:6px;'
+        f'border:1px solid #d9d7ce;border-radius:6px">'
+        + "".join(
+            f'<option value="{pol}"'
+            + (" selected" if (meta.get("earnings_policy") or "AVOID") == pol
+               else "")
+            + f'>{pol.title()}</option>'
+            for pol in ("AVOID", "CONTROLLED", "ACCEPT"))
+        + '</select></label>'
+        f'<label style="font-size:11px;color:#898781">Min stock<br>'
+        f'<input name="min_stock" type="number" '
+        f'value="{meta.get("min_stock", 0)}" '
+        f'style="width:70px;padding:5px;border:1px solid #d9d7ce;'
+        f'border-radius:6px"></label>'
+        f'<label style="font-size:11px;color:#898781">Min CSP<br>'
+        f'<input name="min_csp" type="number" '
+        f'value="{meta.get("min_csp", 0)}" '
+        f'style="width:70px;padding:5px;border:1px solid #d9d7ce;'
+        f'border-radius:6px"></label>' 
         f'<button type="button" onclick="cspFilter()" class="btn secondary" '
         f'style="padding:7px 14px">Filter</button>'
         f'<button type="submit" class="btn" style="padding:7px 16px">'
@@ -728,7 +844,14 @@ def _controls(meta, typed=""):
         + (f'<a href="/csp" class="btn secondary" style="text-decoration:none;'
            f'padding:7px 14px">Clear</a>' if typed else "")
         + f'<span id="csp-msg" style="font-size:11px;color:#898781"></span>'
-        f'</form>')
+        f'</form>'
+        + _sub("Earnings: AVOID skips any expiry containing a print; "
+               "CONTROLLED shows it with a scoring penalty; ACCEPT waives "
+               "the penalty only when quality, delta, liquidity and premium "
+               "are all strong enough to be paid for the gap risk — "
+               "otherwise it falls back to CONTROLLED rather than a free "
+               "pass. Score floors rank first and cut after, so a thin day "
+               "returns fewer names rather than worse ones."))
 
 
 def _lookup_block(typed, wanted, shown, slim_only, missing):
