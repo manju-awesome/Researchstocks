@@ -1,425 +1,450 @@
 {
-  "generated_at": "2026-08-10T08:28:30",
+  "generated_at": "2026-08-12T08:02:07",
   "vix": {
-    "level": 15.41,
-    "change": 0.51,
-    "change_pct": 3.42,
+    "level": 15.11,
+    "change": -0.17,
+    "change_pct": -1.11,
     "label": "NORMAL",
     "error": null
   },
   "futures": [
     {
       "ticker": "ES=F",
-      "price": 7774.0,
-      "chg_pct": -0.07,
+      "price": 7781.25,
+      "chg_pct": 0.44,
       "label": "S&P fut"
     },
     {
       "ticker": "NQ=F",
-      "price": 29796.25,
-      "chg_pct": -0.13,
+      "price": 29907.0,
+      "chg_pct": 0.95,
       "label": "Nasdaq fut"
     }
   ],
   "macro": [
     {
       "ticker": "GC=F",
-      "price": 4395.0,
-      "chg_pct": 1.25,
+      "price": 4482.8,
+      "chg_pct": 2.28,
       "label": "Gold"
     },
     {
       "ticker": "CL=F",
-      "price": 79.44,
-      "chg_pct": 1.61,
+      "price": 83.22,
+      "chg_pct": 0.02,
       "label": "Oil (WTI)"
     },
     {
       "ticker": "BTC-USD",
-      "price": 64841.08,
-      "chg_pct": -0.01,
+      "price": 64089.48,
+      "chg_pct": 0.85,
       "label": "Bitcoin"
     }
   ],
   "yield_10y": {
-    "level_pct": 4.674,
-    "change_bps": 1,
+    "level_pct": 4.65,
+    "change_bps": -3,
     "error": null
   },
   "dollar_index": {
-    "level": 99.74,
-    "change_pct": 0.14,
+    "level": 99.68,
+    "change_pct": -0.14,
     "error": null
   },
   "fed": {
-    "current_implied": 3.63,
+    "current_implied": 3.632,
     "months": [
       {
         "label": "Sep 2026",
         "symbol": "ZQU26.CBT",
-        "implied_rate": 3.685,
-        "change_bps": 6,
+        "implied_rate": 3.675,
+        "change_bps": 4,
         "moves": 0.2
       },
       {
         "label": "Oct 2026",
         "symbol": "ZQV26.CBT",
-        "implied_rate": 3.75,
-        "change_bps": 12,
-        "moves": 0.5
+        "implied_rate": 3.74,
+        "change_bps": 11,
+        "moves": 0.4
       },
       {
         "label": "Nov 2026",
         "symbol": "ZQX26.CBT",
-        "implied_rate": 3.81,
-        "change_bps": 18,
-        "moves": 0.7
+        "implied_rate": 3.79,
+        "change_bps": 16,
+        "moves": 0.6
       },
       {
         "label": "Dec 2026",
         "symbol": "ZQZ26.CBT",
-        "implied_rate": 3.895,
-        "change_bps": 27,
-        "moves": 1.1
+        "implied_rate": 3.865,
+        "change_bps": 23,
+        "moves": 0.9
       },
       {
         "label": "Jan 2027",
         "symbol": "ZQF27.CBT",
-        "implied_rate": 3.935,
-        "change_bps": 31,
-        "moves": 1.2
+        "implied_rate": 3.895,
+        "change_bps": 26,
+        "moves": 1.0
       },
       {
         "label": "Feb 2027",
         "symbol": "ZQG27.CBT",
-        "implied_rate": 3.975,
-        "change_bps": 35,
-        "moves": 1.4
+        "implied_rate": 3.93,
+        "change_bps": 30,
+        "moves": 1.2
       }
     ],
-    "asof": "2026-08-10",
+    "asof": "2026-08-12",
     "error": null
   },
   "econ_events": [
     {
-      "title": "Core CPI m/m",
+      "title": "Core PPI m/m",
       "impact": "High",
-      "when": "2026-08-12 08:30:00-04:00",
+      "when": "2026-08-13 08:30:00-04:00",
+      "forecast": "0.3%",
+      "previous": "0.2%"
+    },
+    {
+      "title": "PPI m/m",
+      "impact": "High",
+      "when": "2026-08-13 08:30:00-04:00",
       "forecast": "0.2%",
-      "previous": "0.0%"
+      "previous": "-0.3%"
     },
     {
-      "title": "Core CPI y/y",
-      "impact": "High",
-      "when": "2026-08-12 08:30:00-04:00",
-      "forecast": "2.5%",
-      "previous": "2.6%"
-    },
-    {
-      "title": "CPI m/m",
-      "impact": "High",
-      "when": "2026-08-12 08:30:00-04:00",
-      "forecast": "0.1%",
-      "previous": "-0.4%"
+      "title": "Unemployment Claims",
+      "impact": "Medium",
+      "when": "2026-08-13 08:30:00-04:00",
+      "forecast": "202K",
+      "previous": "199K"
     }
   ],
   "spy": {
     "ticker": "SPY",
-    "price": 773.26,
-    "day_chg_pct": 0.61,
-    "ret_5d_pct": 3.51,
+    "price": 770.56,
+    "day_chg_pct": -0.32,
+    "ret_5d_pct": -0.1,
     "above_20ma": true,
     "above_50ma": true,
     "market_cap": null,
-    "breadth_pct": 74.5,
-    "score": 6,
+    "breadth_pct": 63.9,
+    "score": 3,
     "strength": "STRONG"
   },
   "qqq": {
     "ticker": "QQQ",
-    "price": 723.03,
-    "day_chg_pct": 1.17,
-    "ret_5d_pct": 5.09,
+    "price": 718.45,
+    "day_chg_pct": -0.34,
+    "ret_5d_pct": -0.75,
     "above_20ma": true,
     "above_50ma": true,
     "market_cap": null,
-    "breadth_pct": 72.4,
-    "score": 6,
+    "breadth_pct": 60.8,
+    "score": 3,
     "strength": "STRONG"
   },
   "sectors_trending": [
     {
-      "ticker": "IGV",
-      "price": 102.69,
-      "chg_pct": 3.29,
-      "label": "Software"
-    },
-    {
-      "ticker": "SMH",
-      "price": 582.7,
-      "chg_pct": 1.96,
-      "label": "Semis"
-    },
-    {
-      "ticker": "XLY",
-      "price": 119.86,
-      "chg_pct": 1.49,
-      "label": "Discret"
-    }
-  ],
-  "sectors_lagging": [
-    {
       "ticker": "DRAM",
-      "price": 50.6,
-      "chg_pct": -1.63,
+      "price": 50.89,
+      "chg_pct": 2.6,
       "label": "Memory"
     },
     {
       "ticker": "XLE",
-      "price": 57.5,
-      "chg_pct": -1.13,
+      "price": 60.93,
+      "chg_pct": 1.25,
       "label": "Energy"
     },
     {
-      "ticker": "XLF",
-      "price": 57.6,
+      "ticker": "XLU",
+      "price": 43.63,
+      "chg_pct": 1.16,
+      "label": "Utilities"
+    }
+  ],
+  "sectors_lagging": [
+    {
+      "ticker": "IGV",
+      "price": 103.92,
+      "chg_pct": -1.04,
+      "label": "Software"
+    },
+    {
+      "ticker": "XLC",
+      "price": 111.27,
+      "chg_pct": -0.5,
+      "label": "Comms"
+    },
+    {
+      "ticker": "XLY",
+      "price": 119.24,
       "chg_pct": -0.36,
-      "label": "Financials"
+      "label": "Discret"
     }
   ],
   "gainers": [
     {
       "rank": 1,
-      "ticker": "UNG",
+      "ticker": "NBIS",
       "direction": "\u25b2",
-      "last_price": 10.15,
-      "prev_close": 9.76,
-      "chg_pct": 4.0,
-      "session_open": 9.99,
-      "session_high": 10.16,
-      "session_low": 9.94,
+      "last_price": 224.11,
+      "prev_close": 208.5,
+      "chg_pct": 7.49,
+      "session_open": 207.78,
+      "session_high": 227.3,
+      "session_low": 206.45,
       "session_vol": 0,
-      "catalyst": "General News",
-      "headline": "Energy stocks were declining premarket Friday, with the State Street Energy Select Sector SPDR ETF (",
+      "catalyst": "Earnings Beat",
+      "headline": "Nebius stock was surging on Wednesday after financial results from the AI cloud infrastructure company beat expectations. Short pressure may be helping the rally.",
       "mode": "premarket",
-      "scan_time": "2026-08-10 09:26:58 ET"
+      "scan_time": "2026-08-12 09:00:46 ET"
+    },
+    {
+      "rank": 2,
+      "ticker": "LITE",
+      "direction": "\u25b2",
+      "last_price": 893.31,
+      "prev_close": 840.59,
+      "chg_pct": 6.27,
+      "session_open": 874.0,
+      "session_high": 899.66,
+      "session_low": 863.42,
+      "session_vol": 0,
+      "catalyst": "Economic Data",
+      "headline": "Futures rose ahead of CPI inflation data. Nvidia partners Lumentum, CoreWeave, Super Micro jumped on earnings, lifting AI stocks.",
+      "mode": "premarket",
+      "scan_time": "2026-08-12 09:00:47 ET"
     },
     {
       "rank": 3,
-      "ticker": "MRVL",
+      "ticker": "COHR",
       "direction": "\u25b2",
-      "last_price": 226.11,
-      "prev_close": 218.72,
-      "chg_pct": 3.38,
-      "session_open": 223.79,
-      "session_high": 228.98,
-      "session_low": 217.76,
+      "last_price": 355.51,
+      "prev_close": 337.8,
+      "chg_pct": 5.24,
+      "session_open": 344.5,
+      "session_high": 363.0,
+      "session_low": 340.75,
       "session_vol": 0,
-      "catalyst": "General News",
-      "headline": "\u2197\ufe0f Berkshire Hathaway (BRK.B): The company said its quarterly profit more than doubled, powered by investment gains and strong results from its industrial and retail businesses. Shares ticked up in premarket trading.",
+      "catalyst": "Economic Data",
+      "headline": "Stock futures are rising after a solid batch of tech earnings gave the broader market a boost ahead of the July inflation report.",
       "mode": "premarket",
-      "scan_time": "2026-08-10 09:26:59 ET"
+      "scan_time": "2026-08-12 09:00:47 ET"
     },
     {
       "rank": 4,
-      "ticker": "AAOI",
+      "ticker": "CIEN",
       "direction": "\u25b2",
-      "last_price": 140.25,
-      "prev_close": 135.9,
-      "chg_pct": 3.2,
-      "session_open": 141.52,
-      "session_high": 144.94,
-      "session_low": 138.6,
+      "last_price": 411.55,
+      "prev_close": 392.11,
+      "chg_pct": 4.96,
+      "session_open": 400.0,
+      "session_high": 508.74,
+      "session_low": 390.12,
       "session_vol": 0,
       "catalyst": "Earnings Beat",
-      "headline": "AAOI's Q2 earnings beat estimates as revenues surge 86.4%, fueled by datacenter, CATV, and rapid 800G growth.",
+      "headline": "NTGR's Q2 earnings beat estimates as Enterprise growth and wider margins offset Consumer weakness amid memory-cost headwinds.",
       "mode": "premarket",
-      "scan_time": "2026-08-10 09:27:00 ET"
+      "scan_time": "2026-08-12 09:00:48 ET"
     },
     {
       "rank": 5,
-      "ticker": "ASML",
+      "ticker": "CRDO",
       "direction": "\u25b2",
-      "last_price": 1797.26,
-      "prev_close": 1742.46,
-      "chg_pct": 3.14,
-      "session_open": 1774.3,
-      "session_high": 1799.99,
-      "session_low": 1747.14,
+      "last_price": 262.85,
+      "prev_close": 250.5,
+      "chg_pct": 4.93,
+      "session_open": 251.55,
+      "session_high": 263.0,
+      "session_low": 250.8,
       "session_vol": 0,
       "catalyst": "General News",
-      "headline": "The AI-focused hedge fund has now committed $500 million to Source Foundry, a Stanford-founded startup aiming to challenge ASML in chip manufacturing equipment",
+      "headline": "QuickLogic (QUIK) delivered earnings and revenue surprises of -50.00% and -8.63%, respectively, for the quarter ended June 2026. Do the numbers hold clues to what lies ahead for the stock?",
       "mode": "premarket",
-      "scan_time": "2026-08-10 09:27:00 ET"
-    },
-    {
-      "rank": 6,
-      "ticker": "LITE",
-      "direction": "\u25b2",
-      "last_price": 920.0,
-      "prev_close": 895.0,
-      "chg_pct": 2.79,
-      "session_open": 914.0,
-      "session_high": 934.0,
-      "session_low": 905.0,
-      "session_vol": 0,
-      "catalyst": "Economic Data",
-      "headline": "The artificial intelligence trade is chugging along as investors wait for a CPI inflation print that could decide where rates go next.",
-      "mode": "premarket",
-      "scan_time": "2026-08-10 09:27:01 ET"
+      "scan_time": "2026-08-12 09:00:48 ET"
     }
   ],
-  "losers": [
-    {
-      "rank": 2,
-      "ticker": "INTC",
-      "direction": "\u25bc",
-      "last_price": 97.93,
-      "prev_close": 101.68,
-      "chg_pct": -3.69,
-      "session_open": 103.45,
-      "session_high": 103.83,
-      "session_low": 96.21,
-      "session_vol": 0,
-      "catalyst": "Economic Data",
-      "headline": "The artificial intelligence trade is chugging along as investors wait for a CPI inflation print that could decide where rates go next.",
-      "mode": "premarket",
-      "scan_time": "2026-08-10 09:26:59 ET"
-    },
-    {
-      "rank": 8,
-      "ticker": "HIMS",
-      "direction": "\u25bc",
-      "last_price": 30.97,
-      "prev_close": 31.68,
-      "chg_pct": -2.25,
-      "session_open": 31.7,
-      "session_high": 32.0,
-      "session_low": 30.86,
-      "session_vol": 0,
-      "catalyst": "Economic Data",
-      "headline": "Stocks Mostly Up Pre-Bell as Traders Assess Middle East Developments, Await Key Inflation Data",
-      "mode": "premarket",
-      "scan_time": "2026-08-10 09:27:02 ET"
-    }
-  ],
+  "losers": [],
   "unusual_movers": [
     {
       "rank": 1,
-      "ticker": "UNG",
+      "ticker": "NBIS",
       "direction": "\u25b2",
-      "last_price": 10.15,
-      "prev_close": 9.76,
-      "chg_pct": 4.0,
-      "session_open": 9.99,
-      "session_high": 10.16,
-      "session_low": 9.94,
+      "last_price": 224.11,
+      "prev_close": 208.5,
+      "chg_pct": 7.49,
+      "session_open": 207.78,
+      "session_high": 227.3,
+      "session_low": 206.45,
       "session_vol": 0,
-      "catalyst": "General News",
-      "headline": "Energy stocks were declining premarket Friday, with the State Street Energy Select Sector SPDR ETF (",
+      "catalyst": "Earnings Beat",
+      "headline": "Nebius stock was surging on Wednesday after financial results from the AI cloud infrastructure company beat expectations. Short pressure may be helping the rally.",
       "mode": "premarket",
-      "scan_time": "2026-08-10 09:26:58 ET"
+      "scan_time": "2026-08-12 09:00:46 ET"
     },
     {
       "rank": 2,
-      "ticker": "INTC",
-      "direction": "\u25bc",
-      "last_price": 97.93,
-      "prev_close": 101.68,
-      "chg_pct": -3.69,
-      "session_open": 103.45,
-      "session_high": 103.83,
-      "session_low": 96.21,
+      "ticker": "LITE",
+      "direction": "\u25b2",
+      "last_price": 893.31,
+      "prev_close": 840.59,
+      "chg_pct": 6.27,
+      "session_open": 874.0,
+      "session_high": 899.66,
+      "session_low": 863.42,
       "session_vol": 0,
       "catalyst": "Economic Data",
-      "headline": "The artificial intelligence trade is chugging along as investors wait for a CPI inflation print that could decide where rates go next.",
+      "headline": "Futures rose ahead of CPI inflation data. Nvidia partners Lumentum, CoreWeave, Super Micro jumped on earnings, lifting AI stocks.",
       "mode": "premarket",
-      "scan_time": "2026-08-10 09:26:59 ET"
+      "scan_time": "2026-08-12 09:00:47 ET"
     },
     {
       "rank": 3,
-      "ticker": "MRVL",
+      "ticker": "COHR",
       "direction": "\u25b2",
-      "last_price": 226.11,
-      "prev_close": 218.72,
-      "chg_pct": 3.38,
-      "session_open": 223.79,
-      "session_high": 228.98,
-      "session_low": 217.76,
+      "last_price": 355.51,
+      "prev_close": 337.8,
+      "chg_pct": 5.24,
+      "session_open": 344.5,
+      "session_high": 363.0,
+      "session_low": 340.75,
       "session_vol": 0,
-      "catalyst": "General News",
-      "headline": "\u2197\ufe0f Berkshire Hathaway (BRK.B): The company said its quarterly profit more than doubled, powered by investment gains and strong results from its industrial and retail businesses. Shares ticked up in premarket trading.",
+      "catalyst": "Economic Data",
+      "headline": "Stock futures are rising after a solid batch of tech earnings gave the broader market a boost ahead of the July inflation report.",
       "mode": "premarket",
-      "scan_time": "2026-08-10 09:26:59 ET"
+      "scan_time": "2026-08-12 09:00:47 ET"
     },
     {
       "rank": 4,
-      "ticker": "AAOI",
+      "ticker": "CIEN",
       "direction": "\u25b2",
-      "last_price": 140.25,
-      "prev_close": 135.9,
-      "chg_pct": 3.2,
-      "session_open": 141.52,
-      "session_high": 144.94,
-      "session_low": 138.6,
+      "last_price": 411.55,
+      "prev_close": 392.11,
+      "chg_pct": 4.96,
+      "session_open": 400.0,
+      "session_high": 508.74,
+      "session_low": 390.12,
       "session_vol": 0,
       "catalyst": "Earnings Beat",
-      "headline": "AAOI's Q2 earnings beat estimates as revenues surge 86.4%, fueled by datacenter, CATV, and rapid 800G growth.",
+      "headline": "NTGR's Q2 earnings beat estimates as Enterprise growth and wider margins offset Consumer weakness amid memory-cost headwinds.",
       "mode": "premarket",
-      "scan_time": "2026-08-10 09:27:00 ET"
+      "scan_time": "2026-08-12 09:00:48 ET"
     },
     {
       "rank": 5,
-      "ticker": "ASML",
+      "ticker": "CRDO",
       "direction": "\u25b2",
-      "last_price": 1797.26,
-      "prev_close": 1742.46,
-      "chg_pct": 3.14,
-      "session_open": 1774.3,
-      "session_high": 1799.99,
-      "session_low": 1747.14,
+      "last_price": 262.85,
+      "prev_close": 250.5,
+      "chg_pct": 4.93,
+      "session_open": 251.55,
+      "session_high": 263.0,
+      "session_low": 250.8,
       "session_vol": 0,
       "catalyst": "General News",
-      "headline": "The AI-focused hedge fund has now committed $500 million to Source Foundry, a Stanford-founded startup aiming to challenge ASML in chip manufacturing equipment",
+      "headline": "QuickLogic (QUIK) delivered earnings and revenue surprises of -50.00% and -8.63%, respectively, for the quarter ended June 2026. Do the numbers hold clues to what lies ahead for the stock?",
       "mode": "premarket",
-      "scan_time": "2026-08-10 09:27:00 ET"
+      "scan_time": "2026-08-12 09:00:48 ET"
+    },
+    {
+      "rank": 6,
+      "ticker": "STX",
+      "direction": "\u25b2",
+      "last_price": 861.01,
+      "prev_close": 821.0,
+      "chg_pct": 4.87,
+      "session_open": 832.49,
+      "session_high": 861.01,
+      "session_low": 827.03,
+      "session_vol": 0,
+      "catalyst": "Economic Data",
+      "headline": "The Morning Bull - US Market Morning Update Monday, Aug, 10 2026 US stock futures are pointing higher this morning, with the S&P 500 contracts up around 0.6%, as investors weigh softer US jobs data against falling bond yields and cooler inflation expectations. July nonfarm payrolls showed a small job loss of 23,000 and weaker wage growth, which signals a slowing job market and less pressure from pay rises. At the same time, the 10 year Treasury yield has dropped to about 4.60% and one year...",
+      "mode": "premarket",
+      "scan_time": "2026-08-12 09:00:49 ET"
+    },
+    {
+      "rank": 7,
+      "ticker": "MU",
+      "direction": "\u25b2",
+      "last_price": 905.53,
+      "prev_close": 867.15,
+      "chg_pct": 4.43,
+      "session_open": 883.22,
+      "session_high": 908.38,
+      "session_low": 868.52,
+      "session_vol": 0,
+      "catalyst": "Analyst Upgrade",
+      "headline": "Host Kenny Polcari joins Yahoo Finance's Jared Blikre and Founder ETFs' Michael Monaghan to explore the data showing why founder-led companies significantly outperform the market. The panel also breaks down the flawless execution of the SpaceX IPO, the overlooked opportunities in AI infrastructure, and why the next major productivity boom will mirror the historical shift from steam to electricity.",
+      "mode": "premarket",
+      "scan_time": "2026-08-12 09:00:50 ET"
+    },
+    {
+      "rank": 8,
+      "ticker": "WDC",
+      "direction": "\u25b2",
+      "last_price": 458.0,
+      "prev_close": 438.91,
+      "chg_pct": 4.35,
+      "session_open": 447.4,
+      "session_high": 458.0,
+      "session_low": 442.86,
+      "session_vol": 0,
+      "catalyst": "General News",
+      "headline": "Micron keeps getting dismissed as a cyclical chip stock doomed to repeat the same boom-and-bust pattern, but one structural shift buried in its latest earnings call suggests that logic no longer applies the way investors assume.",
+      "mode": "premarket",
+      "scan_time": "2026-08-12 09:00:50 ET"
+    },
+    {
+      "rank": 9,
+      "ticker": "VRT",
+      "direction": "\u25b2",
+      "last_price": 295.06,
+      "prev_close": 283.19,
+      "chg_pct": 4.19,
+      "session_open": 284.42,
+      "session_high": 297.62,
+      "session_low": 281.81,
+      "session_vol": 0,
+      "catalyst": "Capital Return",
+      "headline": "In late July 2026, Vertiv Holdings Co reported second-quarter results showing higher revenue and net income year over year, completed its US$599.84 million share repurchase program, and raised both third-quarter and full-year 2026 guidance, while earlier in August Bitzero Holdings Inc. announced a collaboration with Vertiv to support AI and HPC data center build-outs. Together with Vertiv\u2019s planned presentation at the OCP APAC Summit 2026 in Taipei, these developments underline the company\u2019s...",
+      "mode": "premarket",
+      "scan_time": "2026-08-12 09:00:51 ET"
+    },
+    {
+      "rank": 10,
+      "ticker": "IREN",
+      "direction": "\u25b2",
+      "last_price": 43.2,
+      "prev_close": 41.49,
+      "chg_pct": 4.12,
+      "session_open": 41.22,
+      "session_high": 43.53,
+      "session_low": 41.18,
+      "session_vol": 0,
+      "catalyst": "General News",
+      "headline": "Super Micro and Nebius also rallied as strong forecasts reinforced demand for AI infrastructure.",
+      "mode": "premarket",
+      "scan_time": "2026-08-12 09:00:51 ET"
     }
   ],
   "earnings_today": [
     {
-      "ticker": "RKLB",
-      "next_earnings_date": "2026-08-10",
-      "avg_abs_move_pct": 10.56
+      "ticker": "COHR",
+      "next_earnings_date": "2026-08-12",
+      "avg_abs_move_pct": 13.22
     },
     {
-      "ticker": "HIMS",
-      "next_earnings_date": "2026-08-10",
-      "avg_abs_move_pct": 9.42
-    },
-    {
-      "ticker": "USAR",
-      "next_earnings_date": "2026-08-10",
-      "avg_abs_move_pct": 6.31
+      "ticker": "NBIS",
+      "next_earnings_date": "2026-08-12",
+      "avg_abs_move_pct": 14.65
     }
   ],
   "near_breakout": [
-    {
-      "dedup_key": "TSM:resistance_touch",
-      "category": "watchlist",
-      "ticker": "TSM",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.8% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.79,
-        "R1": 404.74
-      },
-      "created_at": "2026-07-30T09:02:34"
-    },
     {
       "dedup_key": "GEV:resistance_touch",
       "category": "watchlist",
@@ -472,57 +497,6 @@
       "created_at": "2026-08-04T09:02:43"
     },
     {
-      "dedup_key": "SMCI:resistance_touch",
-      "category": "watchlist",
-      "ticker": "SMCI",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (1.2% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 1.25,
-        "R1": 29.64
-      },
-      "created_at": "2026-08-04T09:02:43"
-    },
-    {
-      "dedup_key": "META:resistance_touch",
-      "category": "watchlist",
-      "ticker": "META",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.1% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.07,
-        "R1": 585.6
-      },
-      "created_at": "2026-08-04T09:02:47"
-    },
-    {
-      "dedup_key": "V:resistance_touch",
-      "category": "watchlist",
-      "ticker": "V",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.6% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.56,
-        "R1": 365.01
-      },
-      "created_at": "2026-08-04T09:02:52"
-    },
-    {
       "dedup_key": "MA:resistance_touch",
       "category": "watchlist",
       "ticker": "MA",
@@ -538,23 +512,6 @@
         "R1": 568.98
       },
       "created_at": "2026-08-04T09:02:52"
-    },
-    {
-      "dedup_key": "AAOI:resistance_touch",
-      "category": "watchlist",
-      "ticker": "AAOI",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.2% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.17,
-        "R1": 125.95
-      },
-      "created_at": "2026-08-06T09:02:36"
     },
     {
       "dedup_key": "GOOGL:resistance_touch",
@@ -574,9 +531,26 @@
       "created_at": "2026-08-06T09:02:38"
     },
     {
-      "dedup_key": "INOD:resistance_touch",
+      "dedup_key": "QCOM:resistance_touch",
       "category": "watchlist",
-      "ticker": "INOD",
+      "ticker": "QCOM",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (1.2% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 1.21,
+        "R1": 168.19
+      },
+      "created_at": "2026-08-10T09:03:12"
+    },
+    {
+      "dedup_key": "UNH:resistance_touch",
+      "category": "watchlist",
+      "ticker": "UNH",
       "priority": "MEDIUM",
       "headline": "is testing resistance (0.2% away)",
       "why_it_matters": "Price is approaching a level that has previously capped upside.",
@@ -585,44 +559,44 @@
       "confidence": 55,
       "time_sensitivity": "next 1-2 sessions",
       "supporting_data": {
-        "dist_to_resistance_pct": 0.24,
-        "R1": 68.88
+        "dist_to_resistance_pct": 0.19,
+        "R1": 411.98
       },
-      "created_at": "2026-08-06T09:02:39"
+      "created_at": "2026-08-10T09:03:23"
     },
     {
-      "dedup_key": "NVDA:resistance_touch",
+      "dedup_key": "DTCR:resistance_touch",
       "category": "watchlist",
-      "ticker": "NVDA",
+      "ticker": "DTCR",
       "priority": "MEDIUM",
-      "headline": "is testing resistance (1.4% away)",
+      "headline": "is testing resistance (0.1% away)",
       "why_it_matters": "Price is approaching a level that has previously capped upside.",
       "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
       "suggested_action": "Watch for a breakout with volume before chasing.",
       "confidence": 55,
       "time_sensitivity": "next 1-2 sessions",
       "supporting_data": {
-        "dist_to_resistance_pct": 1.41,
-        "R1": 225.51
+        "dist_to_resistance_pct": 0.12,
+        "R1": 28.18
       },
-      "created_at": "2026-08-07T09:02:47"
+      "created_at": "2026-08-10T09:03:24"
     },
     {
-      "dedup_key": "ASML:resistance_touch",
+      "dedup_key": "AAPL:resistance_touch",
       "category": "watchlist",
-      "ticker": "ASML",
+      "ticker": "AAPL",
       "priority": "MEDIUM",
-      "headline": "is testing resistance (1.3% away)",
+      "headline": "is testing resistance (0.5% away)",
       "why_it_matters": "Price is approaching a level that has previously capped upside.",
       "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
       "suggested_action": "Watch for a breakout with volume before chasing.",
       "confidence": 55,
       "time_sensitivity": "next 1-2 sessions",
       "supporting_data": {
-        "dist_to_resistance_pct": 1.33,
-        "R1": 1758.05
+        "dist_to_resistance_pct": 0.54,
+        "R1": 308.01
       },
-      "created_at": "2026-08-07T09:02:47"
+      "created_at": "2026-08-11T09:03:13"
     },
     {
       "dedup_key": "TXN:resistance_touch",
@@ -636,49 +610,15 @@
       "confidence": 55,
       "time_sensitivity": "next 1-2 sessions",
       "supporting_data": {
-        "dist_to_resistance_pct": 0.41,
-        "R1": 284.29
+        "dist_to_resistance_pct": 0.39,
+        "R1": 284.86
       },
-      "created_at": "2026-08-07T09:02:48"
+      "created_at": "2026-08-11T09:03:14"
     },
     {
-      "dedup_key": "MU:resistance_touch",
+      "dedup_key": "WDC:resistance_touch",
       "category": "watchlist",
-      "ticker": "MU",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.3% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.32,
-        "R1": 868.15
-      },
-      "created_at": "2026-08-07T09:02:48"
-    },
-    {
-      "dedup_key": "MDB:resistance_touch",
-      "category": "watchlist",
-      "ticker": "MDB",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (1.0% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 1.02,
-        "R1": 394.86
-      },
-      "created_at": "2026-08-07T09:02:51"
-    },
-    {
-      "dedup_key": "OKTA:resistance_touch",
-      "category": "watchlist",
-      "ticker": "OKTA",
+      "ticker": "WDC",
       "priority": "MEDIUM",
       "headline": "is testing resistance (0.8% away)",
       "why_it_matters": "Price is approaching a level that has previously capped upside.",
@@ -687,15 +627,100 @@
       "confidence": 55,
       "time_sensitivity": "next 1-2 sessions",
       "supporting_data": {
-        "dist_to_resistance_pct": 0.78,
-        "R1": 149.35
+        "dist_to_resistance_pct": 0.79,
+        "R1": 440.33
       },
-      "created_at": "2026-08-07T09:02:52"
+      "created_at": "2026-08-11T09:03:15"
     },
     {
-      "dedup_key": "AMZN:resistance_touch",
+      "dedup_key": "SMCI:resistance_touch",
       "category": "watchlist",
-      "ticker": "AMZN",
+      "ticker": "SMCI",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (1.2% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 1.19,
+        "R1": 32.39
+      },
+      "created_at": "2026-08-11T09:03:15"
+    },
+    {
+      "dedup_key": "OKTA:resistance_touch",
+      "category": "watchlist",
+      "ticker": "OKTA",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.2% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.25,
+        "R1": 150.65
+      },
+      "created_at": "2026-08-11T09:03:19"
+    },
+    {
+      "dedup_key": "INOD:resistance_touch",
+      "category": "watchlist",
+      "ticker": "INOD",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.7% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.66,
+        "R1": 63.72
+      },
+      "created_at": "2026-08-11T09:03:20"
+    },
+    {
+      "dedup_key": "NEE:resistance_touch",
+      "category": "watchlist",
+      "ticker": "NEE",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (1.0% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 1.03,
+        "R1": 86.31
+      },
+      "created_at": "2026-08-11T09:03:21"
+    },
+    {
+      "dedup_key": "KTOS:resistance_touch",
+      "category": "watchlist",
+      "ticker": "KTOS",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.0% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.02,
+        "R1": 62.25
+      },
+      "created_at": "2026-08-11T09:03:22"
+    },
+    {
+      "dedup_key": "RKLB:resistance_touch",
+      "category": "watchlist",
+      "ticker": "RKLB",
       "priority": "MEDIUM",
       "headline": "is testing resistance (0.9% away)",
       "why_it_matters": "Price is approaching a level that has previously capped upside.",
@@ -705,43 +730,26 @@
       "time_sensitivity": "next 1-2 sessions",
       "supporting_data": {
         "dist_to_resistance_pct": 0.94,
-        "R1": 279.51
+        "R1": 78.15
       },
-      "created_at": "2026-08-07T09:02:53"
+      "created_at": "2026-08-11T09:03:23"
     },
     {
-      "dedup_key": "GD:resistance_touch",
+      "dedup_key": "USAR:resistance_touch",
       "category": "watchlist",
-      "ticker": "GD",
+      "ticker": "USAR",
       "priority": "MEDIUM",
-      "headline": "is testing resistance (0.1% away)",
+      "headline": "is testing resistance (0.3% away)",
       "why_it_matters": "Price is approaching a level that has previously capped upside.",
       "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
       "suggested_action": "Watch for a breakout with volume before chasing.",
       "confidence": 55,
       "time_sensitivity": "next 1-2 sessions",
       "supporting_data": {
-        "dist_to_resistance_pct": 0.07,
-        "R1": 385.88
+        "dist_to_resistance_pct": 0.28,
+        "R1": 18.88
       },
-      "created_at": "2026-08-07T09:02:58"
-    },
-    {
-      "dedup_key": "HIMS:resistance_touch",
-      "category": "watchlist",
-      "ticker": "HIMS",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.5% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.52,
-        "R1": 30.32
-      },
-      "created_at": "2026-08-07T09:03:00"
+      "created_at": "2026-08-11T09:03:25"
     }
   ]
 }
