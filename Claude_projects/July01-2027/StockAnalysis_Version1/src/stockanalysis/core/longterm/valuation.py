@@ -370,7 +370,10 @@ def _reverse_dcf(row: dict, risk_free: float) -> dict | None:
     gap = implied_pct - delivered
     tolerance = max(TOLERANCE_FLOOR_PP, abs(delivered) * TOLERANCE_FRACTION)
 
-    if implied_pct >= IMPLAUSIBLE_IMPLIED_GROWTH:
+    # Two independent routes to OVERVALUED, and which one fired changes
+    # what the verdict sentence may truthfully claim.
+    implausible = implied_pct >= IMPLAUSIBLE_IMPLIED_GROWTH
+    if implausible:
         band = "OVERVALUED"
     elif gap > tolerance:
         band = "OVERVALUED"
@@ -379,11 +382,21 @@ def _reverse_dcf(row: dict, risk_free: float) -> dict | None:
     else:
         band = "FAIR"
 
-    verdict = ("demands more growth than the company has delivered"
-               if band == "OVERVALUED" else
-               "demands less growth than the company has delivered"
-               if band == "UNDERVALUED" else
-               "demands roughly what the company has delivered")
+    # The sentence has to name the rule that actually decided the band.
+    # When the implausible-growth ceiling is what forced OVERVALUED and
+    # the gap was inside tolerance, "demands more growth than delivered"
+    # is simply false — IDXX reached here with a gap of -1.8, meaning the
+    # price demanded LESS than delivered, under a sentence saying more.
+    if implausible and gap <= tolerance:
+        verdict = (f"requires growth above the "
+                   f"{IMPLAUSIBLE_IMPLIED_GROWTH:.0f}% ceiling any forecast "
+                   f"should carry, whatever the company currently delivers")
+    elif band == "OVERVALUED":
+        verdict = "demands more growth than the company has delivered"
+    elif band == "UNDERVALUED":
+        verdict = "demands less growth than the company has delivered"
+    else:
+        verdict = "demands roughly what the company has delivered"
 
     assumptions = [
         f"At ${price:,.2f} the price requires {implied_pct:.0f}% free-cash-flow "
@@ -415,8 +428,19 @@ def _reverse_dcf(row: dict, risk_free: float) -> dict | None:
         "delivered_growth_pct": round(delivered_raw, 1),
         "growth_gap_pp": round(gap, 1),
         "tolerance_pp": round(tolerance, 1),
+        # The delivered figure printed here MUST be the one the gap was
+        # computed against. Printing the raw rate beside a verdict derived
+        # from the capped one produced a headline that contradicted
+        # itself on ten names — "requires 55%; delivers +194% — demands
+        # more growth than the company has delivered" (NVDA).
         "headline": (f"Price requires {implied_pct:.0f}% growth a year; the "
-                     f"company delivers {delivered_raw:+.0f}% — {verdict}"),
+                     f"company delivers {delivered_raw:+.0f}%"
+                     + (f" (credited at {delivered:.0f}%, the sustainable "
+                        f"ceiling)" if capped else "")
+                     + f" — {verdict}"),
+        "delivered_credited_pct": round(delivered, 1),
+        "delivered_capped": capped,
+        "implausible_growth": implausible,
         "assumptions": assumptions,
         # No fair value: this method deliberately does not produce one.
         "fair_value": None, "fair_low": None, "fair_high": None,
