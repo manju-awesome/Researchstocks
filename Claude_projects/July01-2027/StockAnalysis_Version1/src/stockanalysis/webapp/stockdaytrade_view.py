@@ -623,13 +623,18 @@ def _detail(row: dict) -> str:
 _COLS = (
     ("#", "right", "rank in the current sort"),
     ("Ticker", "left", "ticker and last price"),
+    # Third, and frozen with the ticker. It was originally ninth, which put
+    # it off-screen at rest — so the one fact that explains why a stop sits
+    # above an entry was invisible exactly while you were reading the stop
+    # and the entry.
+    ("Dir", "left", "long or short — on a short the stop is ABOVE the entry "
+                    "and the targets below it"),
     ("Catalyst", "left", "why it is moving (§2)"),
     ("Float", "right", "shares in the float (§4)"),
     ("Gap %", "right", "open vs previous close (§3)"),
     ("RVOL", "right", "volume vs the same clock time on prior sessions (§3)"),
     ("ATR %", "right", "daily ATR as a share of price (§3)"),
     ("$Vol", "right", "dollar volume traded this session"),
-    ("Dir", "left", "long or short — on a short the stop is ABOVE the entry"),
     ("Pattern", "left", "primary intraday structure (§6)"),
     ("RS", "right", "relative strength vs SPY (§7)"),
     ("VWAP", "right", "distance from VWAP in 5-min ATRs (§4)"),
@@ -674,15 +679,14 @@ def _sort_key(value) -> str:
     return str(value).strip().lower()
 
 
-# The rank and ticker columns freeze to the left. With 22 columns on a
+# Rank, ticker and direction freeze to the left. With 23 columns on a
 # 1620px table, scrolling right to read R:R or Chase otherwise leaves you
-# looking at a row of numbers with no idea which stock they belong to —
-# and on this page a misattributed stop price is not a cosmetic problem.
-# Widths are fixed so the second column's offset is exact; `#` never
-# exceeds two digits and the ticker column is sized for its longest symbol
-# plus the price line underneath.
-_RANK_W, _TICKER_W = 40, 92
-_FROZEN = {0: 0, 1: _RANK_W}
+# looking at a row of numbers with no idea which stock they belong to or
+# which way the trade goes — and on this page a misattributed stop price
+# is not a cosmetic problem. Widths are fixed so each offset is exact.
+_COL_W = {0: 40, 1: 92, 2: 68}
+_FROZEN = {i: sum(_COL_W[j] for j in range(i)) for i in _COL_W}
+_FREEZE_EDGE = max(_FROZEN)      # the column that carries the divider
 
 
 def _td(html: str, align: str, sort_value, extra_style: str = "",
@@ -694,10 +698,9 @@ def _td(html: str, align: str, sort_value, extra_style: str = "",
         # is transparent by default and the scrolled columns slide visibly
         # underneath it.
         base += (f';position:sticky;left:{_FROZEN[col]}px;z-index:2;'
-                 f'background:white;'
-                 f'width:{_RANK_W if col == 0 else _TICKER_W}px;'
-                 f'min-width:{_RANK_W if col == 0 else _TICKER_W}px')
-        if col == 1:
+                 f'background:white;width:{_COL_W[col]}px;'
+                 f'min-width:{_COL_W[col]}px')
+        if col == _FREEZE_EDGE:
             base += ";box-shadow:1px 0 0 #e1e0d9"
     return f'<td style="{base}" data-sort="{esc(_sort_key(sort_value))}">{html}</td>'
 
@@ -714,9 +717,8 @@ def _th(idx: int, label: str, align: str, tip: str) -> str:
              f'cursor:pointer;user-select:none;z-index:3')
     if idx in _FROZEN:
         style += (f';left:{_FROZEN[idx]}px;z-index:4;'
-                  f'width:{_RANK_W if idx == 0 else _TICKER_W}px;'
-                  f'min-width:{_RANK_W if idx == 0 else _TICKER_W}px')
-        if idx == 1:
+                  f'width:{_COL_W[idx]}px;min-width:{_COL_W[idx]}px')
+        if idx == _FREEZE_EDGE:
             style += ";box-shadow:1px 0 0 #e1e0d9"
     return (f'<th data-col="{idx}" onclick="sdtSort({idx})" '
             f'title="{esc(tip)} — click to sort" style="{style}">{esc(label)}'
@@ -746,6 +748,8 @@ def _table(rows: list[dict]) -> str:
                 f'{esc(r["ticker"])}</a>'
                 f'<div style="font-size:10px;color:#898781">{_n(price)}</div>',
                 "left", r.get("ticker"), col=1),
+            _td(_direction_badge(r.get("direction")), "left",
+                r.get("direction") or "", col=2),
             _td(esc((r.get("catalyst") or {}).get("type") or DASH), "left",
                 (r.get("catalyst") or {}).get("type"), ";color:#444441"),
             _td(_shares(sup.get("float_shares")), "right", sup.get("float_shares")),
@@ -753,8 +757,6 @@ def _table(rows: list[dict]) -> str:
             _td(_n(vol.get("rvol")), "right", vol.get("rvol")),
             _td(_n(vol.get("atr_pct"), ".1f", "%"), "right", vol.get("atr_pct")),
             _td(_money(vol.get("dollar_volume")), "right", vol.get("dollar_volume")),
-            _td(_direction_badge(r.get("direction")), "left",
-                r.get("direction") or ""),
             _td(esc((r.get("patterns") or {}).get("primary") or DASH), "left",
                 (r.get("patterns") or {}).get("primary"), ";color:#444441"),
             _td(_n((r.get("strength") or {}).get("vs_spy"), "+.1f", "pp"), "right",

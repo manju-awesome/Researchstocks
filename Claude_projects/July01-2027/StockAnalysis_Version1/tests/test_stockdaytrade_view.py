@@ -284,27 +284,44 @@ class RenderTests(unittest.TestCase):
         body = self._render(_snapshot([_row(room=room)]))
         self.assertIn(f'data-sort="{float(V._OPEN_AIR_SORT)!r}"', body)
 
-    def test_rank_and_ticker_columns_are_frozen_left(self):
-        """22 columns on a 1620px table: scrolling right to read R:R or
+    def test_rank_ticker_and_direction_are_frozen_left(self):
+        """23 columns on a 1620px table: scrolling right to read R:R or
         Chase otherwise leaves a row of numbers with no idea which stock
-        they belong to, and a misattributed stop price is not cosmetic."""
+        they belong to or which way the trade goes, and a misattributed
+        stop price is not cosmetic."""
         body = self._render(_snapshot([_row()]))
-        self.assertEqual(sorted(V._FROZEN), [0, 1])
-        self.assertIn(f"position:sticky;left:0px", body)
-        self.assertIn(f"position:sticky;left:{V._RANK_W}px", body)
+        self.assertEqual(sorted(V._FROZEN), [0, 1, 2])
+        self.assertEqual([c[0] for c in V._COLS][:3], ["#", "Ticker", "Dir"])
+        for offset in V._FROZEN.values():
+            self.assertIn(f"position:sticky;left:{offset}px", body)
+        # Offsets must be the running sum of the widths, or the columns
+        # overlap when scrolled.
+        self.assertEqual(V._FROZEN[1], V._COL_W[0])
+        self.assertEqual(V._FROZEN[2], V._COL_W[0] + V._COL_W[1])
 
     def test_frozen_cells_are_opaque_and_layered_above_scrolled_ones(self):
         """A sticky cell is transparent by default — the scrolled columns
         slide visibly underneath it without an explicit background."""
         body = self._render(_snapshot([_row()]))
         frozen = [seg for seg in body.split("<td")[1:] if "position:sticky" in seg]
-        self.assertEqual(len(frozen), 2)
+        self.assertEqual(len(frozen), len(V._FROZEN))
         for seg in frozen:
             self.assertIn("background:white", seg)
             self.assertIn("z-index:2", seg)
-        # The two corner headers are sticky in both axes, so they must
-        # outrank both the plain headers and the frozen body cells.
-        self.assertEqual(body.count("z-index:4"), 2)
+        # The corner headers are sticky in both axes, so they must outrank
+        # both the plain headers and the frozen body cells.
+        self.assertEqual(body.count("z-index:4"), len(V._FROZEN))
+        # Exactly one divider, on the last frozen column.
+        self.assertEqual(body.count("box-shadow:1px 0 0 #e1e0d9"), 2)
+
+    def test_direction_is_shown_as_a_column(self):
+        """A correct short reads as a bug — "why is STOP greater than
+        entry" — unless the page says which way the trade goes."""
+        long_body = self._render(_snapshot([_row(direction="long")]))
+        self.assertIn("▲ LONG", long_body)
+        short_body = self._render(_snapshot([_row(direction="short")]))
+        self.assertIn("▼ SHORT", short_body)
+        self.assertIn("stop sits above entry", short_body)
 
     def test_column_label_renamed_from_stock_to_cscore(self):
         """"Stock" said nothing about what the number was."""
