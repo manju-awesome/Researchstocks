@@ -330,12 +330,68 @@ def _no_edge_block(rows):
                    "gate; that alone never routes a name to NO EDGE"))
 
 
+def _controls(typed: str) -> str:
+    """The manual ticker box.
+
+    A full scan is the default because the useful output is the list you
+    did not already know to look at. But when you DO have a name in mind,
+    scanning 552 to read one is noise, so a typed list narrows it — and
+    when one is given the page shows every requested ticker regardless of
+    bucket, including NO EDGE. You asked about that name specifically;
+    "it did not make the cut" is the answer, not a reason to hide it.
+    """
+    return (
+        f'<form method="get" style="display:flex;gap:8px;align-items:center;'
+        f'flex-wrap:wrap;margin-top:10px">'
+        f'<input name="tickers" value="{esc(typed)}" '
+        f'placeholder="MDB, CRL, NVDA — blank scans the whole library" '
+        f'style="flex:1;min-width:260px;padding:7px 10px;border:1px solid '
+        f'#d9d7ce;border-radius:7px;font-size:13px">'
+        f'<button type="submit" class="btn">Scan these</button>'
+        + (f'<a href="/shortside" class="btn secondary" '
+           f'style="text-decoration:none;padding:7px 14px">Full library</a>'
+           if typed else "")
+        + '</form>')
+
+
+def _missing_block(missing):
+    """Requested tickers with no row in the research library.
+
+    Reported rather than silently dropped: a typed ticker that vanishes
+    reads as "no signal", when the truth is that nothing was measured.
+    """
+    if not missing:
+        return ""
+    return (f'<div style="margin-top:8px">'
+            f'{badge(str(len(missing)) + " not in the research library", "watch")}'
+            f'<div style="font-size:11px;color:#898781;margin-top:4px">'
+            f'{esc(", ".join(missing))} — run Scanner or "+ Refresh Research" '
+            f'on these first; the engine reads the library and does not '
+            f'fetch fundamentals itself.</div></div>')
+
+
 def shortside_page(query: dict | None = None) -> tuple[str, str]:
     from stockanalysis.webapp import api
+    from stockanalysis.webapp.longterm_view import parse_tickers
+
+    typed = ((query or {}).get("tickers") or [""])[0]
+    wanted = parse_tickers(typed)
 
     data = api.longterm()
     raw = {r.get("Ticker"): r for r in api._longterm_universe()}
-    rows = SE.evaluate_universe(data["rows"], raw, limit=40)
+
+    results = data["rows"]
+    missing = []
+    if wanted:
+        have = {r.get("ticker") for r in results}
+        missing = [t for t in wanted if t not in have]
+        keep = set(wanted)
+        results = [r for r in results if r.get("ticker") in keep]
+
+    # With a short typed list every name is worth confirming; on a full
+    # library run the cap keeps the scan to a couple of dozen calls.
+    limit = max(40, len(wanted)) if wanted else 40
+    rows = SE.evaluate_universe(results, raw, limit=limit)
     counts = SE.counts(rows)
 
     by = {b: [r for r in rows if r["bucket"] == b] for b in SE.BUCKETS}
@@ -344,12 +400,13 @@ def shortside_page(query: dict | None = None) -> tuple[str, str]:
         f'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;'
         f'margin-bottom:8px">'
         f'{badge("regime " + str(data.get("regime") or "?"), "info")}'
-        f'{badge(str(len(rows)) + " names scored both ways", "muted")}'
+        f'{badge(str(len(rows)) + (" name" if len(rows) == 1 else " names") + " scored both ways", "muted")}'
         f'{badge(str(counts.get("SHORT NOW", 0)) + " short now", "bad")}'
         f'{badge(str(counts.get("SHORT WATCH", 0)) + " short watch", "watch")}'
         f'{badge(str(counts.get("LONG OPPORTUNITY", 0)) + " long", "good")}'
         f'{badge(str(counts.get("NO EDGE", 0)) + " no edge", "muted")}'
-        f'</div>')
+        + (badge("manual list", "info") if wanted else "")
+        + '</div>')
 
     thesis = (
         '<div style="font-size:11px;color:#898781;line-height:1.6">'
@@ -375,14 +432,27 @@ def shortside_page(query: dict | None = None) -> tuple[str, str]:
             ("SHORT WATCH", "👀", "thesis complete, waiting for price to agree"),
             ("LONG OPPORTUNITY", "🟢", "the Long-Term engine's own verdict")):
         items = by.get(bucket) or []
+        if wanted and not items:
+            continue                    # a typed list should not show empties
         sections.append(card(f"{icon} {bucket} ({len(items)})",
                              _table(items, n) + _sub(note)))
         n += len(items)
 
-    body = (card("Long / Short Decision Engine", header + thesis, icon="⚖️")
-            + "".join(sections)
-            + card(f"⚪ NO EDGE ({len(by.get('NO EDGE') or [])})",
-                   _no_edge_block(by.get("NO EDGE") or [])))
+    no_edge = by.get("NO EDGE") or []
+    if wanted and no_edge:
+        # Typed names get the full table even here — see _controls().
+        sections.append(card(f"⚪ NO EDGE ({len(no_edge)})",
+                             _table(no_edge, n)
+                             + _sub("scored in full because you asked for "
+                                    "these by name")))
+    elif no_edge:
+        sections.append(card(f"⚪ NO EDGE ({len(no_edge)})",
+                             _no_edge_block(no_edge)))
+
+    body = (card("Long / Short Decision Engine",
+                 header + thesis + _controls(typed) + _missing_block(missing),
+                 icon="⚖️")
+            + "".join(sections))
 
     js = """
 function ssToggle(i){

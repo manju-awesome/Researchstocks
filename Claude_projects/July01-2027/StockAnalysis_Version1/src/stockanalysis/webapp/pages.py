@@ -974,13 +974,14 @@ def csp_page() -> tuple[str, str]:
     return csp_view.csp_page()
 
 
-def shortside_page() -> tuple[str, str]:
+def shortside_page(query: dict | None = None) -> tuple[str, str]:
     """The two-sided decision engine — see webapp/shortside_view.py.
 
-    Scores every name long AND short. Distinct from /longterm, whose
+    Takes the query string because its manual ticker list lives in the
+    URL. Scores every name long AND short; distinct from /longterm, whose
     quality rejections it treats as evidence rather than as a verdict."""
     from stockanalysis.webapp import shortside_view
-    return shortside_view.shortside_page()
+    return shortside_view.shortside_page(query)
 
 
 def stockdaytrade_page() -> tuple[str, str]:
