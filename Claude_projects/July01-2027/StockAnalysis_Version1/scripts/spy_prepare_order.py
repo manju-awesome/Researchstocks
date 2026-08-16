@@ -50,7 +50,7 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-from spydaytrader.core import position_sizing, trade_proposals, trading_journal  # noqa: E402
+from Daytrades.core import position_sizing, trade_proposals, trading_journal  # noqa: E402
 
 
 def _cfg() -> dict:

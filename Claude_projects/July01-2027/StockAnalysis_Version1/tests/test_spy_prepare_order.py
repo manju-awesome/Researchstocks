@@ -20,7 +20,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from spydaytrader.core import trade_proposals, trading_journal  # noqa: E402
+from Daytrades.core import trade_proposals, trading_journal  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location(
     "spy_prepare_order", PROJECT_ROOT / "scripts" / "spy_prepare_order.py")

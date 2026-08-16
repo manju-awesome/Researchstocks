@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "farmfinder",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["src/findfarms/webapp/app.py"],
+      "port": 8877
+    }
+  ]
+}

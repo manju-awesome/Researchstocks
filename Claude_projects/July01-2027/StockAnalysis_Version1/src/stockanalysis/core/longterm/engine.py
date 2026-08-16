@@ -47,6 +47,7 @@ The market regime does not score. It changes how selective the gates are:
 
 from __future__ import annotations
 
+from stockanalysis.core.longterm import buy_zones as BZ
 from stockanalysis.core.longterm import quality as Q
 from stockanalysis.core.longterm import technicals as T
 from stockanalysis.core.longterm import valuation as V
@@ -625,7 +626,10 @@ def evaluate(row: dict, peers: dict | None = None,
                          confluence, volume, rs, lt, market_note, entries,
                          blockers, triggers, price, regime_up, readiness,
                          insider, investment, entry, components, cluster,
-                         why_extra, technical, targets)
+                         # risk_free rides along because the buy zones re-read
+                         # the reverse DCF at each band's price, and it has to
+                         # be the same discount rate the verdict used.
+                         why_extra, technical, targets, risk_free)
 
     # ── GATE 1 — business quality. Nothing below matters if this fails. ──
     if lq["score"] is None or not lq["reliable"]:
@@ -877,7 +881,8 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
               volume, rs, lt, market_note, entries, blockers, triggers, price,
               regime, readiness=None, insider=None, investment=None,
               entry=None, components=None, cluster=None,
-              why_extra=None, technical=None, targets=None) -> dict:
+              why_extra=None, technical=None, targets=None,
+              risk_free=V.DEFAULT_RISK_FREE) -> dict:
     """The verdict with its whole audit attached — never a score without the
     reasoning that produced it."""
     zone = pullback["zone"]
@@ -951,6 +956,11 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
         "tranche_pct": tranche,
         "earnings_risk": earnings_risk(row.get("Days_To_Earnings")),
         "entries": entries,
+        # Valuation and support computed separately and intersected — a buy
+        # zone exists only where both agree, which is usually nowhere. See
+        # buy_zones.py for why this is not built from the support levels.
+        "buy_zones": BZ.compute(row, pullback, val, lq, trend, volume, price,
+                                risk_free=risk_free),
         "why": why,
         "blockers": blockers,
         "triggers": triggers,

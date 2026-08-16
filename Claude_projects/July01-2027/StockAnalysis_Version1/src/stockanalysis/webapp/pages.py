@@ -985,6 +985,17 @@ def shortside_page(query: dict | None = None) -> tuple[str, str]:
     return shortside_view.shortside_page(query)
 
 
+def compounder_page(query: dict | None = None) -> tuple[str, str]:
+    """The Future Compounder engine — see webapp/compounder_view.py.
+
+    Renders a stored scan rather than scanning live: a run is six network
+    calls per company across the whole theme library. Takes the query string
+    because its ticker filter lives in the URL, the same way /shortside
+    does."""
+    from stockanalysis.webapp import compounder_view
+    return compounder_view.compounder_page(query)
+
+
 def stockdaytrade_page() -> tuple[str, str]:
     """The stock day-trade scanner — see webapp/stockdaytrade_view.py.
 

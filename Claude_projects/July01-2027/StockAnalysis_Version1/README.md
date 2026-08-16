@@ -20,7 +20,11 @@ pip install -r requirements.txt
 cp .env.example .env          # fill in RESEND_API_KEY etc. (see Configuration)
 
 # Web app (http://localhost:8899)
+# First run prints a generated username/password once — save it.
 python src/stockanalysis/webapp/app.py
+
+# Change that password (or add a user) any time
+python src/stockanalysis/webapp/app.py --set-password
 
 # One-off scan from the command line
 python -m stockanalysis.scanners.scan_universe
@@ -44,8 +48,17 @@ this themselves when run directly).
 
 `webapp/app.py` serves nine pages (stdlib `http.server`, background jobs as
 daemon threads via `jobstore.py`, page HTML in `pages.py`/`views.py`, job and
-JSON-endpoint logic in `api.py`). Binds `127.0.0.1` only — no auth, don't
-expose it beyond localhost.
+JSON-endpoint logic in `api.py`). Binds `127.0.0.1` only — don't expose it
+beyond localhost.
+
+Every page, API endpoint and generated file under `data/output/` sits behind a
+login (`auth.py`): PBKDF2-SHA256 password hashes in `data/users.json`,
+in-memory sessions in an HttpOnly `SameSite=Lax` cookie, 12-hour idle timeout,
+and a 5-minute lockout after five failed attempts. The first start creates an
+account and prints the generated password once — it is not recoverable
+afterwards, so use `--set-password` to reset. `--no-auth` serves without the
+gate. The cookie omits `Secure` because this is plain HTTP on loopback; turn
+it on in `auth.cookie_header()` before putting the app behind TLS.
 
 ### 🏠 Dashboard (`/`)
 Home page: latest generated HTML report per universe, market-pulse snapshot
@@ -297,6 +310,128 @@ it is preparation, not a live scan. `--at-time HH:MM` replays a session as
 of a wall-clock time with nothing later visible, which is the only way to
 see the engine's real behaviour when the market is shut: read at the close,
 every candidate has already made its move and correctly scores a poor R:R.
+
+---
+
+## Future Compounders — `core/compounder/` · page `/compounder`
+
+Finds companies that could become 5–10 year market leaders **before** their
+growth is fully recognised. Twelve steps ending in one `FUTURE COMPOUNDER
+SCORE` and a 20-name 10-Year Watchlist.
+
+```bash
+python -m stockanalysis.core.compounder.scan                 # full library
+python -m stockanalysis.core.compounder.scan --tickers ALAB RKLB   # merges
+python -m stockanalysis.core.compounder.scan --theme nuclear
+python -m stockanalysis.core.compounder.scan --list-themes
+```
+
+**This is the one engine that weights instead of gating, and the exception
+is deliberate.** Everywhere else in this project a gate encodes a condition
+that cannot be traded away — no chart pattern compensates for a
+deteriorating business. That is right for a buy decision and wrong here,
+because every candidate in this population fails something today. Gate on
+negative FCF, no profit, thin coverage or small size and the survivors are
+large-cap quality names, which is `/longterm`'s job. So the brief's
+instruction — "instead classify the risk" — is taken literally: every
+condition a conventional screen would reject on appears as a labelled risk
+flag on the row, and the ranking continues.
+
+**Weights** (§12): secular TAM 20, growth acceleration 15, moat formation
+15, market-share opportunity 10, operating leverage 10, reinvestment 10,
+competitive position 5, management 5, survivability 5, discovery 5.
+
+**There is no valuation term**, deliberately. Paying 14× sales for a company
+that becomes a $50B business works out and 4× for one that doesn't, does
+not. Price and entry belong to `/longterm`, and the page says so.
+
+### TAM is a curated claim, never a generated number
+
+Steps 1–2 need a TAM curve, and no filing contains one. The tempting
+shortcut — have the model estimate a TAM per company at scan time — is the
+one thing `themes.py` exists to prevent: TAM carries 20% of the composite
+and market-share opportunity another 10%, so a fabricated figure would
+drive 30% of the ranking, unfalsifiably and differently on every run.
+
+Instead TAM lives per **theme**, versioned in git with a source basis, an
+`as_of` date and a confidence level. Confidence applies twice — a
+proportional discount (`×0.65` for LOW) and a hard ceiling — so a
+speculative market's arithmetic cannot outrank a measured one. Quantum
+computing scores 60 raw on pure TAM CAGR against semiconductor equipment's
+49; after the discount and the 45 ceiling it lands below it, which is the
+honest ordering.
+
+`THEME_MEMBERS` is also the **universe**: a ticker is in the scan *because*
+a structural trend was identified for it, which is what Step 1 asks and the
+reverse of ranking whatever sits in an index. Market cap ($300M–$20B) is
+classified live, not filtered — a name that compounded past $20B is
+labelled `GRADUATED`, because that is the engine's success case, not an
+error.
+
+### Acceleration, not history
+
+The framework's sharpest instruction is to reward *accelerating* growth
+rather than high historical growth, and the two rank very differently. A
+company compounding 45% for four years and fading to 30% has a great past;
+one that went 12% → 19% → 34% has a worse history and is the one that
+becomes a leader.
+
+Acceleration is always a year-on-year rate against **another year-on-year
+rate**. Comparing a spot rate to a multi-year CAGR — the obvious
+implementation — is broken in a way that is easy to miss: a CAGR off a
+small base is enormous ($20M → $850M in three years compounds at 155%), so
+every early hyper-growth name gets stamped "decelerating", inverting the
+ranking exactly where it matters most. Fade from an unsustainable base is
+reported as `FADING FROM A HIGH BASE` rather than filed with a company
+going 14% → 4%.
+
+### What is measured, and what is not
+
+Measured from filings and prices: growth and its second derivative, margin
+trends, the revenue-vs-opex leverage ratio, R&D and capex *productivity*,
+share-count dilution, cash runway, insider open-market buying, analyst
+coverage drift, institutional ownership, relative strength.
+
+**Not available, and never proxied:** backlog growth, customer counts,
+guidance-versus-actual history, acquisition returns, patent portfolios and
+third-party market-share data. Each is named in the output's `unmeasured`
+list and printed on the card, because a reader who does not know backlog
+was never checked will assume it was.
+
+Intensity metrics are **plateaus, not ladders**. A pre-revenue company
+spending 300% of revenue on R&D scores near zero on intensity, not 100 —
+on a monotonic scale it would top the reinvestment leg despite research
+productivity of 0.33×, which is precisely the "spending growth without
+corresponding revenue growth" the framework says to penalise.
+
+### Stage is not a band on the score
+
+`stage.py` classifies from thresholds on revenue scale, growth, margin state
+and cash generation — never from the composite. If stage were a band it
+would say nothing the score did not. Kept independent, a company can be
+Stage 2 with an excellent score or Stage 4 with a poor one, and those two
+cells are where the interesting names live. Each row carries the *named
+conditions* to advance, with the live value beside the threshold ("revenue
+reaches $250M — now $118M").
+
+Every narrative line on the card is built from a computed field. Free prose
+about a small-cap reads well, sounds confident and cannot be checked, which
+on a ten-year holding list is worse than no prose at all.
+
+### Sorting and filtering the page
+
+Both tables sort on any column (click the header, click again to reverse)
+and filter on six facets — stage, theme, funding class, tier, discovery
+state and cap band — plus free text, a minimum score and a "hide names with
+material risks" toggle. All client-side: the page is a stored snapshot, so
+re-sorting rearranges data the browser already has.
+
+Two behaviours are deliberate. **Facet options are built from the values
+present in the rows shown**, with counts, so a dropdown never offers a
+choice that returns an empty table. And **a value that was never measured
+sorts to the bottom in both directions** rather than as zero — the same rule
+the scoring engine follows, and the reason an unreported gross margin must
+not rank as the worst gross margin.
 
 ---
 
@@ -733,6 +868,11 @@ StockAnalysis_Version1/
 │   ├── core/          # pure scoring/classification logic (metrics, grades,
 │   │                  #   conviction, key levels, regime, alerts, earnings,
 │   │                  #   watchlist/news monitors, brief, journal)
+│   │   ├── longterm/   # the four-gate long-term buy engine
+│   │   ├── shortside/  # both directions scored on one page
+│   │   ├── csp/        # cash-secured puts over the longterm verdict
+│   │   ├── daytrade/   # gates-not-weights intraday equity scanner
+│   │   └── compounder/ # 10-year emerging-leader engine + theme/TAM library
 │   ├── scanners/      # data fetching + orchestration (scan_universe,
 │   │                  #   market_movers, ai_pulse)
 │   ├── backtest/      # walk-forward backtesting (data, engine, resolve, report)

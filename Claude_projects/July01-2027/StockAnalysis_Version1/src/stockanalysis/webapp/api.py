@@ -1637,21 +1637,33 @@ LONGTERM_REGIME_MAP = {"Bullish": "FAVORABLE", "Neutral": "SELECTIVE",
                        "Defensive": "DEFENSIVE"}
 
 
+def _longterm_entries() -> list[dict]:
+    """Research-index entries for the library, snapshot-merged.
+
+    Split out from _longterm_universe() because two callers need two shapes:
+    the engine wants the raw scan row, while core.market_position ranks over
+    the index entry (it reads `sector`, `market_cap` and `raw.Industry`).
+    Deriving one from the other at the call site would mean rebuilding half
+    an entry from a row that had it a moment ago.
+    """
+    from stockanalysis.core import research_snapshot
+    from stockanalysis.reporting.research import load_research_index
+    index = load_research_index(OUTPUT_DIR)
+    try:
+        return research_snapshot.merged(
+            index, research_snapshot.load(OUTPUT_DIR))
+    except Exception as e:
+        print(f"[LongTerm] snapshot unavailable, using index alone ({e})")
+        return list(index.values())
+
+
 def _longterm_universe() -> list[dict]:
     """Raw scan rows for every library ticker that has a real quote, with
     core.research_snapshot filling anything the live index is missing —
     the same durability the Screener relies on."""
     from stockanalysis.core import research_snapshot
-    from stockanalysis.reporting.research import load_research_index
-    index = load_research_index(OUTPUT_DIR)
-    try:
-        entries = research_snapshot.merged(
-            index, research_snapshot.load(OUTPUT_DIR))
-    except Exception as e:
-        print(f"[LongTerm] snapshot unavailable, using index alone ({e})")
-        entries = list(index.values())
     rows = []
-    for entry in entries:
+    for entry in _longterm_entries():
         if not research_snapshot.has_quote(entry):
             continue
         raw = dict(entry.get("raw") or {})
@@ -1823,7 +1835,10 @@ def longterm(regime_override: str | None = None,
     """
     from stockanalysis.core.longterm import engine as E
     from stockanalysis.core.longterm import position_sizing as PS
+    from stockanalysis.core.longterm import profile as PR
+    from stockanalysis.core.swing import engine as SW
 
+    entries = _longterm_entries()
     rows = _longterm_universe()
     regime, regime_note = longterm_regime(regime_override)
     risk_free, risk_free_note = longterm_risk_free()
@@ -1831,7 +1846,22 @@ def longterm(regime_override: str | None = None,
     results = E.evaluate_universe(rows, regime=regime, risk_free=risk_free)
 
     settings = risk_settings or load_risk_settings()
-    PS.attach(results, {r.get("Ticker"): r for r in rows}, settings)
+    by_ticker = {r.get("Ticker"): r for r in rows}
+    PS.attach(results, by_ticker, settings)
+    # Same seam as sizing: context the engine's gates never read, attached
+    # after the verdict rather than computed inside it.
+    PR.attach(results, by_ticker, entries)
+
+    # The swing verdict, from a separate engine that reads none of the above.
+    # Attached here rather than inside evaluate() precisely because it is a
+    # different question: the same stock can be a long-term WAIT and a swing
+    # setup, and folding it into the company verdict would make one of the
+    # two answers a qualifier on the other.
+    for result in results:
+        row = by_ticker.get(result.get("ticker"))
+        if row:
+            result["swing"] = SW.evaluate(row, regime=regime,
+                                          settings=settings)
 
     counts = {}
     for r in results:

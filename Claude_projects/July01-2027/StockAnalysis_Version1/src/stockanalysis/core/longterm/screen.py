@@ -37,10 +37,12 @@ is the seam, and it is the only place that knows both shapes.
 from __future__ import annotations
 
 from stockanalysis.core import screener as S
+from stockanalysis.core.longterm import buy_zones as BZ
 from stockanalysis.core.longterm import engine as E
 from stockanalysis.core.longterm import quality as Q
 from stockanalysis.core.longterm import technicals as T
 from stockanalysis.core.longterm import valuation as V
+from stockanalysis.core.swing import engine as SW
 
 NUM, BOOL, ENUM = S.NUM, S.BOOL, S.ENUM
 UP, DOWN = S.UP, S.DOWN
@@ -53,6 +55,26 @@ TREND_VALUES = T.TREND_STATES
 STAGE_VALUES = T.STAGES
 ACTION_VALUES = E.ACTIONS
 INSIDER_VALUES = tuple(name for _floor, name in Q.INSIDER_BANDS)
+
+
+def _band_name(label: str) -> str:
+    """"🟢 Strong cluster" -> "Strong".
+
+    Two things come off the engine's band label. The leading status emoji is
+    right in a table cell and wrong in a filter value — it would have to
+    survive a URL round trip and be typed to match. The trailing noun is
+    already carried by the field name, so keeping it would make the rule pill
+    read "Level cluster is Strong cluster".
+
+    Derived from CLUSTER_BANDS rather than written out, so adding a band adds
+    a filter value with it.
+    """
+    head, _, rest = str(label).partition(" ")
+    name = (rest or head).strip()
+    return name[:-len(" cluster")] if name.endswith(" cluster") else name
+
+
+CLUSTER_VALUES = tuple(_band_name(name) for _floor, name in T.CLUSTER_BANDS)
 
 # `src` is the key flatten() writes. Kept identical to `key` throughout so
 # there is one name per concept — the screener allows them to differ and that
@@ -124,6 +146,28 @@ LONGTERM_FIELDS: tuple[S.Field, ...] = (
     S.Field("headroom_ratio", "Headroom vs downside", "Levels", NUM,
             "headroom_ratio", "x", UP,
             hint="Distance to R1 divided by distance to S1", decimals=2),
+
+    # The cluster reading, which the Support column has shown since it was
+    # built but nothing could filter on. It answers a different question from
+    # `confluence_hits` and is deliberately kept separate rather than folded
+    # in: confluence counts levels HOLDING price up, so it only sees levels
+    # beneath. A cluster counts levels wound around price in either
+    # direction. Meta is the case that forces the distinction — five levels
+    # inside 1.9% with only two below it, a tight coil at a weak support
+    # score, and both readings are true.
+    S.Field("cluster", "Level cluster", "Levels", ENUM, "cluster",
+            values=CLUSTER_VALUES,
+            hint="Levels compressed within 2% of price, above OR below. Not "
+                 "directional — a cluster says a move resolves here, not "
+                 "which way it resolves"),
+    S.Field("cluster_count", "Levels in cluster", "Levels", NUM,
+            "cluster_count", "", UP,
+            hint="How many of the 8 EMA / 21 EMA / 50 MA / 200 MA / S1 / R1 "
+                 "sit within 2% of price", decimals=0),
+    S.Field("cluster_span", "Cluster span", "Levels", NUM, "cluster_span", "%",
+            DOWN, hint="Lowest to highest level in the cluster — the tighter "
+                       "the span, the more coiled. None when nothing clusters",
+            decimals=1),
     S.Field("lt_pct_vs_8ema", "Distance from 8 EMA", "Levels", NUM,
             "lt_pct_vs_8ema", "%", None, decimals=1),
     S.Field("lt_pct_vs_21ema", "Distance from 21 EMA", "Levels", NUM,
@@ -149,6 +193,113 @@ LONGTERM_FIELDS: tuple[S.Field, ...] = (
             hint="Pure price and volume — shares no input with LQuality or "
                  "valuation, which is what makes agreement mean something",
             decimals=0),
+
+    # ── Buy zone ────────────────────────────────────────────────────────────
+    # The whole point of these is the first one. "Which names have a buy zone"
+    # was previously unanswerable without opening 552 reasoning panels, and
+    # the answer is small enough (18 of 552 today) that it is the query worth
+    # having. `buy_zone` is the existence of the zone; `buy_zone_reached` is
+    # whether the price is in it — two different questions, and conflating
+    # them would hide every name that is one pullback away.
+    S.Field("buy_zone", "Has a buy zone", "Buy zone", BOOL, "buy_zone",
+            hint="Valuation, expected return, quality and support all agree "
+                 "at some price. Says nothing about whether price is there"),
+    S.Field("buy_zone_reached", "Price is in the buy zone", "Buy zone", BOOL,
+            "buy_zone_reached",
+            hint="The zone exists AND the stock is trading inside it"),
+    S.Field("buy_verdict", "Buy-zone verdict", "Buy zone", ENUM, "buy_verdict",
+            values=("BUY", "WAIT"),
+            hint="BUY only when the price is in a qualifying zone and no "
+                 "check fails. Distinct from Action, which is the entry "
+                 "engine's own timing verdict"),
+    S.Field("buy_zone_tier", "Buy-zone tier", "Buy zone", ENUM,
+            "buy_zone_tier", values=BZ.TIER_LABELS,
+            hint="Excellent / Preferred / Aggressive — the best tier this "
+                 "name qualifies for"),
+    S.Field("buy_zone_confidence", "Buy-zone confidence", "Buy zone", ENUM,
+            "buy_zone_confidence", values=BZ.CONFIDENCE_LEVELS,
+            hint="Agreement between the cash-flow model, the trend, tested "
+                 "support and volume"),
+    S.Field("buy_zone_low", "Buy zone — low", "Buy zone", NUM, "buy_zone_low",
+            "$", None,
+            hint="Bottom of the zone shown in the table. A qualifying "
+                 "investment zone where one exists, otherwise the nearest "
+                 "technical support band", decimals=2),
+    S.Field("buy_zone_distance", "Buy zone distance", "Buy zone", NUM,
+            "buy_zone_distance", "%", None,
+            hint="How far the zone sits from today's price — negative is "
+                 "below", decimals=1),
+    S.Field("buy_below", "Buy below", "Buy zone", NUM, "buy_below", "$", None,
+            hint="The price at which expected return meets this business's "
+                 "hurdle — the fundamental ceiling, ignoring the chart",
+            decimals=2),
+    S.Field("value_zone", "Valuation zone today", "Buy zone", ENUM,
+            "value_zone", values=BZ.VALUE_ZONES,
+            hint="What today's price would earn, banded against this "
+                 "business's own hurdle"),
+    S.Field("expected_cagr", "Expected return", "Buy zone", NUM,
+            "expected_cagr", "%", UP,
+            hint="Annualised over 5 years from today's price, if the company "
+                 "compounds at the slower of its FCF and revenue growth and "
+                 "the market eventually pays the model's value. A hurdle "
+                 "test, not a forecast", decimals=1),
+    S.Field("return_hurdle", "Return hurdle", "Buy zone", NUM, "return_hurdle",
+            "%", None, hint="The bar this business has to clear — higher for "
+                            "better quality, not lower", decimals=0),
+    S.Field("fair_value_gap", "Price vs model value", "Buy zone", NUM,
+            "fair_value_gap", "%", DOWN,
+            hint="Negative is below what the cash-flow model says it is "
+                 "worth", decimals=0),
+    S.Field("model_value", "Model value", "Buy zone", NUM, "model_value", "$",
+            None, hint="Reverse-DCF value at the projected growth rate",
+            decimals=2),
+
+    # ── Swing ───────────────────────────────────────────────────────────────
+    # A separate engine's answer to a separate question, filterable on its
+    # own. Deliberately NOT gated on LQuality anywhere: a 55-quality name can
+    # have an excellent 3-to-20-day setup, and requiring 85 here would delete
+    # exactly the trades this engine exists to find.
+    S.Field("swing_score", "Swing score", "Swing", NUM, "swing_score", "", UP,
+            hint="Market regime 15 · trend 20 · setup 25 · momentum 15 · "
+                 "volume 15 · trade quality 10. Independent of the company "
+                 "verdict", decimals=0),
+    S.Field("swing_grade", "Swing grade", "Swing", ENUM, "swing_grade",
+            values=tuple(g for _floor, g in SW.GRADES)),
+    S.Field("swing_setup", "Swing setup", "Swing", ENUM, "swing_setup",
+            values=tuple(label for label, _base in SW.SETUPS.values()),
+            hint="Which pattern is occurring — not merely 'near support'"),
+    S.Field("swing_state", "Swing state", "Swing", ENUM, "swing_state",
+            values=("READY", "NEAR READY", "TRIGGERED", "APPROACHING",
+                    "DEVELOPING", "WATCH", "NO SETUP", "NO TRADE", "EXTENDED",
+                    "MISSED", "BREAKDOWN", "FAILED", "AVOID"),
+            hint="More actionable than the score. WATCH is a good chart with "
+                 "no pattern — not the same as NO SETUP or BREAKDOWN"),
+    S.Field("swing_eligible", "Swing gates pass", "Swing", BOOL,
+            "swing_eligible",
+            hint="Every blocking gate passed — market, trend, setup, path, "
+                 "stop, no-chase. Independent of the score"),
+    S.Field("swing_action", "Swing action", "Swing", ENUM, "swing_action",
+            values=("enter", "wait for the trigger", "wait", "watchlist",
+                    "wait for a setup", "no trade", "do not chase",
+                    "avoid long", "wait for the trend", "remove from the list",
+                    "ignore")),
+    S.Field("swing_stop_pct", "Swing stop distance", "Swing", NUM,
+            "swing_stop_pct", "%", DOWN,
+            hint="A 29% stop is a different trade from a 4% one even when "
+                 "position sizing holds account risk constant", decimals=1),
+    S.Field("swing_first_r", "R to first resistance", "Swing", NUM,
+            "swing_first_r", "R", UP,
+            hint="The level the trade actually has to clear — not R to a "
+                 "distant 52-week high", decimals=2),
+    S.Field("swing_path", "Swing path quality", "Swing", ENUM, "swing_path",
+            values=("Good", "Fair", "Poor"),
+            hint="Room to the FIRST resistance from the entry, not to a "
+                 "distant 52-week high"),
+    S.Field("swing_volume", "Swing volume", "Swing", ENUM, "swing_volume",
+            values=("reversal", "breakout", "quiet_pullback", "neutral",
+                    "distribution", "selling", "unclear", "unknown"),
+            hint="Classified by what the volume happened ON — 1.6x on a down "
+                 "day is supply, not conviction"),
 
     # ── Verdict ─────────────────────────────────────────────────────────────
     S.Field("action", "Action", "Verdict", ENUM, "action",
@@ -213,8 +364,11 @@ LONGTERM_FIELD_BY_KEY = {f.key: f for f in LONGTERM_FIELDS}
 # NOT touch S.FIELDS — see the module docstring.
 S.FIELD_BY_KEY.update(LONGTERM_FIELD_BY_KEY)
 
-FIELD_GROUPS = ("Quality", "Valuation", "Trend", "Levels", "Entry", "Position",
-                "Verdict", "Context")
+# "Buy zone" sits straight after Valuation rather than at the end: it is
+# downstream of quality and valuation and upstream of everything technical,
+# which is the order the engine now reasons in.
+FIELD_GROUPS = ("Quality", "Valuation", "Buy zone", "Swing", "Trend",
+                "Levels", "Entry", "Position", "Verdict", "Context")
 
 
 def _num(v):
@@ -222,6 +376,25 @@ def _num(v):
         return None if v is None else float(v)
     except (TypeError, ValueError):
         return None
+
+
+def _cluster_value(cluster: dict) -> str | None:
+    """The cluster band as a filterable enum value.
+
+    Reads the label the engine already computed rather than re-deriving the
+    band from the count, so the filter and the Support column can never
+    disagree about where a name sits. Returns None — "no data", which no
+    equality rule matches — when the engine produced no cluster at all,
+    rather than reporting that as "No level nearby", which is a measurement.
+    """
+    if not cluster:
+        return None
+    label = cluster.get("label")
+    if label:
+        return _band_name(label)
+    count = cluster.get("count") or 0
+    return next((_band_name(name) for floor, name in T.CLUSTER_BANDS
+                 if count >= floor), None)
 
 
 def flatten(result: dict) -> dict:
@@ -242,8 +415,24 @@ def flatten(result: dict) -> dict:
     bz = p.get("buy_zone") or {}
     rz = p.get("resistance") or {}
     by = p.get("by_level") or {}
+    # The engine writes the cluster at the top level; technicals also leaves a
+    # copy on `pullback`. Read both so a result from either path filters.
+    cl = result.get("ma_cluster") or p.get("ma_cluster") or {}
     tech = result.get("technical") or {}
     inv = result.get("investment") or {}
+    # Computed inside evaluate(), so always present — but every field below
+    # still guards, because a result assembled by an older cached path or a
+    # test fixture may not carry it.
+    # `bzones`, not `bz` — `bz` a few lines up is pullback["buy_zone"], the
+    # SINGULAR S1 level, and reusing the name here silently blanked
+    # s1_distance and headroom_ratio for every row.
+    swing = result.get("swing") or {}
+    bzones = result.get("buy_zones") or {}
+    fund = bzones.get("fundamental") or {}
+    zones = bzones.get("investment") or []
+    bz_verdict = bzones.get("verdict") or {}
+    best = zones[0] if zones else {}
+
     # Attached by api.longterm() after evaluation, so it is absent whenever
     # the engine is run directly. Every position field then flattens to None
     # rather than raising, which is the same treatment an unscanned column
@@ -297,6 +486,9 @@ def flatten(result: dict) -> dict:
         "r1_distance": r1_dist,
         "r1_tested": rz.get("actual_resistance"),
         "headroom_ratio": headroom,
+        "cluster": _cluster_value(cl),
+        "cluster_count": _num(cl.get("count")) if cl else None,
+        "cluster_span": _num(cl.get("span_pct")),
         "lt_pct_vs_8ema": level_pct("8EMA"),
         "lt_pct_vs_21ema": level_pct("21EMA"),
         "lt_pct_vs_50ma": level_pct("50MA"),
@@ -309,6 +501,37 @@ def flatten(result: dict) -> dict:
         "reversal": _reversal_flag(result),
 
         "technical": _num(tech.get("score")),
+
+        # `bz or None` rather than a bare bool: with no buy-zone data at all,
+        # "has no buy zone" would be a claim the row cannot support, and a
+        # False here would quietly include those names in a `buy_zone:eq:false`
+        # search alongside names actually measured and rejected.
+        "buy_zone": bool(zones) if bzones else None,
+        "buy_zone_reached": (any(z.get("reached") for z in zones)
+                             if bzones else None),
+        "buy_verdict": bz_verdict.get("action"),
+        "buy_zone_tier": best.get("label"),
+        "buy_zone_confidence": (bz_verdict.get("confidence") or {}).get("level"),
+        "buy_below": _num(fund.get("buy_below")),
+        "buy_zone_low": _num((bzones.get("display_zone") or {}).get("low")),
+        "buy_zone_distance": _num(
+            (bzones.get("display_zone") or {}).get("distance_pct")),
+        "value_zone": fund.get("zone"),
+        "expected_cagr": _num(fund.get("expected_cagr_now")),
+        "return_hurdle": _num(fund.get("hurdle_pct")),
+        "fair_value_gap": _num(fund.get("fair_value_gap_pct")),
+        "model_value": _num(fund.get("intrinsic")),
+
+        "swing_score": _num(swing.get("score")),
+        "swing_grade": swing.get("grade"),
+        "swing_setup": swing.get("setup_label"),
+        "swing_state": swing.get("state"),
+        "swing_path": (swing.get("path") or {}).get("quality"),
+        "swing_volume": swing.get("volume_kind"),
+        "swing_eligible": swing.get("eligible") if swing else None,
+        "swing_action": swing.get("action"),
+        "swing_stop_pct": _num(swing.get("stop_pct")),
+        "swing_first_r": _num(swing.get("first_r")),
 
         "action": result.get("action"),
         "gate": result.get("gate"),
@@ -484,6 +707,31 @@ PRESETS: tuple[dict, ...] = (
      "rules": ["lt_sector_rs:gte:80", "lquality:gte:85"]},
 
     # ── When to buy ─────────────────────────────────────────────────────────
+    # The three buy-zone screens first, because they are the only ones that
+    # test valuation, expected return, quality and support together — every
+    # other preset in this group tests the chart and leaves the price to the
+    # reader.
+    {"key": "buy_zone_open", "icon": "🎯", "name": "Buy Zone Open Now",
+     "group": "When to buy",
+     "desc": "The price is inside a zone where the cash-flow model, the "
+             "return hurdle, the quality floor and a support level all agree. "
+             "The shortest list this engine produces, and the only one where "
+             "the answer is act rather than watch.",
+     "rules": ["buy_zone_reached:eq:true"]},
+    {"key": "buy_zone_waiting", "icon": "⏱️", "name": "Buy Zone — Waiting for the Price",
+     "group": "When to buy",
+     "desc": "A qualifying zone exists and the stock has not reached it. "
+             "These are the names worth a price alert: nothing about the "
+             "business needs to change, only the quote.",
+     "rules": ["buy_zone:eq:true", "buy_zone_reached:eq:false"]},
+    {"key": "buy_zone_high_conf", "icon": "🎖️", "name": "Buy Zone · High Confidence",
+     "group": "When to buy",
+     "desc": "A zone whose legs agree — cash-flow model on filed statements, "
+             "trend confirmed, support that has actually been defended, and "
+             "volume not distributing. Confidence is about how much the "
+             "inputs corroborate each other, never about how good the price "
+             "looks.",
+     "rules": ["buy_zone:eq:true", "buy_zone_confidence:eq:High"]},
     {"key": "ready_to_deploy", "icon": "🟢", "name": "Ready to Deploy",
      "group": "When to buy", "desc": "Entry readiness 65+ on a quality business — the level, the "
              "volume and the market all lining up now rather than eventually.",
@@ -507,6 +755,16 @@ PRESETS: tuple[dict, ...] = (
              "a TESTED support. Position sizing writes itself.",
      "rules": ["headroom_ratio:gte:2", "s1_tested:eq:true",
                "lquality:gte:85"]},
+    {"key": "coiled_quality", "icon": "🌀", "name": "Coiled at a Decision Point",
+     "group": "When to buy",
+     "desc": "Three or more levels wound within 2% of price on a business "
+             "worth owning. A cluster is not bullish on its own — it says the "
+             "next move gets resolved here rather than drifting — so this is "
+             "the list to have an order and a stop ready on, not a buy. "
+             "Requiring the trend intact is what keeps it from surfacing "
+             "names coiling on the way down.",
+     "rules": ["cluster:eq:Strong", "lquality:gte:80",
+               "trend_state:ne:BROKEN"]},
     {"key": "accumulation", "icon": "🧲", "name": "Quiet Accumulation",
      "group": "When to buy", "desc": "Pullback volume drying up while relative strength holds — the "
              "shape of institutions buying rather than retail selling.",
@@ -561,6 +819,14 @@ PRESETS: tuple[dict, ...] = (
              "tiebreaker, never a thesis — it sits outside LQuality for "
              "exactly that reason.",
      "rules": ["lquality:gte:85", "insider:eq:Net buying"]},
+    {"key": "priced_out_quality", "icon": "🧊", "name": "Great Business, No Price",
+     "group": "What would stop me",
+     "desc": "Elite businesses whose expected return from here is negative — "
+             "the price already assumes more than the company has delivered, "
+             "so the next five years pay you nothing for owning it. AVGO is "
+             "the shape: 94 quality, confirmed trend, support underfoot, and "
+             "a model value less than a third of the price.",
+     "rules": ["lquality:gte:85", "expected_cagr:lt:0"]},
     {"key": "chart_disagrees", "icon": "📉", "name": "Chart Disagrees",
      "group": "What would stop me",
      "desc": "Businesses the statements rate highly and price action does "

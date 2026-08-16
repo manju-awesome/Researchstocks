@@ -651,6 +651,12 @@ def compute_valuation(row: dict, peers: dict | None = None,
         # number nobody can defend.
         "implied_growth_pct": result.get("implied_growth_pct"),
         "delivered_growth_pct": result.get("delivered_growth_pct"),
+        # The rate the GAP was actually measured against — the raw delivered
+        # figure capped at the sustainable ceiling. Anything that reasons
+        # about the band downstream (the buy zones price a "demands only what
+        # it delivers" level off it) has to use this one, or NVDA's +194%
+        # would price that level in the thousands.
+        "delivered_credited_pct": result.get("delivered_credited_pct"),
         "growth_gap_pp": result.get("growth_gap_pp"),
         "tolerance_pp": result.get("tolerance_pp"),
         "fair_value": result.get("fair_value"),
@@ -661,6 +667,125 @@ def compute_valuation(row: dict, peers: dict | None = None,
         "assumptions": result.get("assumptions", []),
         "notes": notes + list(result.get("notes") or []),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# READING THE MODEL AT A DIFFERENT PRICE
+# ─────────────────────────────────────────────────────────────────────────────
+# Both of these run the SAME two-stage model as the verdict above, at a price
+# other than today's. That is why they are here and not in a caller: the
+# moment a second module reimplements the discount rate or the share count,
+# the buy zones start disagreeing with the band printed beside them.
+#
+# Note what these deliberately are NOT. `_reverse_dcf` refuses to publish a
+# fair value, because the method's output is a RATE and turning it into a
+# price would imply the model knows what growth to expect. These two dodge
+# that: one reports the rate at a hypothetical price, the other reports the
+# price at a rate the CALLER supplies. Neither invents a growth forecast, and
+# every figure they produce has to be shown with its condition attached.
+
+def _dcf_inputs(row: dict, risk_free: float):
+    """(fcf0, shares, discount, net_cash) or None when the model can't run."""
+    fcf0, shares = f(row.get("FreeCashFlow")), _shares(row)
+    if not fcf0 or not shares:
+        return None
+    net_cash = (f(row.get("TotalCash")) or 0.0) - (f(row.get("TotalDebt")) or 0.0)
+    discount, _note = _discount_rate(f(row.get("Beta")), risk_free)
+    return fcf0, shares, discount, net_cash
+
+
+def implied_growth_at_price(row: dict, price: float,
+                            risk_free: float = DEFAULT_RISK_FREE):
+    """The growth rate the model would require if the stock traded at `price`.
+
+    "What would this have to grow at to justify $148?" — the same question
+    the verdict answers at today's price, which is what makes the two
+    comparable.
+    """
+    inputs = _dcf_inputs(row, risk_free)
+    if not inputs or not price or price <= 0:
+        return None
+    fcf0, shares, discount, net_cash = inputs
+    implied = _implied_growth(price * shares, fcf0, discount, net_cash)
+    return None if implied is None else round(implied * 100, 1)
+
+
+def price_at_implied_growth(row: dict, growth_pct: float,
+                            risk_free: float = DEFAULT_RISK_FREE):
+    """The price at which the model would require exactly `growth_pct`.
+
+    The forward direction of the same model, so no solver: value the cash
+    flows at that rate and divide by shares. `growth_pct` is supplied by the
+    caller — usually the rate the company has actually delivered — so the
+    result is always "the price that asks only for X", never "the price this
+    is worth".
+    """
+    inputs = _dcf_inputs(row, risk_free)
+    if not inputs or growth_pct is None:
+        return None
+    fcf0, shares, discount, net_cash = inputs
+    equity = _equity_value(fcf0, growth_pct / 100.0, discount, net_cash)
+    if equity is None or equity <= 0:
+        return None
+    return round(equity / shares, 2)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPECTED RETURN
+# ─────────────────────────────────────────────────────────────────────────────
+# "Is it undervalued" is a yes/no about today. "What would I earn from here"
+# is the question a long-term buyer is actually asking, and it has a number.
+#
+# The identity these rest on is the DCF's own: a discounted cash-flow model
+# says that paying its computed value earns you the discount rate. Pay less
+# and you multiply your terminal wealth by (value / price); pay more and you
+# divide by it. Annualised over the horizon:
+#
+#     expected CAGR = (1 + discount) x (value / price)^(1/years) - 1
+#     price for a target CAGR = value x ((1 + discount) / (1 + target))^years
+#
+# No new assumptions beyond the model that produced `value` — but that model
+# assumes the business compounds at its DELIVERED rate and that the market
+# eventually pays the model's number for it. The second half is the strong
+# one: a company the market has priced above this model for a decade may
+# simply keep being priced above it. Every figure these produce has to be
+# shown as conditional on that, never as a forecast.
+
+RETURN_HORIZON_YEARS = 5
+
+
+def expected_cagr_at_price(row: dict, price: float, growth_pct: float,
+                           risk_free: float = DEFAULT_RISK_FREE,
+                           years: int = RETURN_HORIZON_YEARS):
+    """Annualised return from buying at `price`, if the business compounds at
+    `growth_pct` and the market ends up paying this model's value for it."""
+    inputs = _dcf_inputs(row, risk_free)
+    if not inputs or not price or price <= 0 or growth_pct is None:
+        return None
+    fcf0, shares, discount, net_cash = inputs
+    equity = _equity_value(fcf0, growth_pct / 100.0, discount, net_cash)
+    if equity is None or equity <= 0:
+        return None
+    value = equity / shares
+    return round(((1 + discount) * (value / price) ** (1 / years) - 1) * 100, 1)
+
+
+def price_for_expected_cagr(row: dict, target_cagr_pct: float,
+                            growth_pct: float,
+                            risk_free: float = DEFAULT_RISK_FREE,
+                            years: int = RETURN_HORIZON_YEARS):
+    """The price at which the expected return would equal `target_cagr_pct`.
+    The inverse of the function above, and the one that turns a return hurdle
+    into a level you can actually place an order at."""
+    inputs = _dcf_inputs(row, risk_free)
+    if not inputs or target_cagr_pct is None or growth_pct is None:
+        return None
+    fcf0, shares, discount, net_cash = inputs
+    equity = _equity_value(fcf0, growth_pct / 100.0, discount, net_cash)
+    if equity is None or equity <= 0:
+        return None
+    value = equity / shares
+    return round(value * ((1 + discount) / (1 + target_cagr_pct / 100.0)) ** years, 2)
 
 
 def valuation_sub_score(val: dict) -> float | None:

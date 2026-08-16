@@ -1,0 +1,61 @@
+{
+  "notes": "SEED HYDROLOGY REFERENCE — approximate river courses and taluk rainfall around Mysuru. Everything here is APPROXIMATE and unverified. River courses are coarse polylines of 6-8 waypoints, so a computed distance is good to roughly ±2 km and is NOT a survey: it will not tell you whether a parcel is inside a river buffer, which needs the revenue map and a licensed surveyor. Rainfall figures are long-period annual averages at taluk level, useful for comparing corridors, not for a specific year or a specific parcel.",
+
+  "verification": "Check rainfall against KSNDMC (Karnataka State Natural Disaster Monitoring Centre) gauge data for the specific hobli, and IMD district records. Check river distance and any buffer restriction against the village map and the irrigation department — never against this file and never against the seller.",
+
+  "rivers": {
+    "Kaveri": {
+      "aliases": ["Cauvery", "Kaveri river", "Cauvery river"],
+      "note": "Enters the district from the north-west via the Krishnaraja Sagar (KRS) reservoir, loops around Srirangapatna, then runs south-east to the confluence with the Kabini at T. Narasipura, and on past Talakad.",
+      "waypoints": [
+        [12.4250, 76.5670],
+        [12.4230, 76.6300],
+        [12.4180, 76.6950],
+        [12.3850, 76.7550],
+        [12.3200, 76.8150],
+        [12.2600, 76.8650],
+        [12.2150, 76.9000],
+        [12.1900, 77.0300],
+        [12.2600, 77.1600]
+      ]
+    },
+    "Kabini": {
+      "aliases": ["Kapila", "Kabini river", "Kapila river"],
+      "note": "Rises in Wayanad, enters via the Kabini (Beechanahalli) reservoir near H.D. Kote, then runs east-north-east past Nanjangud to join the Kaveri at T. Narasipura.",
+      "waypoints": [
+        [11.9800, 76.3500],
+        [12.0100, 76.4300],
+        [12.0450, 76.5300],
+        [12.0850, 76.6100],
+        [12.1173, 76.6836],
+        [12.1550, 76.7800],
+        [12.2150, 76.9000]
+      ]
+    }
+  },
+
+  "confluence": {
+    "name": "Triveni Sangama, T. Narasipura",
+    "lat": 12.2150,
+    "lon": 76.9000,
+    "note": "Where the Kabini joins the Kaveri."
+  },
+
+  "rainfall_mm_by_taluk": {
+    "Mysuru": 785,
+    "Nanjangud": 715,
+    "T Narasipura": 700,
+    "Hunsur": 920,
+    "H D Kote": 1000,
+    "K R Nagar": 800,
+    "Periyapatna": 1050,
+    "Srirangapatna": 720,
+    "Pandavapura": 700
+  },
+
+  "rainfall_note": "Approximate long-period annual averages, in millimetres. The gradient is real and matters: rainfall rises going west and south-west toward the Western Ghats (H.D. Kote, Periyapatna, Hunsur) and falls going east and south-east into the drier belt (Nanjangud, T. Narasipura). Note the tension this creates with the 30 km radius — the wetter taluks are mostly the further ones.",
+
+  "rainfall_default_mm": 780,
+
+  "seasonality_note": "Roughly 55-60% of the annual total falls in the south-west monsoon (June-September) and much of the rest in the north-east monsoon (October-November), with a long dry spell from December to May. This is why storage matters more than the annual total: a parcel receiving 900 mm over about 55 rain days still needs to carry itself through five dry months, and an annual average tells you nothing about whether it can."
+}

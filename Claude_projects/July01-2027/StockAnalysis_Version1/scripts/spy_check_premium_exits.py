@@ -39,7 +39,7 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-from spydaytrader.core import position_sizing, trade_proposals  # noqa: E402
+from Daytrades.core import position_sizing, trade_proposals  # noqa: E402
 
 
 def _bands() -> tuple[float, float]:

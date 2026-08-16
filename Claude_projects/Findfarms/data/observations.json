@@ -1,0 +1,2452 @@
+[
+  {
+    "property_id": "bannur-2.5-16d31f9ac2",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "MagicBricks",
+    "source_url": "https://example-portal.test/listing/8821",
+    "claims": {
+      "source": {
+        "value": "MagicBricks",
+        "source": "MagicBricks",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-portal.test/listing/8821",
+        "source": "MagicBricks",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Agricultural land for sale at Bannur, T Narasipura taluk. 2 acre 20 gunta fertile red soil. Borewell 380 feet with 3 phase power and pump set, plus an open well. Water storage tank. 60 coconut trees and 40 mango trees, fully cultivated and yielding. 30 ft tar road frontage, 300 meters from main road, fully fenced. RTC and mutation available, survey no 142/3. Price 42 lakh per acre, slightly negotiable. Direct owner, no brokers. 22 km from Mysore. Contact 9845012345",
+        "source": "MagicBricks",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 2.5,
+        "source": "listing (2 acre + 20 gunta)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 4200000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 4200000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 10500000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "negotiable": {
+        "value": true,
+        "source": "listing: \"negotiable\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Bannur",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "T Narasipura",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "other_places_mentioned": {
+        "value": "T Narasipura",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "seller_stated_distance": {
+        "value": "22 km from mysore",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_open_well": {
+        "value": true,
+        "source": "listing: \"open well\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...borewell 380 feet with 3 phase power and pump set, plus an open well.  __storage__ . 60 coconut trees and 40 mango trees, fully..."
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...nnur, t narasipura taluk. 2 acre 20 gunta fertile red soil. borewell 380 feet with 3 phase power and pump set, plus an open well..."
+      },
+      "water_sources": {
+        "value": "open_well, borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 380,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "three_phase_power": {
+        "value": true,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "electricity": {
+        "value": true,
+        "source": "listing mentions 3-phase supply",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "pump": {
+        "value": true,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_storage": {
+        "value": "water storage",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "coconut, mango",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "soil": {
+        "value": "red soil",
+        "source": "listing: \"red soil\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "tree_count": {
+        "value": 60,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "under_cultivation": {
+        "value": true,
+        "source": "listing: \"fully cultivated\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"road frontage\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_width_ft": {
+        "value": 30,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "tarred",
+        "source": "listing: \"tar road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 0,
+        "source": "listing describes frontage on a main road",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_frontage": {
+        "value": true,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "fencing": {
+        "value": true,
+        "source": "listing: \"fenced\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "mentions_rtc": {
+        "value": true,
+        "source": "listing: \"rtc\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...tar road frontage, 300 meters from main road, fully fenced. rtc and mutation available, survey no 142/3. price 42 lakh per..."
+      },
+      "mentions_mutation": {
+        "value": true,
+        "source": "listing: \"mutation\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...frontage, 300 meters from main road, fully fenced. rtc and mutation available, survey no 142/3. price 42 lakh per acre, slightl..."
+      },
+      "mentions_survey_number": {
+        "value": true,
+        "source": "listing: \"survey no\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...s from main road, fully fenced. rtc and mutation available, survey no 142/3. price 42 lakh per acre, slightly negotiable. direct..."
+      },
+      "survey_number": {
+        "value": "142/3",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "owner_direct": {
+        "value": true,
+        "source": "listing: \"direct owner\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "motivation_signals": {
+        "value": "direct owner, no brokers",
+        "source": "listing language",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "motivation_level_hint": {
+        "value": "POSSIBLY_MOTIVATED",
+        "source": "listing language",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Read from the advert's own wording only — not an inference about the seller's circumstances."
+      },
+      "phone": {
+        "value": "9845012345",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      }
+    }
+  },
+  {
+    "property_id": "bannur-2.5-16d31f9ac2",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "Local broker site",
+    "source_url": "https://example-broker.test/p/441",
+    "claims": {
+      "source": {
+        "value": "Local broker site",
+        "source": "Local broker site",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-broker.test/p/441",
+        "source": "Local broker site",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Farm land Bannur 2.5 acres with borewell 380 ft and open well, coconut and mango plantation, tar road, 300 mtr from main road, fencing done. Sy no 142/3. Rate 42L per acre. Owner direct 98450 12345",
+        "source": "Local broker site",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 2.5,
+        "source": "listing (2.5 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 4200000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 4200000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 10500000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Bannur",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "T Narasipura",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_open_well": {
+        "value": true,
+        "source": "listing: \"open well\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...farm land bannur 2.5 acres with borewell 380 ft and open well, coconut and mango plantation, tar road, 300 mtr from main..."
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...farm land bannur 2.5 acres with borewell 380 ft and open well, coconut and mango plantation, tar roa..."
+      },
+      "water_sources": {
+        "value": "open_well, borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 380,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "coconut, mango",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "tarred",
+        "source": "listing: \"tar road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 300,
+        "source": "listing: \"300 mtr from main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "fencing": {
+        "value": true,
+        "source": "listing: \"fencing\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "mentions_survey_number": {
+        "value": true,
+        "source": "listing: \"sy no\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...plantation, tar road, 300 mtr from main road, fencing done. sy no 142/3. rate 42l per acre. owner direct 98450 12345..."
+      },
+      "survey_number": {
+        "value": "142/3",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "owner_direct": {
+        "value": true,
+        "source": "listing: \"owner direct\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9845012345",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      }
+    }
+  },
+  {
+    "property_id": "bannur-2.5-16d31f9ac2",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "Facebook group",
+    "source_url": "https://example-social.test/post/99231",
+    "claims": {
+      "source": {
+        "value": "Facebook group",
+        "source": "Facebook group",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-social.test/post/99231",
+        "source": "Facebook group",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "URGENT SALE — Bannur 2 acre 20 gunta coconut and mango farm, borewell 380 feet, open well, tar road frontage, fenced. Family settlement, price reduced to 35 lakh per acre. Sy no 142/3. Direct owner 9845012345",
+        "source": "Facebook group",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 2.5,
+        "source": "listing (2 acre + 20 gunta)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 3500000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 3500000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 8750000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Bannur",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "T Narasipura",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_open_well": {
+        "value": true,
+        "source": "listing: \"open well\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...2 acre 20 gunta coconut and mango farm, borewell 380 feet, open well, tar road frontage, fenced. family settlement, price reduce..."
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...rgent sale — bannur 2 acre 20 gunta coconut and mango farm, borewell 380 feet, open well, tar road frontage, fenced. family sett..."
+      },
+      "water_sources": {
+        "value": "open_well, borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 380,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "coconut, mango",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"road frontage\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "tarred",
+        "source": "listing: \"tar road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 0,
+        "source": "listing describes frontage on a main road",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_frontage": {
+        "value": true,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "fencing": {
+        "value": true,
+        "source": "listing: \"fenced\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "mentions_survey_number": {
+        "value": true,
+        "source": "listing: \"sy no\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...nced. family settlement, price reduced to 35 lakh per acre. sy no 142/3. direct owner 9845012345..."
+      },
+      "survey_number": {
+        "value": "142/3",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "risk_dispute": {
+        "value": true,
+        "source": "listing: \"family settlement\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...m, borewell 380 feet, open well, tar road frontage, fenced. family settlement, price reduced to 35 lakh per acre. sy no 142/3. direct own..."
+      },
+      "owner_direct": {
+        "value": true,
+        "source": "listing: \"direct owner\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "motivation_signals": {
+        "value": "urgent sale, price reduced",
+        "source": "listing language",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "motivation_level_hint": {
+        "value": "HIGHLY_MOTIVATED",
+        "source": "listing language",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Read from the advert's own wording only — not an inference about the seller's circumstances."
+      },
+      "phone": {
+        "value": "9845012345",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      }
+    }
+  },
+  {
+    "property_id": "kadakola-3.0-2d073ae6e1",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "99acres",
+    "source_url": "https://example-portal.test/listing/7712",
+    "claims": {
+      "source": {
+        "value": "99acres",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-portal.test/listing/7712",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "3 acres agricultural land Kadakola near Mysore airport, Nanjangud road. Canal irrigation available plus open well. Sugarcane and paddy cultivation. Black soil, flat land. 40 ft tar road, 200 meters from highway. Electricity connection with 3 phase. 45 lakh per acre. Broker 9880123456",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 3.0,
+        "source": "listing (3 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 4500000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 4500000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 13500000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Kadakola",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "Mysuru",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "other_places_mentioned": {
+        "value": "Nanjangud",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_canal": {
+        "value": true,
+        "source": "listing: \"canal\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...cultural land kadakola near mysore airport, nanjangud road. canal irrigation available plus open well. sugarcane and paddy cu..."
+      },
+      "water_open_well": {
+        "value": true,
+        "source": "listing: \"open well\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...re airport, nanjangud road. canal irrigation available plus open well. sugarcane and paddy cultivation. black soil, flat land. 40..."
+      },
+      "water_sources": {
+        "value": "canal, open_well",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "three_phase_power": {
+        "value": true,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "electricity": {
+        "value": true,
+        "source": "listing mentions 3-phase supply",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "paddy, sugarcane",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "soil": {
+        "value": "black soil",
+        "source": "listing: \"black soil\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "terrain": {
+        "value": "flat",
+        "source": "listing: \"flat land\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "undulation": {
+        "value": "flat",
+        "source": "listing: \"flat land\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_width_ft": {
+        "value": 40,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "tarred",
+        "source": "listing: \"tar road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 200,
+        "source": "listing: \"200 meters from highway\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "seller_type": {
+        "value": "broker/agent",
+        "source": "listing: \"broker\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9880123456",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "t-narasipura-2.0-889ff01933",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "OLX",
+    "source_url": "https://example-portal.test/listing/6650",
+    "claims": {
+      "source": {
+        "value": "OLX",
+        "source": "OLX",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-portal.test/listing/6650",
+        "source": "OLX",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "2 acres river facing land at T Narasipura, Kaveri river just 200 meters. River water available for irrigation. Sandy loam soil. Mud road access, 2 km from main road. Coconut trees planted. 38 lakh per acre negotiable. 9740098765",
+        "source": "OLX",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 2.0,
+        "source": "listing (2 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 3800000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 3800000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 7600000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "negotiable": {
+        "value": true,
+        "source": "listing: \"negotiable\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "T Narasipura",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "T Narasipura",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "seller_stated_distance": {
+        "value": "2 km from",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "seller_stated_river_distance": {
+        "value": "200 meters from the Kaveri",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_river": {
+        "value": true,
+        "source": "listing: \"river\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...2 acres river facing land at t narasipura, kaveri river just 200 meters...."
+      },
+      "water_sources": {
+        "value": "river",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "coconut",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "soil": {
+        "value": "sandy",
+        "source": "listing: \"sandy loam\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "unpaved",
+        "source": "listing: \"mud road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 2000,
+        "source": "listing: \"2 km from main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9740098765",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "varuna-1.5-f5c528dc23",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "Local broker site",
+    "source_url": "https://example-broker.test/p/512",
+    "claims": {
+      "source": {
+        "value": "Local broker site",
+        "source": "Local broker site",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-broker.test/p/512",
+        "source": "Local broker site",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Farm land for sale Varuna, Mysore taluk. 1.5 acres. Borewell 850 feet good water. Red soil, ragi cultivation. Mud road, 1.5 km from tar road. 32 lakh per acre. Urgent sale, owner shifting abroad. 9611223344",
+        "source": "Local broker site",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 1.5,
+        "source": "listing (1.5 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 3200000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 3200000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 4800000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Varuna",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "Mysuru",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "seller_stated_distance": {
+        "value": "1.5 km from",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...farm land for sale varuna, mysore taluk. 1.5 acres. borewell 850 feet good water. red soil, ragi cultivation. mud road,..."
+      },
+      "water_sources": {
+        "value": "borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 850,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "ragi",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "soil": {
+        "value": "red soil",
+        "source": "listing: \"red soil\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "tarred",
+        "source": "listing: \"tar road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 1500,
+        "source": "listing: \"1.5 km from tar road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "motivation_signals": {
+        "value": "urgent sale",
+        "source": "listing language",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "motivation_level_hint": {
+        "value": "HIGHLY_MOTIVATED",
+        "source": "listing language",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Read from the advert's own wording only — not an inference about the seller's circumstances."
+      },
+      "phone": {
+        "value": "9611223344",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "bannur-2.0-be582daabf",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "Facebook group",
+    "source_url": "https://example-social.test/post/88110",
+    "claims": {
+      "source": {
+        "value": "Facebook group",
+        "source": "Facebook group",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-social.test/post/88110",
+        "source": "Facebook group",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Cheap agricultural land Bannur 2 acres only 24 lakh per acre. Grant land granted under PTCL. Borewell 300 ft, coconut trees. Urgent distress sale. 9900112233",
+        "source": "Facebook group",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 2.0,
+        "source": "listing (2 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 2400000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 2400000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 4800000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Bannur",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "T Narasipura",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...acres only 24 lakh per acre. grant land granted under ptcl. borewell 300 ft, coconut trees. urgent distress sale. 9900112233..."
+      },
+      "water_sources": {
+        "value": "borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 300,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "coconut",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "risk_grant_land": {
+        "value": true,
+        "source": "listing: \"grant land\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...eap agricultural land bannur 2 acres only 24 lakh per acre. grant land granted under ptcl. borewell 300 ft, coconut trees. urgent..."
+      },
+      "motivation_signals": {
+        "value": "distress sale",
+        "source": "listing language",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "motivation_level_hint": {
+        "value": "HIGHLY_MOTIVATED",
+        "source": "listing language",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Read from the advert's own wording only — not an inference about the seller's circumstances."
+      },
+      "phone": {
+        "value": "9900112233",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "bilikere-4.0-2e0996ae3f",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "OLX",
+    "source_url": "https://example-portal.test/listing/5540",
+    "claims": {
+      "source": {
+        "value": "OLX",
+        "source": "OLX",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-portal.test/listing/5540",
+        "source": "OLX",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Bilikere Hunsur road 4 acres dry land, rain fed. No borewell, borewell can be arranged. Barren land, no cultivation currently. Mud road access, interior village land. 18 lakh per acre. 9845567890",
+        "source": "OLX",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 4.0,
+        "source": "listing (4 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 1800000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 1800000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 7200000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Bilikere",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "Hunsur",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "other_places_mentioned": {
+        "value": "Hunsur",
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_borewell_absent": {
+        "value": true,
+        "source": "listing says \"...acres dry land, rain fed. no borewell, borewell can be arranged. ba...\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "Listing appears to state there is NO borewell."
+      },
+      "water_rain_fed": {
+        "value": true,
+        "source": "listing: \"rain fed\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...bilikere hunsur road 4 acres dry land, rain fed. no borewell, borewell can be arranged. barren land, no cul..."
+      },
+      "water_sources": {
+        "value": "rain_fed",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "under_cultivation": {
+        "value": false,
+        "source": "listing: \"barren\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "unpaved",
+        "source": "listing: \"mud road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 1500,
+        "source": "listing: \"interior\" — described as interior, read as ~1.5 km. Measure it.",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9845567890",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "bannur-3.0-040c4e2859",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "99acres",
+    "source_url": "https://example-portal.test/listing/7801",
+    "claims": {
+      "source": {
+        "value": "99acres",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-portal.test/listing/7801",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Bannur 3 acres agricultural land, borewell 400 feet, coconut plantation, tar road facing, 400 m from main road, fenced. 40 lakh per acre. 9812345670",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 3.0,
+        "source": "listing (3 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 4000000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 4000000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 12000000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Bannur",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "T Narasipura",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...bannur 3 acres agricultural land, borewell 400 feet, coconut plantation, tar road facing, 400 m from m..."
+      },
+      "water_sources": {
+        "value": "borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 400,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "coconut",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"road facing\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "tarred",
+        "source": "listing: \"tar road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 0,
+        "source": "listing describes frontage on a main road",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_frontage": {
+        "value": true,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "fencing": {
+        "value": true,
+        "source": "listing: \"fenced\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9812345670",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "bannur-2.0-d1837f8d31",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "MagicBricks",
+    "source_url": "https://example-portal.test/listing/7802",
+    "claims": {
+      "source": {
+        "value": "MagicBricks",
+        "source": "MagicBricks",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-portal.test/listing/7802",
+        "source": "MagicBricks",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Bannur 2 acres with borewell 350 ft and open well, mango and sapota trees, main road facing, red soil. 44 lakh per acre negotiable. 9812345671",
+        "source": "MagicBricks",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 2.0,
+        "source": "listing (2 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 4400000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 4400000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 8800000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "negotiable": {
+        "value": true,
+        "source": "listing: \"negotiable\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Bannur",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "T Narasipura",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_open_well": {
+        "value": true,
+        "source": "listing: \"open well\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...bannur 2 acres with borewell 350 ft and open well, mango and sapota trees, main road facing, red soil. 44 lak..."
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...bannur 2 acres with borewell 350 ft and open well, mango and sapota trees, main road fac..."
+      },
+      "water_sources": {
+        "value": "open_well, borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 350,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "mango, sapota",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "soil": {
+        "value": "red soil",
+        "source": "listing: \"red soil\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"road facing\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 0,
+        "source": "listing describes frontage on a main road",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_frontage": {
+        "value": true,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9812345671",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "bannur-1.5-4d97a5b34e",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "Local broker site",
+    "source_url": "https://example-broker.test/p/601",
+    "claims": {
+      "source": {
+        "value": "Local broker site",
+        "source": "Local broker site",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-broker.test/p/601",
+        "source": "Local broker site",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Agricultural land Bannur 1.5 acres borewell 320 feet, coconut trees, tar road, 800 meters from main road, fenced, red soil. 46 lakh per acre. 9812345672",
+        "source": "Local broker site",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 1.5,
+        "source": "listing (1.5 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 4600000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 4600000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 6900000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Bannur",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "T Narasipura",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...agricultural land bannur 1.5 acres borewell 320 feet, coconut trees, tar road, 800 meters from main roa..."
+      },
+      "water_sources": {
+        "value": "borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 320,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "coconut",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "soil": {
+        "value": "red soil",
+        "source": "listing: \"red soil\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "tarred",
+        "source": "listing: \"tar road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 800,
+        "source": "listing: \"800 meters from main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "fencing": {
+        "value": true,
+        "source": "listing: \"fenced\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9812345672",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "kadakola-2.0-3a6d367c53",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "99acres",
+    "source_url": "https://example-portal.test/listing/7803",
+    "claims": {
+      "source": {
+        "value": "99acres",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-portal.test/listing/7803",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Kadakola 2 acres canal water, sugarcane, black soil, main road facing, 3 phase power. 48 lakh per acre. 9812345673",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 2.0,
+        "source": "listing (2 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 4800000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 4800000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 9600000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Kadakola",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "Mysuru",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_canal": {
+        "value": true,
+        "source": "listing: \"canal\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...kadakola 2 acres canal water, sugarcane, black soil, main road facing, 3 phase pow..."
+      },
+      "water_sources": {
+        "value": "canal",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "three_phase_power": {
+        "value": true,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "electricity": {
+        "value": true,
+        "source": "listing mentions 3-phase supply",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "sugarcane",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "soil": {
+        "value": "black soil",
+        "source": "listing: \"black soil\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"road facing\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 0,
+        "source": "listing describes frontage on a main road",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_frontage": {
+        "value": true,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9812345673",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "kadakola-4.0-de59c49b46",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "MagicBricks",
+    "source_url": "https://example-portal.test/listing/7804",
+    "claims": {
+      "source": {
+        "value": "MagicBricks",
+        "source": "MagicBricks",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-portal.test/listing/7804",
+        "source": "MagicBricks",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Kadakola 4 acres farm land with canal and borewell 300 ft, paddy and sugarcane, flat land, 600 m from main road. 43 lakh per acre. 9812345674",
+        "source": "MagicBricks",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 4.0,
+        "source": "listing (4 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 4300000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 4300000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 17200000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Kadakola",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "Mysuru",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_canal": {
+        "value": true,
+        "source": "listing: \"canal\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...kadakola 4 acres farm land with canal and borewell 300 ft, paddy and sugarcane, flat land, 600 m..."
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...kadakola 4 acres farm land with canal and borewell 300 ft, paddy and sugarcane, flat land, 600 m from main roa..."
+      },
+      "water_sources": {
+        "value": "canal, borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 300,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "paddy, sugarcane",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "terrain": {
+        "value": "flat",
+        "source": "listing: \"flat land\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "undulation": {
+        "value": "flat",
+        "source": "listing: \"flat land\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 600,
+        "source": "listing: \"600 m from main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9812345674",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  },
+  {
+    "property_id": "srirangapatn-2.0-cfad12fd22",
+    "observed_at": "2026-08-14T14:37:24",
+    "source": "99acres",
+    "source_url": "https://example-portal.test/listing/7805",
+    "claims": {
+      "source": {
+        "value": "99acres",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "source_url": {
+        "value": "https://example-portal.test/listing/7805",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "date_discovered": {
+        "value": "2026-08-14",
+        "source": "findfarms",
+        "confidence": "VERIFIED",
+        "observed_at": "2026-08-14",
+        "note": "Date this system first saw the listing."
+      },
+      "raw_text": {
+        "value": "Srirangapatna 2 acres agricultural land, borewell 280 feet, coconut and banana, canal nearby, tar road, 250 meters from main road, fenced. 50 lakh per acre. 9812345675",
+        "source": "99acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "Verbatim listing text, kept for re-extraction."
+      },
+      "acres": {
+        "value": 2.0,
+        "source": "listing (2 acre)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre_stated": {
+        "value": 5000000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "price_per_acre": {
+        "value": 5000000.0,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "asking_price": {
+        "value": 10000000,
+        "source": "₹/acre x acres",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "village": {
+        "value": "Srirangapatna",
+        "source": "listing (matched to gazetteer)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "taluk": {
+        "value": "Srirangapatna",
+        "source": "gazetteer",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "water_canal": {
+        "value": true,
+        "source": "listing: \"canal\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...s agricultural land, borewell 280 feet, coconut and banana, canal nearby, tar road, 250 meters from main road, fenced. 50 lak..."
+      },
+      "water_borewell": {
+        "value": true,
+        "source": "listing: \"borewell\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": "...srirangapatna 2 acres agricultural land, borewell 280 feet, coconut and banana, canal nearby, tar road, 250 m..."
+      },
+      "water_sources": {
+        "value": "canal, borewell",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_depth_ft": {
+        "value": 280,
+        "source": "listing",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "borewell_count": {
+        "value": 1,
+        "source": "listing mentions a borewell, count not stated",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "crops": {
+        "value": "banana, coconut",
+        "source": "listing keywords",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_frontage": {
+        "value": true,
+        "source": "listing: \"main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "road_surface": {
+        "value": "tarred",
+        "source": "listing: \"tar road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "main_road_distance_m": {
+        "value": 250,
+        "source": "listing: \"250 meters from main road\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "fencing": {
+        "value": true,
+        "source": "listing: \"fenced\"",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "phone": {
+        "value": "9812345675",
+        "source": "listing (publicly posted)",
+        "confidence": "SELLER_CLAIM",
+        "observed_at": "2026-08-14",
+        "note": ""
+      },
+      "no_documents_mentioned": {
+        "value": true,
+        "source": "extraction",
+        "confidence": "INFERRED",
+        "observed_at": "2026-08-14",
+        "note": "The listing names no title document, survey number or encumbrance status. Normal for an advert; means the legal screen has nothing to work with."
+      }
+    }
+  }
+]

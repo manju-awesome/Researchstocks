@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from spydaytrader.core import signal_engine  # noqa: E402
+from Daytrades.core import signal_engine  # noqa: E402
 
 
 def _bars(closes: list[float], start: str = "2026-07-20 09:30", freq: str = "5min") -> pd.DataFrame:

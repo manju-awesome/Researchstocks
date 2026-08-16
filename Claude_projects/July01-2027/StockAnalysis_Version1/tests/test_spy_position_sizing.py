@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from spydaytrader.core import position_sizing  # noqa: E402
+from Daytrades.core import position_sizing  # noqa: E402
 
 
 def test_suggested_contracts_basic():

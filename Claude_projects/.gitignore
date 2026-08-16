@@ -7,6 +7,10 @@ July01-2027/StockAnalysis_Version1/data/output/
 .env
 *.key
 
+# Login store: password hashes, not plaintext, but a committed PBKDF2 hash is
+# still an offline cracking target — and it's per-machine state anyway.
+July01-2027/StockAnalysis_Version1/data/users.json
+
 # Browser-saved pages that land here by accident, not source
 /1.html
 /Dashboard · Trading Workstation.html

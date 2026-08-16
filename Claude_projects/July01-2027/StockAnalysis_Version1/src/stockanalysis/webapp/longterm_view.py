@@ -637,10 +637,505 @@ _PANEL_H = ('font-size:10px;text-transform:uppercase;letter-spacing:.06em;'
             'color:#898781;margin-bottom:5px')
 
 
+# Same palette the Research Library's Position column uses, so "Dominant"
+# reads identically on both pages.
+_POSITION_COLOR = {"dominant": "#0F6E56", "duopoly": "#0C447C",
+                   "top2": "#8a6d1a", "rest": "#898781"}
+
+
+def _position_line(p) -> str:
+    """Competitive standing, with the basis of the claim attached to it.
+
+    Two very different statements share this line, and they are styled apart
+    on purpose. A curated data/market_structure.json entry ("EUV monopoly")
+    is a structural fact someone verified, and gets the ● that marks it as
+    such. Everything else is market-cap rank among the names in THIS library
+    — a size proxy, not market share — and says so in full rather than in a
+    tooltip, because "Dominant" next to a description of the business reads
+    as a claim about the market unless something stops it.
+    """
+    structure = p.get("structure")
+    if structure:
+        note = p.get("structure_note") or "curated in data/market_structure.json"
+        return (f'<span style="color:#0F6E56;font-weight:700" '
+                f'title="{esc(note)}">● {esc(structure)}</span>'
+                f'<div style="font-size:10px;color:#898781;margin-top:2px">'
+                f'{esc(note)}</div>')
+
+    group, rank, count = p.get("peer_group"), p.get("peer_rank"), p.get("peer_count")
+    if not rank or not count:
+        where = f" in {esc(group)}" if group else ""
+        return (f'<span style="font-size:11px;color:#898781">No peer group'
+                f'{where} — nothing in this library to rank it against.</span>')
+
+    colour = _POSITION_COLOR.get(p.get("position_tier"), "#898781")
+    weight = "400" if p.get("position_tier") == "rest" else "700"
+    share = p.get("peer_share_pct")
+    scope = "sector" if p.get("peer_group_is_sector") else "industry"
+    bits = [f'#{rank} of {count} tracked {scope} peers']
+    if share is not None:
+        bits.append(f'{share:.0f}% of their combined market cap')
+    return (f'<span style="color:{colour};font-weight:{weight}">'
+            f'{esc(p.get("position_label") or f"#{rank}")}</span>'
+            f'<span style="font-size:11px;color:#52514e"> · {esc(" · ".join(bits))}'
+            f'</span>'
+            f'<div style="font-size:10px;color:#898781;margin-top:2px">'
+            f'Ranked on market cap across {esc(group or scope)} names in this '
+            f'library — a size proxy, not market share. A verified structure '
+            f'("duopoly with …") comes from data/market_structure.json, which '
+            f'ships empty on purpose.</div>')
+
+_ZONE_TONE = {"Exceptional": "#0F6E56", "Attractive": "#0F6E56",
+              "Fair": "#8a6d1a", "Expensive": "#A32D2D",
+              "Extreme": "#A32D2D", "Not priced": "#898781"}
+
+_TIER_TONE = {"excellent": ("#0C447C", "#E6F1FB"),
+              "preferred": ("#0F6E56", "#E1F5EE"),
+              "aggressive": ("#8a6d1a", "#FAEEDA")}
+
+
+def _check_row(c) -> str:
+    mark = ('<span style="color:#0F6E56">✓</span>' if c["ok"] else
+            '<span style="color:#A32D2D">✗</span>' if c["ok"] is False else
+            '<span style="color:#898781">?</span>')
+    colour = "#0b0b0b" if c["ok"] else "#791F1F" if c["ok"] is False else "#898781"
+    return (f'<tr><td style="padding:2px 8px 2px 0">{mark}</td>'
+            f'<td style="padding:2px 10px 2px 0;font-weight:600;color:{colour};'
+            f'white-space:nowrap">{esc(c["name"])}</td>'
+            f'<td style="padding:2px 0;color:#52514e">{esc(c["detail"])}</td></tr>')
+
+
+def _technical_row(z) -> str:
+    """One support zone, carrying the valuation reading AT ITS OWN PRICE.
+
+    The two facts share a line on purpose. Printing "50 MA $386–395" in one
+    panel and "the price is Extreme" in another is what let a support level
+    read as a buy zone.
+    """
+    tone = _ZONE_TONE.get(z.get("value_zone"), "#898781")
+    where = ("price is here now" if z.get("reached") == "inside"
+             else f'{z["distance_pct"]:+.0f}%' if z.get("distance_pct") is not None
+             else "")
+    cagr = (f'{z["expected_cagr_pct"]:+.0f}%/yr'
+            if z.get("expected_cagr_pct") is not None else "—")
+    fund = (f'{z["fundamental_downside_pct"]:+.0f}% to model value'
+            if z.get("fundamental_downside_pct") is not None else "—")
+    down = (f'{z["downside_pct"]:+.0f}% to {esc(z["downside_note"])}'
+            if z.get("downside_pct") is not None else esc(z["downside_note"]))
+    return (f'<tr><td style="padding:5px 10px 5px 0;font-weight:600;'
+            f'white-space:nowrap">{esc(z["label"])}</td>'
+            f'<td style="padding:5px 10px 5px 0;font-weight:700;'
+            f'white-space:nowrap">${z["low"]:,.0f} – ${z["high"]:,.0f}</td>'
+            f'<td style="padding:5px 10px 5px 0;color:#898781;'
+            f'white-space:nowrap">{esc(where)}</td>'
+            f'<td style="padding:5px 10px 5px 0;color:{tone};font-weight:600;'
+            f'white-space:nowrap">{esc(z.get("value_icon") or "")} '
+            f'{esc(z.get("value_zone") or "")}</td>'
+            f'<td style="padding:5px 10px 5px 0;color:{tone};'
+            f'white-space:nowrap">{esc(cagr)}</td>'
+            f'<td style="padding:5px 10px 5px 0;color:#898781;'
+            f'white-space:nowrap">{esc(down)}</td>'
+            f'<td style="padding:5px 0;color:#898781;'
+            f'white-space:nowrap">{esc(fund)}</td></tr>')
+
+
+def _fundamental_block(fu) -> str:
+    if fu.get("blocked"):
+        return (f'<div style="font-size:11px;color:#898781">'
+                f'{esc(fu["blocked"])}</div>')
+
+    gap = fu.get("fair_value_gap_pct")
+    tone = _ZONE_TONE.get(fu.get("zone"), "#898781")
+    head = (
+        f'<div style="display:flex;gap:20px;flex-wrap:wrap;font-size:12px;'
+        f'margin-bottom:8px">'
+        f'<div><div style="font-size:10px;color:#898781;text-transform:uppercase">'
+        f'Model value</div><strong>${fu["intrinsic"]:,.2f}</strong></div>'
+        + (f'<div><div style="font-size:10px;color:#898781;'
+           f'text-transform:uppercase">Price vs it</div>'
+           f'<strong style="color:{tone}">{gap:+.0f}%</strong></div>'
+           if gap is not None else "")
+        + (f'<div><div style="font-size:10px;color:#898781;'
+           f'text-transform:uppercase">Expected return</div>'
+           f'<strong style="color:{tone}">'
+           f'{fu["expected_cagr_now"]:+.1f}%/yr</strong></div>'
+           if fu.get("expected_cagr_now") is not None else "")
+        + (f'<div><div style="font-size:10px;color:#898781;'
+           f'text-transform:uppercase">Hurdle · {esc(fu.get("quality_tier") or "")}'
+           f'</div><strong>{fu["hurdle_pct"]:.0f}%/yr</strong></div>'
+           if fu.get("hurdle_pct") else "")
+        + (f'<div><div style="font-size:10px;color:#898781;'
+           f'text-transform:uppercase">Today</div>'
+           f'<strong style="color:{tone}">{esc(fu.get("zone_icon") or "")} '
+           f'{esc(fu.get("zone") or "")}</strong></div>')
+        + '</div>')
+
+    rungs = "".join(
+        f'<tr><td style="padding:3px 12px 3px 0;font-weight:600">'
+        f'{esc(r["label"])}</td>'
+        f'<td style="padding:3px 12px 3px 0;font-weight:700;white-space:nowrap">'
+        f'at or below ${r["price"]:,.2f}</td>'
+        f'<td style="padding:3px 0;color:#898781;white-space:nowrap">'
+        f'earns {r["cagr_pct"]:.0f}%/yr</td></tr>' for r in fu.get("ladder") or [])
+
+    caveat = (f'<div style="background:#FAEEDA;color:#633806;font-size:11px;'
+              f'padding:8px 10px;border-radius:8px;margin:8px 0">⚠ '
+              f'{esc(fu["caveat"])}</div>' if fu.get("caveat") else "")
+
+    note = (f'<div style="font-size:10px;color:#898781;margin-top:6px">'
+            f'Projected at {esc(fu.get("projection_note") or "")}. Assumes the '
+            f'market eventually pays the model\'s value — a company priced '
+            f'above it for a decade may stay there. A hurdle test, not a '
+            f'forecast.</div>' if fu.get("projection_note") else "")
+
+    return head + caveat + (f'<table>{rungs}</table>' if rungs else "") + note
+
+
+def _investment_block(zones, verdict) -> str:
+    if not zones:
+        return (f'<div style="background:#FCEBEB;color:#791F1F;font-size:12px;'
+                f'padding:10px 12px;border-radius:8px">'
+                f'<strong>No investment buy zone.</strong> '
+                f'{esc(verdict.get("what_would_change") or "")}</div>')
+    out = []
+    for z in zones:
+        colour, bg = _TIER_TONE.get(z["key"], ("#444441", "#F1EFE8"))
+        state = ("price is in this zone now" if z.get("reached")
+                 else "not reached — a level to wait for")
+        out.append(
+            f'<div style="border:0.5px solid {colour};background:{bg};'
+            f'border-radius:10px;padding:9px 12px;margin-bottom:6px">'
+            f'<div style="display:flex;gap:10px;align-items:baseline;'
+            f'flex-wrap:wrap">'
+            f'<span style="color:{colour};font-weight:700">{esc(z["icon"])} '
+            f'{esc(z["label"])}</span>'
+            f'<span style="font-weight:700;font-size:14px">${z["low"]:,.0f} – '
+            f'${z["high"]:,.0f}</span>'
+            f'<span style="font-size:11px;color:#52514e">{esc(state)}</span>'
+            f'</div>'
+            f'<div style="font-size:11px;color:#52514e;margin-top:3px">'
+            f'{esc(z["support"])} support · earns at least '
+            f'{z["min_cagr_pct"]:.0f}%/yr here · needs LQuality '
+            f'{z["min_quality"]}+</div></div>')
+    return "".join(out)
+
+
+def _buy_zone_panel(r) -> str:
+    """Valuation decides whether; support decides when; the zone is where
+    they overlap.
+
+    Laid out in that order deliberately. An earlier version led with the
+    support bands and appended a valuation warning, which produced "price is
+    inside this band now" directly above "no band qualifies" — two true
+    statements that should never have shared a panel.
+    """
+    bz = r.get("buy_zones") or {}
+    tech, fu = bz.get("technical") or [], bz.get("fundamental") or {}
+    verdict = bz.get("verdict") or {}
+    if not tech and not fu.get("intrinsic"):
+        return empty("Nothing to build zones from — run a scan.")
+
+    action = verdict.get("action")
+    conf = verdict.get("confidence") or {}
+    ok = action == "BUY"
+    banner = (
+        f'<div style="background:{"#E1F5EE" if ok else "#FCEBEB"};'
+        f'color:{"#085041" if ok else "#791F1F"};padding:10px 12px;'
+        f'border-radius:8px;margin-bottom:12px">'
+        f'<strong style="font-size:14px">{esc(action or "—")}</strong>'
+        + (f' <span style="font-size:11px">· {esc(conf["level"])} confidence '
+           f'({esc(conf.get("note") or "")})</span>' if conf.get("level") else "")
+        + f'<div style="font-size:12px;margin-top:4px">'
+          f'{esc(verdict.get("what_would_change") or "")}</div></div>')
+
+    checks = ('<table style="font-size:11px;margin-bottom:14px">'
+              + "".join(_check_row(c) for c in verdict.get("checks") or [])
+              + '</table>')
+
+    def section(title, body, sub=""):
+        return (f'<div style="margin-bottom:14px">'
+                f'<div style="font-size:10px;color:#898781;'
+                f'text-transform:uppercase;letter-spacing:.3px">{esc(title)}</div>'
+                + (f'<div style="font-size:10px;color:#898781;margin-bottom:5px">'
+                   f'{esc(sub)}</div>' if sub else '<div style="height:5px"></div>')
+                + body + '</div>')
+
+    tech_body = ('<table style="font-size:11px">'
+                 + "".join(_technical_row(z) for z in tech) + '</table>'
+                 + (f'<div style="font-size:10px;color:#898781;margin-top:5px">'
+                    f'⚠ {esc(bz["inverted"])}</div>' if bz.get("inverted") else ""))
+
+    return (banner + checks
+            + section("Investment buy zone",
+                      _investment_block(bz.get("investment") or [], verdict),
+                      "Where valuation and support overlap. Empty is a result.")
+            + section("Fundamental — what a price would earn",
+                      _fundamental_block(fu),
+                      "Independent of the chart.")
+            + section("Technical pullback zones", tech_body,
+                      "Where support sits. A level existing is not a reason "
+                      "to buy — each row carries what that price would earn."))
+
+_SWING_STATE = {"READY": ("#0F6E56", "#E1F5EE", "🟢"),
+                "WATCH": ("#0C447C", "#E6F1FB", "🔵"),
+                "NO TRADE": ("#898781", "#F1EFE8", "⚪"),
+                "BREAKDOWN": ("#791F1F", "#FCEBEB", "🔴"),
+                "NEAR READY": ("#0F6E56", "#E1F5EE", "🟢"),
+                "TRIGGERED": ("#0C447C", "#E6F1FB", "🔵"),
+                "APPROACHING": ("#8a6d1a", "#FAEEDA", "🟡"),
+                "DEVELOPING": ("#8a6d1a", "#FAEEDA", "🟠"),
+                "EXTENDED": ("#A32D2D", "#FAEEDA", "🟠"),
+                "MISSED": ("#A32D2D", "#FAEEDA", "🟠"),
+                "AVOID": ("#791F1F", "#FCEBEB", "🔴"),
+                "FAILED": ("#791F1F", "#FCEBEB", "🔴"),
+                "NO SETUP": ("#898781", "#F1EFE8", "⚪")}
+
+# One dot per component, so the six readings can be scanned without reading
+# the table underneath them.
+_DOT = ((75, "🟢"), (55, "🟡"), (0, "🔴"))
+
+
+def _swing_dot(score) -> str:
+    if score is None:
+        return "⚪"
+    return next(d for floor, d in _DOT if score >= floor)
+
+
+def _swing_panel(r) -> str:
+    """The swing verdict: what it is, what would trigger it, and what would
+    invalidate it.
+
+    Laid out as verdict → readings → triggers → risk plan, because the score
+    is the least actionable thing here. An earlier version led with the
+    number and buried the trigger, which invited reading "69/100" as a
+    decision rather than as a ranking.
+    """
+    sw = r.get("swing") or {}
+    if not sw or sw.get("score") is None:
+        return empty("No swing reading — run a scan.")
+
+    colour, bg, icon = _SWING_STATE.get(sw.get("state"),
+                                        ("#898781", "#F1EFE8", "⚪"))
+    grade = sw.get("grade") or "—"
+    tone = ("good" if grade in ("A+", "A") else "watch" if grade == "B"
+            else "bad")
+    head = (
+        f'<div style="background:{bg};border-radius:8px;padding:10px 12px;'
+        f'margin-bottom:10px">'
+        f'<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">'
+        f'<span style="font-size:18px;font-weight:700;color:{colour}">'
+        f'{sw["score"]}<span style="font-size:11px;font-weight:400">/100</span>'
+        f'</span>{badge(grade, tone)}'
+        f'<span style="font-weight:700;color:{colour}">{icon} '
+        f'{esc(sw.get("state") or "")}</span>'
+        f'<span style="font-size:11px;color:#52514e">'
+        f'{esc(sw.get("action") or "")}</span>'
+        f'<span style="margin-left:auto;font-size:12px;color:#52514e">'
+        f'{esc(sw.get("setup_label") or "")}</span></div>'
+        # Chart verdict and trade verdict, side by side and never merged.
+        f'<div style="font-size:11px;color:#52514e;margin-top:4px">'
+        f'Chart {esc((sw.get("stock_view") or {}).get("icon") or "")} '
+        f'{esc((sw.get("stock_view") or {}).get("label") or "")}'
+        f' · Trade {esc(sw.get("state") or "")} — '
+        f'{esc(sw.get("state_why") or "")}</div>'
+        f'<div style="font-size:12px;color:#52514e;margin-top:5px">'
+        f'{esc(sw.get("thesis") or "")}</div></div>')
+
+    # The six readings as a dot row — the "Trend 🟢 / Momentum 🔴" summary.
+    dots = "".join(
+        f'<div style="min-width:96px"><div style="font-size:10px;'
+        f'color:#898781;text-transform:uppercase">{esc(c["name"])}</div>'
+        f'<div style="font-weight:600">{_swing_dot(c["score"])} '
+        f'{c["score"]:.0f}</div></div>'
+        for c in sw.get("components") or [])
+    dot_row = (f'<div style="display:flex;gap:12px;flex-wrap:wrap;'
+               f'font-size:11px;margin-bottom:10px">{dots}</div>')
+
+    comps = "".join(
+        f'<tr><td style="padding:2px 10px 2px 0;white-space:nowrap">'
+        f'{esc(c["name"])}</td>'
+        f'<td style="padding:2px 8px 2px 0;color:#898781">w{c["weight"]}</td>'
+        f'<td style="padding:2px 10px 2px 0;font-weight:600;text-align:right">'
+        f'{c["score"]:.0f}</td>'
+        f'<td style="padding:2px 0;color:#52514e">{esc(c["detail"])}</td></tr>'
+        for c in sw.get("components") or [])
+
+    # ── triggers ────────────────────────────────────────────────────────────
+    trig = sw.get("triggers") or {}
+
+    def trigger_line(stage, label, colour_):
+        if not stage:
+            return ""
+        mark = "✓ met" if stage.get("met") else f'{stage["distance_pct"]:+.1f}% away'
+        return (f'<div style="margin-bottom:3px"><span style="color:{colour_};'
+                f'font-weight:700">{esc(label)}</span> '
+                f'<strong>${stage["price"]:,.2f}</strong> '
+                f'<span style="color:#898781">— {esc(stage["condition"])} '
+                f'({esc(mark)})</span></div>')
+
+    chase = trig.get("max_chase") or {}
+    chase_html = ""
+    if chase.get("price"):
+        exceeded = chase.get("exceeded")
+        chase_html = (
+            f'<div style="margin-top:5px;color:{"#791F1F" if exceeded else "#898781"}">'
+            f'{"🔴 MISSED — " if exceeded else ""}No chase above '
+            f'<strong>${chase["price"]:,.2f}</strong> — {esc(chase["note"])}</div>')
+
+    triggers_html = ""
+    if trig.get("early") or trig.get("full"):
+        triggers_html = (
+            f'<div style="background:#E6F1FB;font-size:11px;padding:9px 11px;'
+            f'border-radius:8px;margin-bottom:10px">'
+            f'<div style="font-size:10px;color:#898781;text-transform:uppercase;'
+            f'margin-bottom:4px">Trigger</div>'
+            + trigger_line(trig.get("early"), "Early", "#8a6d1a")
+            + trigger_line(trig.get("full"), "Full", "#0F6E56")
+            + chase_html + '</div>')
+
+    # ── levels, split by which side of the trigger they sit on ─────────────
+    path = sw.get("path") or {}
+
+    def level_list(title, items, fmt):
+        if not items:
+            return ""
+        return (f'<div style="margin-bottom:6px">'
+                f'<div style="font-size:10px;color:#898781;'
+                f'text-transform:uppercase">{esc(title)}</div>'
+                + "".join(f'<div>{esc(i["name"])} '
+                          f'<strong>${i["price"]:,.2f}</strong> '
+                          f'<span style="color:#898781">{fmt(i)}</span></div>'
+                          for i in items) + '</div>')
+
+    levels_html = (
+        f'<div style="font-size:11px;margin-bottom:10px">'
+        + level_list("Pre-trigger resistance — must clear to reach the entry",
+                     path.get("to_clear"),
+                     lambda i: f'{i["move_pct"]:+.1f}% from here')
+        + level_list("Post-entry support", path.get("support_after_entry"),
+                     lambda i: f'{i["below_entry_pct"]:+.1f}% vs entry')
+        + level_list("Target", path.get("levels"),
+                     lambda i: f'{i["r"]:.2f}R · {i["move_pct"]:+.1f}%')
+        + '</div>')
+
+    path_rows = "".join(
+        f'<tr><td style="padding:2px 10px 2px 0">{esc(c["name"])}</td>'
+        f'<td style="padding:2px 8px 2px 0;color:#898781">w{c["weight"]}</td>'
+        f'<td style="padding:2px 10px 2px 0;text-align:right;font-weight:600">'
+        f'{c["score"]:.0f}</td>'
+        f'<td style="padding:2px 0;color:#52514e">{esc(c["detail"])}</td></tr>'
+        for c in sw.get("path_components") or [])
+    path_html = (f'<div style="font-size:10px;color:#898781;'
+                 f'text-transform:uppercase;margin:8px 0 3px">Path quality — '
+                 f'{esc(path.get("quality") or "—")}</div>'
+                 f'<table style="font-size:11px">{path_rows}</table>'
+                 if path_rows else "")
+
+    # ── the risk plan ──────────────────────────────────────────────────────
+    inval, ts = sw.get("invalidation") or {}, sw.get("time_stop") or {}
+    risk = sw.get("risk_pct") or {}
+    plan_rows = [("Entry", f'${sw["entry"]:,.2f}' if sw.get("entry") else "—",
+                  sw.get("entry_note") or "")]
+    if inval.get("price"):
+        plan_rows.append(("Invalidation", f'${inval["price"]:,.2f}',
+                          inval["condition"]))
+    if sw.get("stop"):
+        plan_rows.append(("Hard stop", f'${sw["stop"]:,.2f}',
+                          sw.get("stop_note") or ""))
+    if ts.get("min_days"):
+        plan_rows.append(("Expected hold",
+                          f'{ts["min_days"]}–{ts["max_days"]} days',
+                          f'cut it if it has not moved within '
+                          f'{ts["review_days"]}'))
+    plan_rows.append(("Risk",
+                      (f'{risk.get("max")}% max' if risk.get("max")
+                       else "no size"),
+                      risk.get("note") or ""))
+    # Sized on the same account and the same arithmetic the Position sizing
+    # panel below uses — the difference is the risk budget, which is stated.
+    sz = sw.get("sizing") or {}
+    if sz.get("shares"):
+        plan_rows.append(
+            ("Position",
+             f'{sz["shares"]:,} sh · ${sz["position_value"]:,.0f}',
+             f'{sz["allocation_pct"]:.1f}% of capital · risk '
+             f'${sz["actual_risk"]:,.0f} · bound by {sz["bound_by"]} · '
+             f'{sz.get("note") or ""}'))
+    plan = ('<table style="font-size:11px">' + "".join(
+        f'<tr><td style="padding:3px 12px 3px 0;color:#898781;'
+        f'white-space:nowrap">{esc(label)}</td>'
+        f'<td style="padding:3px 12px 3px 0;font-weight:700;'
+        f'white-space:nowrap">{esc(value)}</td>'
+        f'<td style="padding:3px 0;color:#52514e">{esc(note)}</td></tr>'
+        for label, value, note in plan_rows) + '</table>')
+
+    gate_html = ""
+    if sw.get("gates"):
+        chips = []
+        for g in sw["gates"]:
+            mark = "✓" if g["ok"] else "✗" if g["ok"] is False else "?"
+            colour = ("#0F6E56" if g["ok"] else
+                      "#A32D2D" if g["ok"] is False else "#898781")
+            weight = "700" if g.get("blocking") else "400"
+            chips.append(f'<span title="{esc(g["detail"])}" '
+                         f'style="color:{colour};font-weight:{weight};'
+                         f'margin-right:10px;white-space:nowrap">{mark} '
+                         f'{esc(g["name"])}</span>')
+        chips.append('<span style="color:#898781">— bold gates block the '
+                     'trade; the rest are advisory</span>')
+        gate_html = (f'<div style="font-size:11px;margin-bottom:10px">'
+                     f'<div style="font-size:10px;color:#898781;'
+                     f'text-transform:uppercase;margin-bottom:3px">Gates</div>'
+                     + "".join(chips) + '</div>')
+
+    return (head + dot_row + gate_html + triggers_html + levels_html
+            + f'<table style="font-size:11px">{comps}</table>'
+            + path_html
+            + f'<div style="font-size:10px;color:#898781;'
+              f'text-transform:uppercase;margin:10px 0 3px">Risk plan</div>'
+            + plan
+            + '<div style="font-size:10px;color:#898781;margin-top:8px">'
+              'Computed from price, volume and structure only — this engine '
+              'reads no quality or valuation input, so it disagrees with the '
+              'company verdict by design.</div>')
+
+
+def _profile_panel(r) -> str:
+    """What the company does and where it stands — the context the scores
+    cannot carry.
+
+    Deliberately the first thing in the reasoning: every panel below it
+    judges the business, and judging one you cannot name is the gap this
+    fills. Nothing here feeds a gate.
+    """
+    p = r.get("profile") or {}
+    sector, industry = p.get("sector") or r.get("sector"), p.get("industry")
+    chips = " ".join(badge(x, "muted", "small") for x in (sector, industry) if x)
+
+    desc = p.get("description")
+    body = (f'<div style="font-size:12px;color:#0b0b0b;line-height:1.5;'
+            f'margin-top:8px">{esc(desc)}</div>' if desc else
+            f'<div style="font-size:11px;color:#898781;margin-top:8px">'
+            f'No business description in the library for this name — it comes '
+            f'from the scan\'s BusinessSummary column.</div>')
+
+    return (f'<div>{chips}</div>{body}'
+            f'<div style="margin-top:10px;padding-top:9px;'
+            f'border-top:0.5px solid #f1efea">'
+            f'<div style="font-size:10px;color:#898781;text-transform:uppercase;'
+            f'letter-spacing:.3px;margin-bottom:4px">Position in its '
+            f'{esc("sector" if p.get("peer_group_is_sector") else "industry")}'
+            f'</div>{_position_line(p)}</div>')
+
+
 def _detail(r):
     q, v, t = r["quality"], r["valuation"], r["trend"]
     gate = _GATE_LABEL.get(r["gate"], r["gate"])
     parts = [
+        # Before the verdict, not after it: the rest of this panel is a
+        # judgment about a business, and it should be possible to know which
+        # business without leaving the page.
+        card(f'{r.get("name") or r["ticker"]}', _profile_panel(r), "🏢"),
         f'<div style="font-size:11px;color:#898781;margin-bottom:10px">'
         f'Stopped at: <strong style="color:#444441">{esc(gate)}</strong>'
         f' · LT score {r["lt_score"] if r["lt_score"] is not None else "—"}'
@@ -653,8 +1148,19 @@ def _detail(r):
     grid = (
         '<div style="display:grid;grid-template-columns:1fr;gap:14px;'
         'margin-top:12px">'
-        # Sizing first: it is the only panel that says what to DO, and the
-        # eight that follow are why.
+        # Buy Zone before sizing, and the two are not redundant. Sizing
+        # answers "if I take this trade today, how much and where is the
+        # stop" — a swing question, priced to the cent. The bands answer the
+        # one a multi-year holder actually asks: which prices are worth
+        # owning this at, and what is still wrong at each. On this page the
+        # second question is the primary one, so it reads first; the precise
+        # plan is underneath for the day you act on it.
+        f'<div>{card("Buy Zone", _buy_zone_panel(r), "🎚️")}</div>'
+        # Second, and deliberately not folded into the one above: this is the
+        # 3-to-20-day question, answered by an engine that reads none of the
+        # company's inputs. AVGO is a long-term WAIT and a swing setup at the
+        # same time, and both are true.
+        f'<div>{card("Swing trade — 3 to 20 days", _swing_panel(r), "📈")}</div>'
         f'<div>{_sizing_panel(r)}</div>'
         f'<div>{card("Business quality — LQuality", _quality_panel(q), "💎")}</div>'
         f'<div>{card("Valuation", _valuation_panel(v), "⚖️")}</div>'
@@ -672,6 +1178,13 @@ def _detail(r):
 # The table — §15
 # ─────────────────────────────────────────────────────────────────────────────
 
+# The resize handle is absolutely positioned, so a header needs to be a
+# positioned ancestor. That `position` is set in PIN_CSS, NOT here: an inline
+# style beats the stylesheet, so `position:relative` in this string overrode
+# `position:sticky` on the two pinned headers — and their measured `left`
+# offset, which does nothing to a static-position sticky element, became a
+# relative shift that slid TICKER and PRICE right by the width of the frozen
+# group while their data cells stayed put.
 _TH = ('padding:7px 8px;font-size:10px;text-transform:uppercase;'
        'letter-spacing:.06em;color:#898781;border-bottom:1px solid #e1e0d9;'
        'white-space:nowrap;cursor:pointer;user-select:none')
@@ -782,8 +1295,88 @@ TABLE_JS = r"""
 function initLtTable() {
   var table = document.getElementById('lt-table');
   if (!table) return;
-  var KEY = 'lt.cols.v1', SORTKEY = 'lt.sort.v1';
+  var KEY = 'lt.cols.v1', SORTKEY = 'lt.sort.v1', WKEY = 'lt.colw.v1';
   var head = table.tHead.rows[0], body = table.tBodies[0];
+
+  // ── Column widths ─────────────────────────────────────────────────────────
+  // Width is applied to the inner [data-colw] span, not to the <th>/<td> box.
+  // A `width` on a table cell is a suggestion the layout algorithm is free to
+  // ignore — and does, whenever the content is wider — so dragging a column
+  // narrower would appear to do nothing on exactly the dense columns worth
+  // narrowing. A capped inline-block always holds.
+  //
+  // Only columns the user has actually dragged are sized. Handing every
+  // column a default width would push the table wider than the nineteen
+  // content-driven columns need, which is the opposite of the request.
+  var colWidths = {};
+  try { colWidths = JSON.parse(localStorage.getItem(WKEY) || '{}') || {}; }
+  catch (e) { colWidths = {}; }
+
+  function applyWidth(key) {
+    var w = colWidths[key];
+    var els = table.querySelectorAll('[data-colw="' + key + '"]');
+    for (var i = 0; i < els.length; i++) {
+      var s = els[i].style;
+      if (w) {
+        s.display = 'inline-block';
+        s.width = w + 'px';
+        s.maxWidth = w + 'px';
+        s.overflow = 'hidden';
+        s.verticalAlign = 'top';
+      } else {
+        // Back to the natural, content-driven column.
+        s.display = s.width = s.maxWidth = s.overflow = s.verticalAlign = '';
+      }
+    }
+  }
+
+  function applyAllWidths() {
+    for (var key in colWidths) {
+      if (Object.prototype.hasOwnProperty.call(colWidths, key)) applyWidth(key);
+    }
+  }
+
+  function saveWidths() {
+    try { localStorage.setItem(WKEY, JSON.stringify(colWidths)); } catch (e) {}
+  }
+
+  var resizeKey = null, resizeStartX = 0, resizeStartW = 0;
+
+  function onResizeMove(e) {
+    if (!resizeKey) return;
+    // 44px floor: narrower than this and the header label has no room to
+    // show even one character, so the column can't be found to widen again.
+    colWidths[resizeKey] = Math.max(44, resizeStartW + (e.clientX - resizeStartX));
+    applyWidth(resizeKey);
+    layoutPins();   // a pinned column changing width moves the ones after it
+  }
+
+  function onResizeEnd() {
+    if (resizeKey) { saveWidths(); layoutPins(); }
+    resizeKey = null;
+    document.body.style.userSelect = '';
+    var active = table.querySelectorAll('.col-resizer.active');
+    for (var i = 0; i < active.length; i++) active[i].classList.remove('active');
+    document.removeEventListener('mousemove', onResizeMove);
+    document.removeEventListener('mouseup', onResizeEnd);
+  }
+
+  function startResize(e, th, handle) {
+    var key = th.dataset.col;
+    e.preventDefault();
+    e.stopPropagation();
+    resizeKey = key;
+    resizeStartX = e.clientX;
+    // Measured, not read back from colWidths: the first drag of an untouched
+    // column has to start from the width it currently occupies on screen, or
+    // the column jumps to some default before it starts following the mouse.
+    resizeStartW = colWidths[key] ||
+      Math.round(th.getBoundingClientRect().width);
+    handle.classList.add('active');
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onResizeMove);
+    document.addEventListener('mouseup', onResizeEnd);
+  }
 
   function colKeys() {
     return Array.prototype.map.call(head.cells, function (th) {
@@ -946,6 +1539,10 @@ function initLtTable() {
     }
   } catch (e) {}
 
+  // Before layoutPins(): a restored width changes how wide a pinned column
+  // is, and the pin offsets are measured from it.
+  applyAllWidths();
+
   // After the restore, so the offsets are measured against the layout the
   // user will actually see. Column widths are content-driven, so anything
   // that reflows the table can move the seam — a window resize, or webfonts
@@ -960,6 +1557,28 @@ function initLtTable() {
   Array.prototype.forEach.call(head.cells, function (th) {
     // Sorting still works on the pinned column; only reordering is off.
     th.draggable = !th.classList.contains('lt-pin');
+
+    // Resizing is allowed on every column INCLUDING the pinned ones — the
+    // reason they can't move (they're position:sticky and must stay leftmost)
+    // says nothing about how wide they should be, and the ticker column is
+    // the one most worth narrowing once you know your own tickers.
+    var handle = th.querySelector('.col-resizer');
+    if (handle) {
+      handle.addEventListener('mousedown', function (e) {
+        startResize(e, th, handle);
+      });
+      // The handle sits inside the header, which sorts on click. Without
+      // this, every resize would also re-sort the table underneath it.
+      handle.addEventListener('click', function (e) { e.stopPropagation(); });
+      handle.addEventListener('dblclick', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        delete colWidths[th.dataset.col];
+        applyWidth(th.dataset.col);
+        saveWidths();
+        layoutPins();
+      });
+    }
     th.addEventListener('dragstart', function (e) {
       dragFrom = Array.prototype.indexOf.call(head.cells, th);
       th.style.opacity = '.4';
@@ -1022,11 +1641,15 @@ function initLtTable() {
   // keeping. A sort is a question you asked once.
   try { localStorage.removeItem(SORTKEY); } catch (e) {}
 
+  // One reset for the whole layout: order and widths are the same preference
+  // from the user's side ("put the table back"), and a control that restored
+  // half of it would need a second one next to it explaining the difference.
   var reset = document.getElementById('lt-reset-cols');
   if (reset) {
     reset.addEventListener('click', function (e) {
       e.preventDefault();
-      try { localStorage.removeItem(KEY); } catch (err) {}
+      try { localStorage.removeItem(KEY); localStorage.removeItem(WKEY); }
+      catch (err) {}
       location.reload();
     });
   }
@@ -1104,6 +1727,64 @@ def _support_confluence_cell(conf, cluster=None):
             f'white-space:nowrap">{sub}</div>',
             # Sorted on levels actually holding, cluster size as tiebreak.
             n * 1000 + count * 10 + min(score, 9))
+
+
+def _buy_zone_cell(r):
+    """The buy zone, for every row.
+
+    A qualifying investment zone is green and bold — valuation, return,
+    quality and support all agree at that price. Everything else shows the
+    nearest technical band the price would reach on a pullback, in grey and
+    labelled with the level it comes from, because a support band is not a
+    buy zone and the two must not look alike.
+    """
+    zone = ((r.get("buy_zones") or {}).get("display_zone")) or {}
+    if not zone.get("low"):
+        return '<span style="color:#898781">—</span>', None
+    qualifies = zone.get("kind") == "investment"
+    colour = "#0F6E56" if qualifies else "#898781"
+    weight = "700" if qualifies else "500"
+    dist = zone.get("distance_pct")
+    sub = esc(zone.get("label") or "")
+    if not qualifies:
+        sub += " · technical"
+    if dist is not None:
+        sub += f' · {dist:+.1f}%'
+    return (f'<span style="color:{colour};font-weight:{weight};'
+            f'white-space:nowrap" title="{esc(zone.get("basis") or "")}">'
+            f'${zone["low"]:,.0f} – ${zone["high"]:,.0f}</span>'
+            f'<div style="font-size:10px;color:#898781;white-space:nowrap">'
+            f'{sub}</div>',
+            # Qualifying zones sort above technical bands; within each, the
+            # nearest to today's price first.
+            (1000 if qualifies else 0) - abs(dist if dist is not None else 999))
+
+
+def _swing_trade_cell(r):
+    """The swing engine's verdict in one cell: score, state, setup.
+
+    Three facts rather than one, because the score alone would rank a name
+    with no pattern above one that is a trigger away from being taken.
+    Sorted on score, but only for names with a live setup — a 50 with no
+    setup should not outrank a 48 that has one.
+    """
+    sw = r.get("swing") or {}
+    score = sw.get("score")
+    if score is None:
+        return '<span style="color:#898781">—</span>', None
+    colour, _bg, icon = _SWING_STATE.get(sw.get("state"),
+                                         ("#898781", "", "⚪"))
+    setup = sw.get("setup_label") or ""
+    sub = f'{icon} {sw.get("state", "")}'
+    if setup and setup != "No setup":
+        sub += f' · {setup}'
+    return (f'<span style="color:{colour};font-weight:700" '
+            f'title="{esc(sw.get("state_why") or "")}">{score}</span>'
+            f'<div style="font-size:10px;color:#898781;white-space:nowrap">'
+            f'{esc(sub)}</div>',
+            # Names with no tradeable setup sort below every name that has
+            # one, whatever their score.
+            score + (1000 if sw.get("eligible") else 0))
 
 
 def _swing_cell(r):
@@ -1366,17 +2047,29 @@ _COLUMNS = (
     ("trend", "Trend", "center", "num"),
     ("pullback", "Pullback", "left", "num"),
     ("support", "Support", "left", "num"),
+    # Present for EVERY name, not only the 14 with a qualifying zone: a blank
+    # cell made "no price qualifies today" and "no support below this" look
+    # like the same finding.
+    ("buy_zone", "Buy Zone", "right", "num"),
     ("buyzone", "S1 \u00b7 Support", "right", "num"),
     ("resistance", "R1 \u00b7 Resistance", "right", "num"),
     ("rs", "RS", "center", "num"),
     ("market", "Market", "center", "text"),
     ("swing", "Technical", "left", "num"),
+    # The swing ENGINE's verdict. Distinct from "Technical" above, which is
+    # the pure price/volume score the long-term engine uses as a second
+    # opinion — same word, different question, so both are labelled for what
+    # they answer rather than for what they are computed from.
+    ("swing_trade", "Swing", "left", "num"),
     ("investment", "Investment", "left", "num"),
     ("entry_score", "Entry", "left", "num"),
     # Sizing sits immediately before Action: the verdict and what it would
     # cost you are one thought, and putting the account impact after the
     # decision is how a 40%-of-capital position gets taken without noticing.
-    ("entry_stop", "Entry · Stop", "right", "num"),
+    # "LT" because a stock now carries three different entries — the
+    # long-term buy zone, the swing trigger and the day entry — and an
+    # unqualified "Entry" column made the first read as all three.
+    ("entry_stop", "LT Entry · Stop", "right", "num"),
     ("position", "Position", "right", "num"),
     ("risk", "Risk", "right", "num"),
     ("rr", "R:R", "right", "num"),
@@ -1441,12 +2134,14 @@ def _cells(r):
         "buyzone": _buyzone_cell(p),
         "resistance": _resistance_cell(p),
         "support": _support_confluence_cell(conf, r.get("ma_cluster") or {}),
+        "buy_zone": _buy_zone_cell(r),
         "investment": _status_cell(r.get("investment") or {}, _INVEST_STYLE),
         "entry_score": (
             f'<strong>{(r.get("entry") or {}).get("score", "—")}</strong>'
             f'<div style="font-size:10px;color:#898781">of 100</div>',
             (r.get("entry") or {}).get("score")),
         "swing": _swing_cell(r),
+        "swing_trade": _swing_trade_cell(r),
         "rs": (rs_mark, rs["score"]),
         "market": (market, r["regime"]),
         "lt": (f'<strong>{r["lt_score"] if r["lt_score"] is not None else "—"}</strong>',
@@ -1494,9 +2189,13 @@ def _row(r, open_detail: bool = False, order=None):
         html, sort_value = cells.get(key, ("", None))
         sort_attr = "" if sort_value is None else esc(str(sort_value))
         pin = ' class="lt-pin"' if key in PINNED_COLUMNS else ""
+        # The data-colw span is deliberately unstyled here. Width lives in
+        # localStorage, so only the browser knows it, and only a column the
+        # user has actually resized gets sized at all — an untouched table
+        # renders exactly as it did before this wrapper existed.
         tds.append(f'<td data-col="{key}"{pin} data-sort="{sort_attr}" '
                    f'style="{_TD};text-align:{align.get(key, "left")}">'
-                   f'{html}</td>')
+                   f'<span data-colw="{key}">{html}</span></td>')
 
     return (f'<tr data-main="1">{"".join(tds)}</tr>'
             f'<tr data-detail="1"><td colspan="{len(_COLUMNS)}" '
@@ -1531,6 +2230,12 @@ PINNED_COLUMNS = ("ticker", "price")
 # frozen group rather than two.
 PIN_CSS = """
 <style>
+/* Containing block for the absolutely-positioned resize handle. Declared
+   here rather than in the header's inline style so the sticky rule below —
+   more specific, and inline styles would outrank it — still wins on the
+   pinned columns. `sticky` is itself a positioned value, so the handle
+   anchors correctly on those two as well. */
+#lt-table th { position: relative; }
 #lt-table td.lt-pin, #lt-table th.lt-pin {
   position: sticky; z-index: 2; background: #fff;
 }
@@ -1557,12 +2262,21 @@ def analysis_table(rows, open_detail: bool = False,
     headers = ""
     for key, label, align, stype in _COLUMNS:
         pinned = key in PINNED_COLUMNS
+        hint = ("Click to sort · pinned left · drag right edge to resize"
+                if pinned else
+                "Click to sort · drag to reorder · drag right edge to resize")
+        # The label rides in its own data-colw span so a width can be applied
+        # to it; the arrow stays outside so a narrowed column still shows
+        # which way it is sorted. draggable="false" on the handle keeps a
+        # mousedown there out of the header's own drag-to-reorder.
         headers += (
             f'<th data-col="{key}" data-type="{stype}" data-dir=""'
             + (' class="lt-pin"' if pinned else "")
-            + f' title="{"Click to sort · pinned left" if pinned else "Click to sort · drag to reorder"}"'
-            + f' style="{_TH};text-align:{align}">{esc(label)}'
-              f'<span class="lt-arrow"></span></th>')
+            + f' title="{hint}"'
+            + f' style="{_TH};text-align:{align}">'
+              f'<span data-colw="{key}">{esc(label)}</span>'
+              f'<span class="lt-arrow"></span>'
+              f'<span class="col-resizer" draggable="false"></span></th>')
     body_rows = "".join(_row(r, open_detail=open_detail) for r in rows) or (
         f'<tr><td colspan="{len(_COLUMNS)}" style="padding:24px;'
         f'text-align:center">{empty(empty_msg)}</td></tr>')
@@ -2207,8 +2921,10 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
 
 <div style="font-size:10px;color:#898781;margin-top:-6px">
   Click a header to sort; <strong>shift-click a second header</strong> to
-  sort by both — e.g. LQuality then Action. Drag a header to reorder;
-  column order persists in this browser
+  sort by both — e.g. LQuality then Action. Drag a header to reorder, or drag
+  its <strong>right edge</strong> to set a column's width (double-click that
+  edge to give the column its natural width back). Order and widths persist
+  in this browser
   (<a href="#" id="lt-reset-cols" style="color:#185FA5">reset columns</a>).
   S1 · Support is the price to work an order at and R1 · Resistance the
   first thing overhead; both are green/red and bold when the market has

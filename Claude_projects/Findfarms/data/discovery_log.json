@@ -1,0 +1,98 @@
+[
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/propertyDetails/xyz",
+    "reason": "manual-only source",
+    "at": "2026-08-14T13:48:13"
+  },
+  {
+    "action": "ingest_text",
+    "source": "Test",
+    "url": "",
+    "property_id": "jayapura-2.0-a0fcc393c6",
+    "is_new": true,
+    "chars": 209,
+    "at": "2026-08-14T14:10:28"
+  },
+  {
+    "action": "ingest_text",
+    "source": "Test2",
+    "url": "",
+    "property_id": "jayapura-2.0-a0fcc393c6",
+    "is_new": false,
+    "chars": 133,
+    "at": "2026-08-14T14:10:28"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:12:34"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:12:38"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:13:54"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:14:11"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:15:16"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:20:47"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:23:39"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:24:26"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:25:55"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:36:55"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:37:22"
+  },
+  {
+    "action": "fetch_refused",
+    "url": "https://www.magicbricks.com/property/123",
+    "reason": "manual-only source",
+    "at": "2026-08-14T14:38:11"
+  }
+]

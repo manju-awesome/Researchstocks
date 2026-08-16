@@ -614,6 +614,38 @@ class TestSortableDraggableTable(unittest.TestCase):
                                                  "Prior_Breakout_Level": None})))
         self.assertIn('data-col="buyzone" data-sort=""', html)
 
+    # ── Resizable columns ───────────────────────────────────────────────────
+
+    def test_every_cell_carries_a_width_target(self):
+        # Widths are applied to this inner span, not to the <td> box: a width
+        # on a table cell is a suggestion the layout algorithm ignores as soon
+        # as the content is wider, which is exactly the dense columns worth
+        # narrowing.
+        for key, _label, _align, _type in self.view._COLUMNS:
+            self.assertIn(f'data-colw="{key}"', self.html)
+
+    def test_every_header_has_a_resize_handle(self):
+        html = self.view.analysis_table([E.evaluate(_row())])
+        self.assertEqual(html.count("col-resizer"), len(self.view._COLUMNS))
+        # draggable="false" keeps a mousedown on the handle out of the
+        # header's own drag-to-reorder.
+        self.assertIn('class="col-resizer" draggable="false"', html)
+
+    def test_the_header_style_does_not_set_position(self):
+        # The regression this exists for: `position:relative` inline on every
+        # <th> outranks the stylesheet, so the two pinned headers stopped
+        # being `sticky` — and the `left` offset that does nothing to an
+        # unscrolled sticky element became a relative shift, sliding TICKER
+        # and PRICE right by the width of the frozen group while their data
+        # cells stayed put. The header must take its position from PIN_CSS.
+        self.assertNotIn("position:", self.view._TH)
+        self.assertIn("#lt-table th { position: relative; }", self.view.PIN_CSS)
+        self.assertIn("position: sticky", self.view.PIN_CSS)
+        # The sticky rule has to come after (and be more specific than) the
+        # blanket one, or the pinned columns lose their freeze.
+        self.assertLess(self.view.PIN_CSS.index("th { position: relative; }"),
+                        self.view.PIN_CSS.index("position: sticky"))
+
 
 class TestBuyZoneLevel(unittest.TestCase):
     """technicals.compute_buy_zone_level — the price to work an order at."""
@@ -663,6 +695,538 @@ class TestBuyZoneLevel(unittest.TestCase):
 
     def test_it_is_attached_to_the_pullback_result(self):
         self.assertIn("buy_zone", T.compute_pullback(_row()))
+
+
+class TestBuyZones(unittest.TestCase):
+    """core.longterm.buy_zones — valuation decides whether, support decides when.
+
+    The bug this module was rewritten around was not a wrong number. It was
+    two true statements that contradicted each other in one panel:
+
+        Preferred $386-395 — price is inside this band now
+        No band qualifies: even the deepest support is an expensive price
+
+    "Preferred" was built from the 50 MA and never meant the price was worth
+    paying. So most of what is pinned here is that support alone can no
+    longer create a buy zone, and that an empty result is a result.
+    """
+
+    def setUp(self):
+        from stockanalysis.core.longterm import buy_zones as BZ
+        from stockanalysis.webapp import longterm_view
+        self.BZ = BZ
+        self.view = longterm_view
+
+    def _zones(self, **kw):
+        return E.evaluate(_row(**kw), risk_free=0.042)["buy_zones"]
+
+    # An elite business at a price the model cannot justify: AVGO's shape.
+    def _expensive(self, **kw):
+        base = {"Current Price": 392.99, "FreeCashFlow": 26.9e9,
+                "SharesOutstanding": 4.76e9, "8EMA": 409.73, "21EMA": 402.62,
+                "50MA": 390.33, "200MA": 368.25, "Prior_Breakout_Level": 351.84,
+                "FCF_CAGR%": 24.4, "Revenue_CAGR%": 24.0, "ATR_Pct": 2.5}
+        base.update(kw)
+        return self._zones(**base)
+
+    # ── the split ───────────────────────────────────────────────────────────
+
+    def test_support_alone_no_longer_creates_a_buy_zone(self):
+        # The whole point. Price sits ON the 50 MA and the model says the
+        # price demands far more growth than the company delivers.
+        zones = self._expensive()
+        self.assertTrue(zones["technical"], "support should still be reported")
+        self.assertEqual(zones["investment"], [],
+                         "an expensive price produced a buy zone from support")
+        self.assertEqual(zones["verdict"]["action"], "WAIT")
+
+    def test_technical_zones_are_named_for_their_level_not_a_verdict(self):
+        # "Preferred" on a 50 MA band was the original sin.
+        labels = [z["label"] for z in self._expensive()["technical"]]
+        for verdictish in ("Preferred", "Aggressive", "Excellent"):
+            self.assertNotIn(verdictish, labels)
+        self.assertIn("50 MA", labels)
+
+    def test_every_support_zone_carries_what_that_price_would_earn(self):
+        # So a level and its valuation can never be read in isolation.
+        for zone in self._expensive()["technical"]:
+            self.assertIn("value_zone", zone)
+            self.assertIn("expected_cagr_pct", zone)
+            self.assertEqual(zone["value_zone"], "Extreme")
+
+    def test_the_two_curves_are_reported_even_when_they_never_meet(self):
+        zones = self._expensive()
+        self.assertIsNotNone(zones["fundamental"]["buy_below"])
+        self.assertLess(zones["fundamental"]["buy_below"],
+                        min(z["low"] for z in zones["technical"]),
+                        "this fixture is meant to have no overlap")
+        self.assertIn("No overlap",
+                      zones["verdict"]["what_would_change"])
+
+    # ── expected return ─────────────────────────────────────────────────────
+
+    def test_paying_the_model_value_earns_the_discount_rate(self):
+        # The identity the whole expected-return figure rests on.
+        from stockanalysis.core.longterm import valuation as V
+        row = _row()
+        value = V.price_at_implied_growth(row, 10.0, 0.042)
+        discount, _ = V._discount_rate(row.get("Beta"), 0.042)
+        self.assertAlmostEqual(
+            V.expected_cagr_at_price(row, value, 10.0, 0.042),
+            discount * 100, places=0)
+
+    def test_a_lower_price_earns_more(self):
+        from stockanalysis.core.longterm import valuation as V
+        row = _row()
+        rates = [V.expected_cagr_at_price(row, p, 10.0, 0.042)
+                 for p in (200.0, 150.0, 100.0, 80.0)]
+        self.assertEqual(rates, sorted(rates))
+
+    def test_the_return_hurdle_round_trips(self):
+        from stockanalysis.core.longterm import valuation as V
+        row = _row()
+        price = V.price_for_expected_cagr(row, 15.0, 10.0, 0.042)
+        self.assertAlmostEqual(
+            V.expected_cagr_at_price(row, price, 10.0, 0.042), 15.0, places=0)
+
+    def test_a_better_business_is_asked_for_a_higher_return(self):
+        # Paying up for quality is only defensible if the quality delivers
+        # the return, so the tier that justifies the premium clears the
+        # taller bar rather than a lower one.
+        self.assertGreater(self.BZ.hurdle_for(95), self.BZ.hurdle_for(85))
+        self.assertGreater(self.BZ.hurdle_for(85), self.BZ.hurdle_for(72))
+
+    # ── what may be projected forward ───────────────────────────────────────
+
+    def test_cash_flow_may_not_outrun_revenue_in_the_projection(self):
+        # Hasbro: free cash flow +51.8% a year while revenue fell 7.1%. Taken
+        # at the FCF rate it valued a $96 stock at $696 and reported a 59%/yr
+        # expected return.
+        rate, note = self.BZ.projection_growth(
+            {"FCF_CAGR%": 51.8, "Revenue_CAGR%": -7.1}, {})
+        self.assertEqual(rate, -7.1)
+        self.assertIn("cannot outrun revenue", note)
+
+    def test_the_projection_is_capped(self):
+        # Newmont: +88.5% off a depressed base, credited by the band at the
+        # engine's 40% ceiling, which still valued a $118 stock at $1,007.
+        rate, note = self.BZ.projection_growth(
+            {"FCF_CAGR%": 88.5, "Revenue_CAGR%": 60.0}, {})
+        self.assertEqual(rate, self.BZ.PROJECTION_CEILING_PCT)
+        self.assertIn("ceiling", note)
+
+    def test_the_projection_cap_is_below_what_the_band_will_underwrite(self):
+        from stockanalysis.core.longterm import valuation as V
+        # Projecting more growth than the engine refuses to underwrite in a
+        # PRICE would be making exactly the forecast it declines to make.
+        self.assertLess(self.BZ.PROJECTION_CEILING_PCT,
+                        V.IMPLAUSIBLE_IMPLIED_GROWTH)
+
+    def test_the_band_and_the_projection_use_different_legs_on_purpose(self):
+        # Microsoft's shape: FCF +4% while revenue +16% on a capex cycle. The
+        # band credits the faster leg so investment is not punished; the
+        # projection takes the slower one because that is what you receive.
+        rate, _ = self.BZ.projection_growth(
+            {"FCF_CAGR%": 4.0, "Revenue_CAGR%": 16.0}, {})
+        self.assertEqual(rate, 4.0)
+
+    # ── the gate ────────────────────────────────────────────────────────────
+
+    def test_an_unacceptable_band_blocks_the_zone_outright(self):
+        zones = self._expensive()
+        self.assertFalse(zones["fundamental"]["blocked"])
+        self.assertEqual(zones["investment"], [])
+
+    def test_a_zone_below_the_price_is_a_level_to_wait_for(self):
+        # Having a qualifying zone is not the same as being able to act.
+        for zone in self._zones()["investment"]:
+            if not zone["reached"]:
+                self.assertEqual(self._zones()["verdict"]["action"], "WAIT")
+
+    def test_the_verdict_separates_unmeasured_from_failed(self):
+        # "the valuation says no" and "there is no valuation" lead to
+        # different decisions; the old output collapsed them.
+        zones = self._zones(FreeCashFlow=None, **{"FCF_CAGR%": None,
+                                                  "Revenue_CAGR%": None})
+        by_name = {c["name"]: c for c in zones["verdict"]["checks"]}
+        self.assertIsNone(by_name["Expected return"]["ok"])
+        self.assertEqual(zones["investment"], [])
+
+    def test_a_peer_priced_name_says_why_it_cannot_project(self):
+        zones = self._zones(FreeCashFlow=None)
+        blocked = zones["fundamental"]["blocked"]
+        self.assertTrue(blocked)
+        self.assertIn("cash-flow model", blocked)
+
+    def test_every_check_appears_in_the_verdict(self):
+        names = [c["name"] for c in self._expensive()["verdict"]["checks"]]
+        for expected in ("Quality", "Long-term trend", "Technical support",
+                         "Valuation", "Expected return", "Margin of safety"):
+            self.assertIn(expected, names)
+
+    def test_a_failing_check_is_named_in_what_would_change(self):
+        verdict = self._expensive()["verdict"]
+        self.assertTrue(verdict["failed"])
+        self.assertTrue(verdict["what_would_change"])
+
+    # ── volume is a confirmation, not a gate ────────────────────────────────
+
+    def test_distribution_lowers_confidence_rather_than_deleting_the_zone(self):
+        heavy = self.BZ._confidence({"confidence": "HIGH"},
+                                    {"state": "CONFIRMED"}, {"score": 20},
+                                    [{"tested": True}], [{"key": "preferred"}])
+        clean = self.BZ._confidence({"confidence": "HIGH"},
+                                    {"state": "CONFIRMED"}, {"score": 80},
+                                    [{"tested": True}], [{"key": "preferred"}])
+        self.assertIn("distributing", heavy["note"])
+        self.assertGreater(clean["agree"], heavy["agree"])
+
+    # ── technical zone geometry (carried over — still load-bearing) ──────────
+
+    def test_a_zone_is_a_range_even_from_one_level(self):
+        zone = next(z for z in self._zones()["technical"] if z["key"] == "200ma")
+        self.assertGreater(zone["high"], zone["low"])
+
+    def test_edges_are_rounded_to_prices_a_human_would_name(self):
+        for zone in self._zones()["technical"]:
+            step = 1.0 if zone["high"] >= 100 else 0.5
+            for edge in (zone["low"], zone["high"]):
+                self.assertAlmostEqual(edge % step, 0, places=6)
+
+    def test_a_distant_level_is_excluded_rather_than_stretching_the_zone(self):
+        zones = self._zones(**{"50MA": 92.0, "Prior_Breakout_Level": 70.0,
+                               "ATR_Pct": 2.0})
+        zone = next(z for z in zones["technical"] if z["key"] == "50ma")
+        self.assertLess((zone["high"] / zone["low"] - 1) * 100, 11)
+        self.assertIn("prior breakout", [e["name"] for e in zone["excluded"]])
+
+    def test_the_ladder_is_in_price_order_even_when_labels_are_not(self):
+        # MU: the 50 MA at $960 above the 8/21 EMA at $905-912.
+        zones = self._zones(**{"Current Price": 971.66, "8EMA": 911.88,
+                               "21EMA": 905.06, "50MA": 960.65,
+                               "200MA": 552.44, "Prior_Breakout_Level": 818.54,
+                               "ATR_Pct": 7.64})
+        mids = [z["mid"] for z in zones["technical"]]
+        self.assertEqual(mids, sorted(mids, reverse=True))
+        self.assertIn("higher price", zones["inverted"])
+
+    def test_an_inversion_note_claims_only_the_ordering(self):
+        # MU's price was 6.6% ABOVE its 8 EMA — a round trip, not a pullback.
+        note = self._zones(**{"Current Price": 971.66, "8EMA": 911.88,
+                              "21EMA": 905.06, "50MA": 960.65,
+                              "200MA": 552.44,
+                              "Prior_Breakout_Level": 818.54})["inverted"]
+        self.assertNotIn("pulled back", note)
+        self.assertNotIn("broken", note)
+
+    def test_a_fifty_under_two_hundred_is_called_what_it_is(self):
+        note = self._zones(**{"8EMA": 99.0, "21EMA": 98.0, "50MA": 90.0,
+                              "200MA": 110.0})["inverted"]
+        self.assertIn("crossed under", note)
+
+    def test_technical_and_fundamental_downside_are_different_numbers(self):
+        # Confusing a tight stop for a margin of safety is the error the
+        # split exists to prevent.
+        zone = self._expensive()["technical"][0]
+        self.assertIsNotNone(zone["downside_pct"])
+        self.assertIsNotNone(zone["fundamental_downside_pct"])
+        self.assertNotEqual(zone["downside_pct"],
+                            zone["fundamental_downside_pct"])
+
+    # ── wiring ──────────────────────────────────────────────────────────────
+
+    def test_the_engine_attaches_them(self):
+        self.assertIn("buy_zones", E.evaluate(_row()))
+
+    def test_the_singular_buy_zone_still_means_the_s1_level(self):
+        result = E.evaluate(_row())
+        self.assertIn("price", result["pullback"]["buy_zone"])
+        self.assertIn("technical", result["buy_zones"])
+
+    def test_the_panel_renders_without_zones(self):
+        self.assertIn("run a scan", self.view._buy_zone_panel({}))
+
+    def test_every_row_gets_a_buy_zone_to_display(self):
+        # 14 of 552 names have a qualifying investment zone. Showing nothing
+        # for the other 538 made "no price qualifies today" look identical
+        # to "no support below this" — GOOGL has no investment zone and a
+        # 200 MA band at $328-334, and the band is worth knowing.
+        zones = self._expensive()["display_zone"]
+        self.assertIsNotNone(zones)
+        self.assertLess(zones["low"], zones["high"])
+        self.assertFalse(zones["qualifies"])
+        self.assertEqual(zones["kind"], "technical")
+
+    def test_a_qualifying_zone_is_marked_apart_from_a_support_band(self):
+        # A support band is not a buy zone and the two must not look alike.
+        zone = self.BZ._display_zone(
+            [{"low": 10.0, "high": 12.0, "label": "Preferred",
+              "support": "50 MA"}], [], 11.0)
+        self.assertTrue(zone["qualifies"])
+        self.assertEqual(zone["kind"], "investment")
+
+    def test_the_displayed_band_is_the_one_the_verdict_cites(self):
+        # TXN printed "support runs down to $227" in prose and "$277" in the
+        # column — two numbers for one idea. The column shows the DEEPEST
+        # tracked band, which is the one the sentence already names.
+        technical = [{"low": 120.0, "high": 125.0, "label": "8 / 21 EMA",
+                      "basis": "8 EMA", "distance_pct": 12.0},
+                     {"low": 90.0, "high": 95.0, "label": "50 MA",
+                      "basis": "50 MA", "distance_pct": -8.0},
+                     {"low": 70.0, "high": 75.0, "label": "200 MA",
+                      "basis": "200 MA", "distance_pct": -28.0}]
+        zone = self.BZ._display_zone([], technical, price=100.0)
+        self.assertEqual(zone["label"], "200 MA")
+        self.assertEqual(zone["low"], 70.0)
+
+    def test_the_column_and_the_verdict_quote_the_same_number(self):
+        zones = self._expensive()
+        low = zones["display_zone"]["low"]
+        what = zones["verdict"]["what_would_change"]
+        if "support runs down to" in what:
+            self.assertIn(f"${low:,.0f}", what)
+
+    def test_a_shrinking_cash_flow_suppresses_the_price_ladder(self):
+        # TXN delivers -24%/yr, so the model discounts to $3.51 on a $279
+        # stock and "buy below $3.40" reads as a target 99% below. It is the
+        # arithmetic working correctly on an input that cannot carry a
+        # five-year projection.
+        zones = self._zones(**{"Current Price": 279.58,
+                               "FreeCashFlow": 5.0e9,
+                               "SharesOutstanding": 9.1e8,
+                               "FCF_CAGR%": -24.0, "Revenue_CAGR%": -2.0})
+        fund = zones["fundamental"]
+        self.assertTrue(fund["not_a_target"])
+        self.assertIn("shrinking cash flow", fund["caveat"])
+        self.assertIn("shrinking cash flow",
+                      zones["verdict"]["what_would_change"])
+        self.assertNotIn("hurdle is not met until",
+                         zones["verdict"]["what_would_change"])
+
+    def test_the_cell_renders_for_a_name_with_no_qualifying_zone(self):
+        # The AVGO shape: elite, supported, and priced past every hurdle.
+        expensive = E.evaluate(_row(**{
+            "Current Price": 392.99, "FreeCashFlow": 26.9e9,
+            "SharesOutstanding": 4.76e9, "FCF_CAGR%": 24.4,
+            "Revenue_CAGR%": 24.0, "8EMA": 409.73, "21EMA": 402.62,
+            "50MA": 390.33, "200MA": 368.25,
+            "Prior_Breakout_Level": 351.84}), risk_free=0.042)
+        self.assertEqual(expensive["buy_zones"]["investment"], [])
+        html, sort = self.view._buy_zone_cell(expensive)
+        self.assertIn("$", html)
+        self.assertIn("technical", html)
+        self.assertIsNotNone(sort)
+
+    def test_a_qualifying_zone_renders_without_the_technical_label(self):
+        html, _sort = self.view._buy_zone_cell(
+            E.evaluate(_row(), risk_free=0.042))
+        self.assertNotIn("technical", html)
+
+    def test_the_panel_never_shows_a_zone_beside_its_own_refusal(self):
+        # The exact contradiction that prompted the rewrite.
+        html = self.view._buy_zone_panel(
+            E.evaluate(_row(**{"Current Price": 392.99,
+                               "FreeCashFlow": 26.9e9,
+                               "SharesOutstanding": 4.76e9,
+                               "50MA": 390.33, "8EMA": 409.73,
+                               "21EMA": 402.62, "200MA": 368.25,
+                               "FCF_CAGR%": 24.4, "Revenue_CAGR%": 24.0}),
+                       risk_free=0.042))
+        self.assertIn("No investment buy zone", html)
+        self.assertNotIn("Preferred $", html)
+
+
+class TestPanelMarkupIsTableSafe(unittest.TestCase):
+    """No panel may emit a bare <tr>/<td> outside a <table>.
+
+    This is not pedantry about validity. Every panel is rendered inside a
+    <td> of the main table, and the HTML5 tree builder hoists a stray <tr>
+    up to the nearest table context — which is the OUTER table. Doing that
+    ends #lt-table early and foster-parents every following row and cell out
+    into <body>: the entire Long-Term page collapsed into a column of loose
+    spans on exactly one such <tr>, emitted by reusing the _kv() helper
+    (which is written for tables) inside a flex <div>.
+
+    Tag-balance checks do not catch it — the markup is perfectly balanced.
+    Python's HTMLParser does not catch it either, because it does not model
+    the content model. Only this does.
+    """
+
+    def setUp(self):
+        from stockanalysis.webapp import longterm_view
+        self.view = longterm_view
+        self.result = E.evaluate(_row(), risk_free=0.042)
+
+    @staticmethod
+    def _stray_table_tags(html):
+        """Return row/cell tags that appear with no <table> open."""
+        depth, stray = 0, []
+        for match in re.finditer(r"<(/?)(table|tr|td|th|thead|tbody)\b", html):
+            closing, tag = match.group(1), match.group(2)
+            if tag == "table":
+                depth += -1 if closing else 1
+                continue
+            if depth <= 0 and not closing:
+                stray.append(tag)
+        return stray
+
+    def test_the_checker_would_have_caught_the_bug(self):
+        # Guard the guard: a bare _kv() outside a table must be flagged.
+        self.assertEqual(self._stray_table_tags(self.view._kv("Risk", "2%")),
+                         ["tr", "td", "td"])
+        self.assertEqual(
+            self._stray_table_tags("<table><tr><td>ok</td></tr></table>"), [])
+
+    def test_no_panel_emits_a_row_outside_a_table(self):
+        panels = {
+            "_swing_panel": self.view._swing_panel,
+            "_buy_zone_panel": self.view._buy_zone_panel,
+            "_profile_panel": self.view._profile_panel,
+            "_sizing_panel": self.view._sizing_panel,
+            "_detail": self.view._detail,
+        }
+        for name, fn in panels.items():
+            with self.subTest(panel=name):
+                self.assertEqual(self._stray_table_tags(fn(self.result)), [],
+                                 f"{name} emits table markup outside a table")
+
+    def test_the_whole_row_survives_as_one_table_row(self):
+        # _row() legitimately IS table markup, so it is checked wrapped in
+        # the table it actually lives in: what must not happen is a stray
+        # row nested inside one of its cells.
+        html = "<table>" + self.view._row(self.result) + "</table>"
+        self.assertEqual(self._stray_table_tags(html), [])
+
+
+class TestBusinessProfile(unittest.TestCase):
+    """core.longterm.profile — what the company does, and where it stands.
+
+    The load-bearing invariant is not the formatting: it is that a market-cap
+    rank never gets to sound like a market-share claim. The computed layer
+    ranks size across the names in this library, and the two come apart on
+    exactly the interesting names — ASML is the sole EUV supplier and ranks
+    #1 of 10 by cap at 37% of it. Only the curated overlay may say "monopoly".
+    """
+
+    def setUp(self):
+        from stockanalysis.core.longterm import profile as PR
+        from stockanalysis.webapp import longterm_view
+        self.PR = PR
+        self.view = longterm_view
+
+    # ── the description ─────────────────────────────────────────────────────
+
+    def test_it_trims_on_a_sentence_boundary(self):
+        text = ("Alpha Corp makes widgets for industry. It also services "
+                "them. A third sentence that should not appear.")
+        out = self.PR.summarize(text)
+        self.assertTrue(out.startswith("Alpha Corp makes widgets"))
+        self.assertNotIn("third sentence", out)
+        self.assertFalse(out.endswith(" It"))
+
+    def test_a_company_suffix_is_not_a_sentence_end(self):
+        # "N.V. provides" and "Inc. designs" continue in lower case, so the
+        # split must not fire there — otherwise the description reads "ASML
+        # Holding N.V."
+        for name in ("ASML Holding N.V. provides lithography solutions.",
+                     "Fortinet, Inc. provides cybersecurity worldwide.",
+                     "Nomura Holdings, Ltd. operates as a financial firm."):
+            self.assertEqual(self.PR.summarize(name), name)
+
+    def test_an_abbreviation_before_a_capital_does_not_truncate_it(self):
+        # "U.S. Bancorp" splits after "U.S." on the capital that follows;
+        # the minimum-length guard is what keeps the description from
+        # becoming the string "U.S.".
+        out = self.PR.summarize("U.S. Bancorp provides banking services.")
+        self.assertIn("Bancorp", out)
+
+    def test_it_respects_the_character_budget(self):
+        long_text = " ".join(["Alpha Corp makes widgets for industry."] * 40)
+        self.assertLessEqual(len(self.PR.summarize(long_text)),
+                             self.PR.MAX_CHARS + 1)
+
+    def test_one_endless_sentence_is_cut_at_a_word(self):
+        out = self.PR.summarize("Alpha " + "widget " * 200 + "end.")
+        self.assertTrue(out.endswith("…"))
+        self.assertNotIn("  ", out)
+
+    def test_no_summary_is_none_not_an_empty_card(self):
+        for empty in (None, "", "   "):
+            self.assertIsNone(self.PR.summarize(empty))
+
+    # ── the position ────────────────────────────────────────────────────────
+
+    def _panel(self, profile):
+        return self.view._profile_panel({"ticker": "TEST", "sector": "Technology",
+                                         "profile": profile})
+
+    def test_a_computed_rank_always_states_what_it_measured(self):
+        html = self._panel({"peer_group": "Software", "peer_rank": 1,
+                            "peer_count": 18, "peer_share_pct": 66.0,
+                            "position_label": "Dominant",
+                            "position_tier": "dominant"})
+        self.assertIn("Dominant", html)
+        self.assertIn("market cap", html)
+        self.assertIn("not market share", html)
+
+    def test_only_the_overlay_may_call_something_a_monopoly(self):
+        # Nothing the computed layer produces should reach the page as an
+        # unqualified structural claim.
+        computed = self._panel({"peer_group": "Semiconductor Equipment",
+                                "peer_rank": 1, "peer_count": 10,
+                                "peer_share_pct": 37.0,
+                                "position_label": "#1", "position_tier": "top2"})
+        self.assertNotIn("●", computed)
+
+        curated = self._panel({"structure": "EUV monopoly",
+                               "structure_note": "sole supplier of EUV systems",
+                               "peer_rank": 1, "peer_count": 10,
+                               "position_label": "#1", "position_tier": "top2"})
+        self.assertIn("EUV monopoly", curated)
+        self.assertIn("●", curated)            # marked as a verified fact
+        self.assertIn("sole supplier", curated)
+        # The curated entry replaces the computed rank rather than sitting
+        # beside it, or the page would make two different claims at once.
+        self.assertNotIn("tracked industry peers", curated)
+
+    def test_an_unrankable_name_says_so(self):
+        html = self._panel({"peer_group": "Shell Companies", "peer_rank": None,
+                            "peer_count": 0})
+        self.assertIn("nothing in this library to rank it against", html)
+
+    def test_the_panel_survives_a_row_with_no_profile(self):
+        # Every unit test in this file builds results straight from the
+        # engine, which does not attach one.
+        html = self.view._profile_panel(E.evaluate(_row()))
+        self.assertIn("No business description", html)
+
+    # ── attachment ──────────────────────────────────────────────────────────
+
+    def test_attach_gives_every_row_a_profile(self):
+        results = [E.evaluate(_row(Ticker="AAA")), E.evaluate(_row(Ticker="BBB"))]
+        raw = {"AAA": _row(Ticker="AAA", BusinessSummary="AAA makes things."),
+               "BBB": _row(Ticker="BBB")}
+        self.PR.attach(results, raw, entries=[])
+        self.assertEqual(results[0]["profile"]["description"], "AAA makes things.")
+        self.assertIsNone(results[1]["profile"]["description"])
+
+    def test_rank_is_computed_against_the_whole_library(self):
+        # Ranking a two-name subset against itself would report "#1 of 2" for
+        # a name that is 3rd in the library. The full index is what the rank
+        # has to be measured in.
+        entries = [{"ticker": t, "sector": "Technology", "market_cap": cap,
+                    "raw": {"Industry": "Software"}}
+                   for t, cap in (("BIG", 9e11), ("MID", 5e11), ("AAA", 1e11))]
+        results = [E.evaluate(_row(Ticker="AAA"))]
+        self.PR.attach(results, {"AAA": _row(Ticker="AAA")}, entries)
+        self.assertEqual(results[0]["profile"]["peer_rank"], 3)
+        self.assertEqual(results[0]["profile"]["peer_count"], 3)
+
+    def test_a_broken_index_does_not_break_the_page(self):
+        results = [E.evaluate(_row(Ticker="AAA"))]
+        self.PR.attach(results, {"AAA": _row(Ticker="AAA")},
+                       entries=[{"ticker": "AAA", "market_cap": "not-a-number"}])
+        self.assertIn("profile", results[0])
 
 
 class TestColumns(unittest.TestCase):
@@ -896,7 +1460,8 @@ class TestLongTermScreening(unittest.TestCase):
     def test_a_rule_round_trips_through_its_url_text(self):
         from stockanalysis.webapp import longterm_view as V
         for text in ("lquality:gte:85", "lq_tier:eq:Elite",
-                     "s1_tested:eq:true", "lquality:between:90,100"):
+                     "s1_tested:eq:true", "lquality:between:90,100",
+                     "cluster:eq:Strong", "cluster_count:gte:3"):
             cond = self.LS.parse_rule(text)
             self.assertEqual(V._rule_text(cond), text)
 
@@ -907,6 +1472,152 @@ class TestLongTermScreening(unittest.TestCase):
         for st in stats:
             for key in ("alone", "missing", "without", "label"):
                 self.assertIn(key, st)
+
+    # ── The buy-zone filters ────────────────────────────────────────────────
+    # "Which names have a buy zone" was unanswerable without opening 552
+    # reasoning panels. The distinction these pin is between a zone EXISTING
+    # and the price being IN it — conflating them hides every name that is
+    # one pullback away, which is most of the useful list.
+
+    def _cheap(self, **kw):
+        """A business whose price the model can justify."""
+        base = {"Current Price": 60.0, "FreeCashFlow": 12.8e9,
+                "SharesOutstanding": 2.0e9, "FCF_CAGR%": 8.0,
+                "Revenue_CAGR%": 8.0, "8EMA": 59.5, "21EMA": 59.0,
+                "50MA": 57.0, "200MA": 52.0, "Prior_Breakout_Level": 56.0}
+        base.update(kw)
+        return E.evaluate(_row(**base), risk_free=0.042)
+
+    def _dear(self, **kw):
+        """AVGO's shape: elite, supported, and priced past any hurdle."""
+        base = {"Current Price": 392.99, "FreeCashFlow": 26.9e9,
+                "SharesOutstanding": 4.76e9, "FCF_CAGR%": 24.4,
+                "Revenue_CAGR%": 24.0, "8EMA": 409.73, "21EMA": 402.62,
+                "50MA": 390.33, "200MA": 368.25,
+                "Prior_Breakout_Level": 351.84}
+        base.update(kw)
+        return E.evaluate(_row(**base), risk_free=0.042)
+
+    def test_buy_zone_fields_are_flattened(self):
+        flat = self.LS.flatten(self._cheap())
+        for key in ("buy_zone", "buy_zone_reached", "buy_verdict",
+                    "value_zone", "expected_cagr", "buy_below",
+                    "fair_value_gap", "model_value"):
+            self.assertIn(key, flat)
+
+    def test_an_expensive_name_has_no_buy_zone(self):
+        self.assertIs(self.LS.flatten(self._dear())["buy_zone"], False)
+
+    def test_having_a_zone_and_being_in_it_are_different_filters(self):
+        flat = self.LS.flatten(self._cheap())
+        self.assertIsNotNone(flat["buy_zone"])
+        self.assertIsNotNone(flat["buy_zone_reached"])
+        # A zone the price has not reached must still be findable — those are
+        # the names worth a price alert.
+        kept, _, _ = self.LS.apply_rules(
+            [self._cheap(), self._dear()],
+            ["buy_zone:eq:true", "buy_zone_reached:eq:false"])
+        for result in kept:
+            zones = result["buy_zones"]["investment"]
+            self.assertTrue(zones)
+            self.assertFalse(any(z["reached"] for z in zones))
+
+    def test_no_buy_zone_data_is_not_reported_as_no_buy_zone(self):
+        # "measured and rejected" and "never measured" must not both answer
+        # a buy_zone:eq:false search.
+        result = dict(self._cheap())
+        result.pop("buy_zones")
+        flat = self.LS.flatten(result)
+        self.assertIsNone(flat["buy_zone"])
+        self.assertIsNone(flat["buy_zone_reached"])
+        for rule in ("buy_zone:eq:true", "buy_zone:eq:false"):
+            kept, _, _ = self.LS.apply_rules([result], [rule])
+            self.assertEqual(kept, [], rule)
+
+    def test_the_buy_zone_filters_agree_with_the_engine(self):
+        # A filter that disagreed with the panel it filters would be worse
+        # than no filter.
+        for result in (self._cheap(), self._dear()):
+            flat = self.LS.flatten(result)
+            zones = result["buy_zones"]["investment"]
+            self.assertEqual(flat["buy_zone"], bool(zones))
+            self.assertEqual(flat["buy_verdict"],
+                             result["buy_zones"]["verdict"]["action"])
+
+    def test_value_zone_uses_the_labels_the_panel_renders(self):
+        from stockanalysis.core.longterm import buy_zones as BZ
+        spec = self.LS.LONGTERM_FIELD_BY_KEY["value_zone"]
+        self.assertEqual(spec.values, BZ.VALUE_ZONES)
+        self.assertIn(self.LS.flatten(self._dear())["value_zone"], spec.values)
+
+    # ── The level-cluster filter ────────────────────────────────────────────
+    # The Support column has shown the cluster band since it was built; these
+    # pin the filter that reads it. The invariant that matters is the one the
+    # cluster exists for: it is NOT support confluence, and a filter that
+    # quietly became direction-aware would look right on most rows and be
+    # wrong on exactly the coiled-under-price names it was added to find.
+
+    def _cluster_row(self, **kw):
+        """Price at 100 with the 8/21/50 EMAs wound inside 2% of it."""
+        return _row(**{"Current Price": 100.0, "8EMA": 99.5, "21EMA": 99.0,
+                       "50MA": 98.6, "200MA": 80.0, "S1": 98.8, "R1": 130.0,
+                       **kw})
+
+    def test_cluster_values_carry_no_emoji(self):
+        # The band label is "🟢 Strong cluster"; the filter value has to
+        # survive a URL round trip and be typed to match.
+        for value in self.LS.CLUSTER_VALUES:
+            self.assertNotIn(" ", value.split(" ")[0])
+            self.assertTrue(value.isascii(), value)
+        self.assertIn("Strong", self.LS.CLUSTER_VALUES)
+
+    def test_cluster_reads_the_band_the_table_shows(self):
+        result = E.evaluate(self._cluster_row())
+        flat = self.LS.flatten(result)
+        self.assertEqual(flat["cluster"], "Strong")
+        # Same source as the Support cell — the two can never disagree.
+        self.assertIn(flat["cluster"], result["ma_cluster"]["label"])
+        self.assertEqual(flat["cluster_count"], result["ma_cluster"]["count"])
+
+    def test_a_strong_cluster_is_selectable(self):
+        coiled = E.evaluate(self._cluster_row(Ticker="COILED"))
+        spread = E.evaluate(_row(Ticker="SPREAD", **{
+            "Current Price": 100.0, "8EMA": 90.0, "21EMA": 80.0,
+            "50MA": 70.0, "200MA": 60.0, "S1": 65.0, "R1": 140.0}))
+        kept, _, _ = self.LS.apply_rules([coiled, spread], ["cluster:eq:Strong"])
+        self.assertEqual([r["ticker"] for r in kept], ["COILED"])
+
+    def test_the_cluster_is_not_direction_aware(self):
+        # Levels stacked ABOVE the price: nothing is holding it up, so support
+        # confluence is weak — and the coil is still real. Reporting only the
+        # first would describe a decision point as an absence.
+        overhead = E.evaluate(_row(**{
+            "Current Price": 100.0, "8EMA": 100.6, "21EMA": 101.0,
+            "50MA": 101.4, "200MA": 80.0, "S1": 88.0, "R1": 101.8}))
+        flat = self.LS.flatten(overhead)
+        self.assertEqual(flat["cluster"], "Strong")
+        self.assertLess(flat["confluence_hits"], flat["cluster_count"])
+
+    def test_cluster_span_measures_how_tight_the_coil_is(self):
+        tight = self.LS.flatten(E.evaluate(self._cluster_row()))
+        loose = self.LS.flatten(E.evaluate(_row(**{
+            "Current Price": 100.0, "8EMA": 101.8, "21EMA": 99.0,
+            "50MA": 98.3, "200MA": 80.0, "S1": 98.2, "R1": 130.0})))
+        self.assertLess(tight["cluster_span"], loose["cluster_span"])
+
+    def test_no_cluster_data_is_not_reported_as_no_levels(self):
+        # "the engine did not measure this" and "it measured zero levels
+        # nearby" are different answers, and an eq rule must match neither.
+        result = dict(E.evaluate(_row()))
+        result["ma_cluster"] = {}
+        result["pullback"] = {k: v for k, v in result["pullback"].items()
+                              if k != "ma_cluster"}
+        flat = self.LS.flatten(result)
+        self.assertIsNone(flat["cluster"])
+        self.assertIsNone(flat["cluster_count"])
+        for rule in ("cluster:eq:Strong", "cluster:eq:No level nearby"):
+            kept, _, _ = self.LS.apply_rules([result], [rule])
+            self.assertEqual(kept, [], rule)
 
     def test_headroom_is_none_when_the_levels_do_not_straddle(self):
         # Support above the price, or resistance below it, would invert the

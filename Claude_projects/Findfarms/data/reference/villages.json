@@ -1,0 +1,563 @@
+{
+  "notes": "SEED GAZETTEER — approximate village/town centroids around Mysuru, used to position a listing when it gives no coordinates. Every coordinate here is APPROXIMATE: it locates a parcel to a neighbourhood, not to a boundary, and a parcel can sit several km from its village centre. Distances computed from these are labelled INFERRED throughout the app and must be replaced by a measured figure on the site visit. 'corridor' drives the straight-line-to-driving multiplier in core/geo.py. 'amenities' is town-level: 'hospital' means the town has hospital facilities, not that a specific facility was verified. Add villages as you encounter them — the app degrades to 'location unresolved' rather than guessing, so an unknown village costs coverage, never accuracy.",
+  "verification": "None of these entries have been field-verified. Before acting on any distance, confirm it on a map and on the drive itself.",
+  "places": [
+    {
+      "name": "Mysuru",
+      "aliases": [
+        "Mysore",
+        "Mysuru City"
+      ],
+      "taluk": "Mysuru",
+      "lat": 12.3052,
+      "lon": 76.6552,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "city",
+        "school",
+        "yoga",
+        "wellness"
+      ],
+      "note": "Reference point for all distances (city centre near the Palace)."
+    },
+    {
+      "name": "Gokulam",
+      "aliases": [
+        "Gokulam Mysore",
+        "Gokulam Mysuru",
+        "Jayalakshmipuram"
+      ],
+      "taluk": "Mysuru",
+      "lat": 12.326,
+      "lon": 76.628,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "yoga",
+        "wellness",
+        "school",
+        "market",
+        "hospital"
+      ],
+      "note": "North-west Mysuru. This is where the city's yoga shalas cluster — the reason Mysuru is an international yoga destination. Tagged at neighbourhood level: it means shalas are in this area, not that any specific one was verified or has space."
+    },
+    {
+      "name": "Bogadi",
+      "taluk": "Mysuru",
+      "hobli": "Kasaba",
+      "lat": 12.315,
+      "lon": 76.6,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school",
+        "yoga"
+      ],
+      "note": "City fringe — priced as urban land, not farmland."
+    },
+    {
+      "name": "Hootagalli",
+      "aliases": [
+        "Hootagally"
+      ],
+      "taluk": "Mysuru",
+      "lat": 12.336,
+      "lon": 76.585,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ],
+      "note": "Industrial belt on the Hunsur road side."
+    },
+    {
+      "name": "Koorgalli",
+      "taluk": "Mysuru",
+      "lat": 12.345,
+      "lon": 76.56,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": []
+    },
+    {
+      "name": "Ilwala",
+      "aliases": [
+        "Ilavala",
+        "Elwala"
+      ],
+      "taluk": "Mysuru",
+      "hobli": "Ilwala",
+      "lat": 12.352,
+      "lon": 76.548,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ],
+      "note": "Hunsur Road corridor."
+    },
+    {
+      "name": "Yelwal",
+      "aliases": [
+        "Yelawala"
+      ],
+      "taluk": "Mysuru",
+      "hobli": "Yelwal",
+      "lat": 12.383,
+      "lon": 76.567,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ],
+      "note": "Hunsur Road / KRS Road junction area."
+    },
+    {
+      "name": "Rammanahalli",
+      "taluk": "Mysuru",
+      "lat": 12.283,
+      "lon": 76.58,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ]
+    },
+    {
+      "name": "Bilikere",
+      "taluk": "Hunsur",
+      "hobli": "Bilikere",
+      "lat": 12.372,
+      "lon": 76.437,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ],
+      "note": "Hunsur Road, near the 25 km mark — the far edge of the preferred band."
+    },
+    {
+      "name": "Hunsur",
+      "aliases": [
+        "Hunasuru",
+        "Hunsoor"
+      ],
+      "taluk": "Hunsur",
+      "lat": 12.3047,
+      "lon": 76.2931,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "school"
+      ],
+      "note": "Taluk HQ. The town itself is ~45 km from Mysuru — outside the 30 km target. Villages on the Mysuru side of Hunsur taluk are what qualify."
+    },
+    {
+      "name": "Varuna",
+      "taluk": "Mysuru",
+      "hobli": "Varuna",
+      "lat": 12.235,
+      "lon": 76.665,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ],
+      "note": "Nanjangud road corridor."
+    },
+    {
+      "name": "Kadakola",
+      "taluk": "Mysuru",
+      "lat": 12.212,
+      "lon": 76.647,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ],
+      "note": "Nanjangud highway, near the airport."
+    },
+    {
+      "name": "Sindhuvalli",
+      "taluk": "Nanjangud",
+      "lat": 12.198,
+      "lon": 76.708,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": []
+    },
+    {
+      "name": "Thandavapura",
+      "aliases": [
+        "Thandya"
+      ],
+      "taluk": "Nanjangud",
+      "lat": 12.15,
+      "lon": 76.67,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ],
+      "note": "Industrial area — check for surrounding industrial use and effluent before valuing the water."
+    },
+    {
+      "name": "Hadinaru",
+      "taluk": "Nanjangud",
+      "lat": 12.155,
+      "lon": 76.66,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ]
+    },
+    {
+      "name": "Kalale",
+      "taluk": "Nanjangud",
+      "hobli": "Kalale",
+      "lat": 12.15,
+      "lon": 76.717,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ]
+    },
+    {
+      "name": "Nanjangud",
+      "aliases": [
+        "Nanjanagud",
+        "Nanjangudu"
+      ],
+      "taluk": "Nanjangud",
+      "lat": 12.1173,
+      "lon": 76.6836,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "school",
+        "wellness"
+      ],
+      "note": "Taluk HQ, ~25 km. Kabini/Kapila river belt — canal command areas nearby, verify the specific parcel's entitlement."
+    },
+    {
+      "name": "Uttanahalli",
+      "taluk": "Mysuru",
+      "lat": 12.26,
+      "lon": 76.665,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ],
+      "note": "Chamundi Hill foothills."
+    },
+    {
+      "name": "Siddalingapura",
+      "taluk": "Mysuru",
+      "lat": 12.275,
+      "lon": 76.61,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ]
+    },
+    {
+      "name": "Doora",
+      "taluk": "Mysuru",
+      "lat": 12.28,
+      "lon": 76.7,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ]
+    },
+    {
+      "name": "Bannur",
+      "aliases": [
+        "Bannuru",
+        "Bannoor"
+      ],
+      "taluk": "T Narasipura",
+      "hobli": "Bannur",
+      "lat": 12.335,
+      "lon": 76.86,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "school"
+      ],
+      "note": "~27 km east. Established agricultural belt."
+    },
+    {
+      "name": "T Narasipura",
+      "aliases": [
+        "T. Narasipura",
+        "TN Pura",
+        "Tirumakudalu Narasipura",
+        "T N Pura"
+      ],
+      "taluk": "T Narasipura",
+      "lat": 12.2078,
+      "lon": 76.8983,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "school",
+        "wellness"
+      ],
+      "note": "~32 km. Kaveri/Kabini confluence — river proximity does NOT imply irrigation rights."
+    },
+    {
+      "name": "Sosale",
+      "taluk": "T Narasipura",
+      "lat": 12.2,
+      "lon": 76.94,
+      "corridor": "village_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ]
+    },
+    {
+      "name": "Talakad",
+      "aliases": [
+        "Talakadu"
+      ],
+      "taluk": "T Narasipura",
+      "lat": 12.19,
+      "lon": 77.03,
+      "corridor": "village_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "wellness"
+      ],
+      "note": "~45 km — outside the target radius."
+    },
+    {
+      "name": "Hebbal",
+      "taluk": "Mysuru",
+      "lat": 12.36,
+      "lon": 76.63,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ],
+      "note": "City limits."
+    },
+    {
+      "name": "Naganahalli",
+      "taluk": "Mysuru",
+      "lat": 12.395,
+      "lon": 76.66,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ],
+      "note": "Bangalore highway side."
+    },
+    {
+      "name": "Belagola",
+      "taluk": "Srirangapatna",
+      "lat": 12.42,
+      "lon": 76.67,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ]
+    },
+    {
+      "name": "Srirangapatna",
+      "aliases": [
+        "Srirangapattana",
+        "Seringapatam"
+      ],
+      "taluk": "Srirangapatna",
+      "district": "Mandya",
+      "lat": 12.4181,
+      "lon": 76.6947,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "school",
+        "wellness"
+      ],
+      "note": "~16 km, but in MANDYA district, not Mysuru — different sub-registrar and different taluk office for records."
+    },
+    {
+      "name": "Kirangur",
+      "taluk": "Srirangapatna",
+      "district": "Mandya",
+      "lat": 12.43,
+      "lon": 76.71,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ]
+    },
+    {
+      "name": "Pandavapura",
+      "taluk": "Pandavapura",
+      "district": "Mandya",
+      "lat": 12.502,
+      "lon": 76.67,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "school"
+      ],
+      "note": "Mandya district. VC canal command belt."
+    },
+    {
+      "name": "Jayapura",
+      "taluk": "Mysuru",
+      "hobli": "Jayapura",
+      "lat": 12.245,
+      "lon": 76.535,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ],
+      "note": "H.D. Kote road corridor, ~16 km."
+    },
+    {
+      "name": "Kergalli",
+      "taluk": "Mysuru",
+      "lat": 12.28,
+      "lon": 76.6,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "school"
+      ]
+    },
+    {
+      "name": "H D Kote",
+      "aliases": [
+        "HD Kote",
+        "Heggadadevanakote",
+        "H.D. Kote"
+      ],
+      "taluk": "H D Kote",
+      "lat": 12.09,
+      "lon": 76.35,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "school"
+      ],
+      "note": "~48 km — outside the target radius. Also: parts of this taluk border forest and wildlife areas; check for forest-land and buffer-zone issues carefully."
+    },
+    {
+      "name": "Metagalli",
+      "taluk": "Mysuru",
+      "lat": 12.34,
+      "lon": 76.62,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "school"
+      ]
+    },
+    {
+      "name": "K R Nagar",
+      "aliases": [
+        "KR Nagar",
+        "Krishnarajanagara",
+        "Krishnaraja Nagara"
+      ],
+      "taluk": "K R Nagar",
+      "lat": 12.4231,
+      "lon": 76.3844,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "school"
+      ],
+      "note": "~38 km — outside the target radius. Kaveri belt, strong agriculture."
+    },
+    {
+      "name": "Saligrama",
+      "taluk": "K R Nagar",
+      "lat": 12.558,
+      "lon": 76.323,
+      "corridor": "state_road",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "market",
+        "town",
+        "school"
+      ],
+      "note": "Well outside the target radius."
+    },
+    {
+      "name": "Periyapatna",
+      "aliases": [
+        "Periyapattana",
+        "Piriyapatna"
+      ],
+      "taluk": "Periyapatna",
+      "lat": 12.3378,
+      "lon": 76.0983,
+      "corridor": "highway",
+      "coord_confidence": "APPROXIMATE",
+      "amenities": [
+        "hospital",
+        "market",
+        "town",
+        "school"
+      ],
+      "note": "~60 km — well outside the target radius."
+    }
+  ],
+  "amenity_note": "'amenities' tags are TOWN-LEVEL and unverified: a tag means the place has facilities of that kind, never that a specific named institution was confirmed at these coordinates. 'yoga' and 'wellness' cluster far more tightly than hospitals or schools — around Mysuru they are concentrated in the city, chiefly Gokulam — so a distance to them is a distance to the neighbourhood where they are found."
+}

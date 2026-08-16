@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from spydaytrader.core import trade_proposals  # noqa: E402
+from Daytrades.core import trade_proposals  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

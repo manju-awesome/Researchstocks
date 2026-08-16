@@ -27,6 +27,16 @@
       "autoPort": true
     },
     {
+      "name": "farmfinder",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PYTHONUNBUFFERED=1",
+        "python3",
+        "Findfarms/src/findfarms/webapp/app.py"
+      ],
+      "port": 8877
+    },
+    {
       "name": "workstation-dashboard",
       "runtimeExecutable": "python3",
       "runtimeArgs": [

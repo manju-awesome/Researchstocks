@@ -1,0 +1,104 @@
+{
+  "bannur-2.5-16d31f9ac2": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 4200000.0,
+      "source": "MagicBricks",
+      "note": "first observation"
+    },
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 3500000.0,
+      "source": "Facebook group",
+      "note": ""
+    }
+  ],
+  "kadakola-3.0-2d073ae6e1": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 4500000.0,
+      "source": "99acres",
+      "note": "first observation"
+    }
+  ],
+  "t-narasipura-2.0-889ff01933": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 3800000.0,
+      "source": "OLX",
+      "note": "first observation"
+    }
+  ],
+  "varuna-1.5-f5c528dc23": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 3200000.0,
+      "source": "Local broker site",
+      "note": "first observation"
+    }
+  ],
+  "bannur-2.0-be582daabf": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 2400000.0,
+      "source": "Facebook group",
+      "note": "first observation"
+    }
+  ],
+  "bilikere-4.0-2e0996ae3f": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 1800000.0,
+      "source": "OLX",
+      "note": "first observation"
+    }
+  ],
+  "bannur-3.0-040c4e2859": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 4000000.0,
+      "source": "99acres",
+      "note": "first observation"
+    }
+  ],
+  "bannur-2.0-d1837f8d31": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 4400000.0,
+      "source": "MagicBricks",
+      "note": "first observation"
+    }
+  ],
+  "bannur-1.5-4d97a5b34e": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 4600000.0,
+      "source": "Local broker site",
+      "note": "first observation"
+    }
+  ],
+  "kadakola-2.0-3a6d367c53": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 4800000.0,
+      "source": "99acres",
+      "note": "first observation"
+    }
+  ],
+  "kadakola-4.0-de59c49b46": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 4300000.0,
+      "source": "MagicBricks",
+      "note": "first observation"
+    }
+  ],
+  "srirangapatn-2.0-cfad12fd22": [
+    {
+      "date": "2026-08-14",
+      "price_per_acre": 5000000.0,
+      "source": "99acres",
+      "note": "first observation"
+    }
+  ]
+}

@@ -35,6 +35,15 @@ data/spy/*.json
 # resets IV Rank to "unavailable" for another thirty trading days.
 data/csp/csp_snapshot.json
 
+# Compounder scan output — ~4MB of scores and generated narrative across the
+# whole theme library, and unlike data/csp/iv_history.json every field in it
+# is reproducible: it is derived entirely from filings and prices that
+# yfinance will serve again. Re-create with
+#   python -m stockanalysis.core.compounder.scan
+# The curated TAM/theme library it scores against is CODE (core/compounder/
+# themes.py) and is versioned — that is the part that could not be rebuilt.
+data/compounder/compounder_snapshot.json
+
 # OS
 .DS_Store
 Thumbs.db

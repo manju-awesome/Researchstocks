@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "findfarms"
+version = "0.1.0"
+description = "Mysuru retirement farmland discovery and deal-intelligence research system"
+requires-python = ">=3.9"
+dependencies = []          # stdlib only — see README
+
+[tool.setuptools.packages.find]
+where = ["src"]
