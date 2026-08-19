@@ -27,6 +27,7 @@ from __future__ import annotations
 import string
 from urllib.parse import urlencode
 
+from stockanalysis.core.longterm import buy_zones as BZ
 from stockanalysis.core.longterm import position_sizing as PS
 from stockanalysis.core.longterm.engine import ACTION_ICONS
 
@@ -705,14 +706,75 @@ def _check_row(c) -> str:
             f'<td style="padding:2px 0;color:#52514e">{esc(c["detail"])}</td></tr>')
 
 
-def _technical_row(z) -> str:
-    """One support zone, carrying the valuation reading AT ITS OWN PRICE.
+_STRENGTH_TONE = {"🟢 Major": "#085041", "🟡 Strong": "#6B5900",
+                  "🟠 Moderate": "#8A4B00", "🔴 Weak": "#791F1F"}
 
-    The two facts share a line on purpose. Printing "50 MA $386–395" in one
-    panel and "the price is Extreme" in another is what let a support level
-    read as a buy zone.
+_THESIS_TONE = {"INTACT": ("#E1F5EE", "#085041"),
+                "STRAINED": ("#FDF1E3", "#8A4B00"),
+                "BROKEN": ("#FCEBEB", "#791F1F"),
+                "UNMEASURED": ("#F0EEE6", "#52514e")}
+
+
+def _thesis_block(th) -> str:
+    """Whether the company is still the one worth adding to.
+
+    Sits directly under the action banner and above the buy checks, because
+    it answers the question that comes FIRST for anything already owned. The
+    action banner says whether to open a position at today's price; this says
+    whether a lower price would be an opportunity or a warning, and the two
+    routinely disagree — WAIT on the banner with the thesis intact is the
+    ordinary state of a good business that is merely not cheap.
+
+    The three legs are listed separately rather than rolled into the
+    headline. A business break and a chart break both read BROKEN and mean
+    entirely different things about what to do next.
+    """
+    if not th.get("state"):
+        return ""
+    bg, fg = _THESIS_TONE.get(th["state"], _THESIS_TONE["UNMEASURED"])
+    # `failures`, never `broken`. Condition names are positive assertions
+    # ("200 MA not falling"), so a leg summary built from them prints the
+    # reverse of what it means — the same trap thesis._condition documents.
+    legs = " · ".join(
+        f'{l["icon"]} {esc(l["label"])}'
+        + (f' ({esc(", ".join(l["failures"]))})' if l.get("failures") else "")
+        for l in th.get("legs") or [])
+    inval = th.get("invalidation_price")
+    return (f'<div style="background:{bg};color:{fg};padding:9px 12px;'
+            f'border-radius:8px;margin-bottom:12px;font-size:12px">'
+            f'<strong>{th.get("icon","")} Thesis {esc(th["state"].title())}'
+            f'</strong>'
+            + (f' <span style="font-size:11px">· DCA invalidation '
+               f'${inval:,.2f} — not the trading stop</span>'
+               if inval is not None else "")
+            + f'<div style="margin-top:4px">{esc(th.get("headline") or "")}</div>'
+            + (f'<div style="font-size:10px;margin-top:5px;opacity:.8">{legs}'
+               f'</div>' if legs else "")
+            + '</div>')
+
+
+def _technical_row(z) -> str:
+    """One support zone, carrying the valuation reading AND the support
+    strength AT ITS OWN PRICE.
+
+    The facts share a line on purpose. Printing "50 MA $386–395" in one panel
+    and "the price is Extreme" in another is what let a support level read as
+    a buy zone.
+
+    Strength is the column that separates the rungs. The valuation reading
+    measured out nearly flat down the ladder — same verdict at the 8/21 EMA
+    and the 200 MA for 55 of 56 quality names — so a table carrying only that
+    gave all three bands equal weight and left the reader with no reason to
+    prefer one. Strength is a property of the LEVEL rather than of today's
+    price, so it still discriminates when every valuation cell reads Extreme.
     """
     tone = _ZONE_TONE.get(z.get("value_zone"), "#898781")
+    st = z.get("strength") or {}
+    st_tone = _STRENGTH_TONE.get(st.get("label"), "#898781")
+    # The basis, so a 79 is legible as a claim rather than a number: the
+    # level it is, plus whatever independently agrees with it there.
+    st_basis = ", ".join(filter(None, [st.get("identity")]
+                                + list(st.get("agreeing") or [])))
     where = ("price is here now" if z.get("reached") == "inside"
              else f'{z["distance_pct"]:+.0f}%' if z.get("distance_pct") is not None
              else "")
@@ -728,7 +790,12 @@ def _technical_row(z) -> str:
             f'white-space:nowrap">${z["low"]:,.0f} – ${z["high"]:,.0f}</td>'
             f'<td style="padding:5px 10px 5px 0;color:#898781;'
             f'white-space:nowrap">{esc(where)}</td>'
-            f'<td style="padding:5px 10px 5px 0;color:{tone};font-weight:600;'
+            + (f'<td style="padding:5px 10px 5px 0;color:{st_tone};'
+               f'font-weight:600;white-space:nowrap" title="{esc(st_basis)}">'
+               f'{st["score"]} {esc(st.get("label") or "")}</td>'
+               if st.get("score") is not None else
+               '<td style="padding:5px 10px 5px 0;color:#898781">—</td>')
+            + f'<td style="padding:5px 10px 5px 0;color:{tone};font-weight:600;'
             f'white-space:nowrap">{esc(z.get("value_icon") or "")} '
             f'{esc(z.get("value_zone") or "")}</td>'
             f'<td style="padding:5px 10px 5px 0;color:{tone};'
@@ -860,12 +927,23 @@ def _buy_zone_panel(r) -> str:
                    f'{esc(sub)}</div>' if sub else '<div style="height:5px"></div>')
                 + body + '</div>')
 
-    tech_body = ('<table style="font-size:11px">'
+    # Headers earn their place now that the row carries two scores. "79 🟢
+    # Major" and "🔴 Extreme" in adjacent cells are answering different
+    # questions, and unlabelled they read as one confused verdict.
+    tech_head = (
+        '<tr>' + "".join(
+            f'<th style="padding:0 10px 4px 0;text-align:left;font-weight:600;'
+            f'color:#898781;font-size:10px;text-transform:uppercase;'
+            f'letter-spacing:.3px;white-space:nowrap">{h}</th>'
+            for h in ("Level", "Zone", "Distance", "Support strength",
+                      "Value here", "Return here", "To next level",
+                      "To model value")) + '</tr>')
+    tech_body = ('<table style="font-size:11px">' + tech_head
                  + "".join(_technical_row(z) for z in tech) + '</table>'
                  + (f'<div style="font-size:10px;color:#898781;margin-top:5px">'
                     f'⚠ {esc(bz["inverted"])}</div>' if bz.get("inverted") else ""))
 
-    return (banner + checks
+    return (banner + _thesis_block(r.get("thesis") or {}) + checks
             + section("Investment buy zone",
                       _investment_block(bz.get("investment") or [], verdict),
                       "Where valuation and support overlap. Empty is a result.")
@@ -1295,7 +1373,15 @@ TABLE_JS = r"""
 function initLtTable() {
   var table = document.getElementById('lt-table');
   if (!table) return;
-  var KEY = 'lt.cols.v1', SORTKEY = 'lt.sort.v1', WKEY = 'lt.colw.v1';
+  // KEY is versioned so that changing the DEFAULT column order actually
+  // reaches anyone who has ever dragged a column. A saved order is a full
+  // list of keys and wins over the server's order outright, so moving Buy
+  // Zone next to Price would have been invisible to exactly the users who
+  // use this table most. Bumping resets a hand-made layout once, which is
+  // the cheaper of the two mistakes. Widths are keyed by column and
+  // survive the reset.
+  var KEY = 'lt.cols.v2', SORTKEY = 'lt.sort.v1', WKEY = 'lt.colw.v1';
+  try { localStorage.removeItem('lt.cols.v1'); } catch (e) {}
   var head = table.tHead.rows[0], body = table.tBodies[0];
 
   // ── Column widths ─────────────────────────────────────────────────────────
@@ -1729,6 +1815,88 @@ def _support_confluence_cell(conf, cluster=None):
             n * 1000 + count * 10 + min(score, 9))
 
 
+# The two proximity states worth a marker in the cell. Wording matters here:
+# "AT ZONE" is a fact about price, not an instruction to buy — whether the
+# zone is worth buying is the Action column's job, and names reach their zone
+# while the engine still says AVOID.
+_ZONE_MARK = {
+    "IN_ZONE": ("#0F6E56", "#E1F5EE", "AT ZONE"),
+    "APPROACHING": ("#8a6d1a", "#FAEEDA", "NEAR"),
+}
+
+
+def _zone_flag(r):
+    """The proximity reading for one row, or None. Cached on the row.
+
+    Computed once per row per render and stashed, because three separate
+    things ask for it — the cell marker, the alert bar's list, and the
+    ?near= filter — and recomputing it in each would let them disagree the
+    moment the threshold moved.
+    """
+    if "_zone_prox" not in r:
+        r["_zone_prox"] = BZ.zone_proximity(r)
+    return r["_zone_prox"]
+
+
+# LQuality at or above this, in a real drawdown, sitting on a tracked
+# level — the shape the DCA note fires on. Not a recommendation and not a
+# gate: the Action column's verdict is untouched, and this says only that
+# the price has reached a rung on a business the engine rates highly.
+DCA_QUALITY = 90
+DCA_CORRECTION_PCT = -20.0
+
+
+def _dca_read(r):
+    """(zone, note) when a quality name is sitting on an accumulation rung.
+
+    Deliberately additive. The engine's own Action may still be WAIT or
+    OWN/WAIT FOR TREND and that verdict is not overridden — this reports a
+    separate fact (price has reached rung N of the ladder on a business
+    scoring DCA_QUALITY or better in a DCA_CORRECTION_PCT drawdown) and
+    leaves the decision where it was.
+    """
+    bz = r.get("buy_zones") or {}
+    hit = bz.get("zone_hit")
+    if not hit:
+        return None, ""
+    q = (r.get("quality") or {}).get("score")
+    off = r.get("dist_52w_high")
+    if q is None or q < DCA_QUALITY:
+        return hit, ""
+    if off is None or off > DCA_CORRECTION_PCT:
+        return hit, ""
+    return hit, (f"Zone {hit['zone']} · {off:.0f}% off the high on a "
+                 f"{q:.0f}-quality business — a DCA tranche fits here")
+
+
+def _dca_cell(r):
+    """The DCA column: which rung, on what kind of level, and whether the
+    drawdown makes it a tranche rather than a routine pullback."""
+    hit, note = _dca_read(r)
+    if not hit:
+        return ('<span style="color:#b5b3ad">—</span>', None)
+    src = {"volume_shelf": "tested shelf", "moving_average": "moving average",
+           "structure": "structural level", "fundamental": "value rung",
+           "level": "prior support"}.get(hit.get("source"), "level")
+    q = (r.get("quality") or {}).get("score")
+    off = r.get("dist_52w_high")
+    if note:
+        colour, weight = "#0F6E56", "700"
+        tail = f'{off:.0f}% off high · Q{q:.0f} · DCA'
+    else:
+        colour, weight = "#898781", "500"
+        bits = [src]
+        if off is not None:
+            bits.append(f'{off:.0f}% off high')
+        tail = " · ".join(bits)
+    return (f'<span style="color:{colour};font-weight:{weight};'
+            f'white-space:nowrap" title="{esc(note or hit.get("label") or "")}">'
+            f'Zone {hit["zone"]}{" · in" if hit.get("inside") else ""}</span>'
+            + _sub(tail),
+            # Sorted so the DCA-eligible rungs lead, then shallower ones.
+            (100 if note else 0) + (4 - hit["zone"]))
+
+
 def _buy_zone_cell(r):
     """The buy zone, for every row.
 
@@ -1737,27 +1905,84 @@ def _buy_zone_cell(r):
     nearest technical band the price would reach on a pullback, in grey and
     labelled with the level it comes from, because a support band is not a
     buy zone and the two must not look alike.
+
+    A name whose price has arrived at, or come within BZ.NEAR_ZONE_PCT of,
+    its zone carries a marker. That marker is the whole reason this column
+    now sits beside Price: the alert bar above the table names those tickers,
+    and this is where the claim can be checked against the two numbers it is
+    made of.
     """
     zone = ((r.get("buy_zones") or {}).get("display_zone")) or {}
     if not zone.get("low"):
         return '<span style="color:#898781">—</span>', None
     qualifies = zone.get("kind") == "investment"
-    colour = "#0F6E56" if qualifies else "#898781"
-    weight = "700" if qualifies else "500"
+    # Overhead supply reads as neither a buy zone nor a qualifying one: the
+    # price has already fallen through it, so it describes where the stock
+    # came from rather than where it is going.
+    overhead = bool(zone.get("above_spot"))
+    colour = "#898781" if overhead else ("#0F6E56" if qualifies else "#898781")
+    weight = "700" if (qualifies and not overhead) else "500"
     dist = zone.get("distance_pct")
     sub = esc(zone.get("label") or "")
-    if not qualifies:
+    if overhead:
+        sub += " · price is below this band"
+    elif zone.get("kind") == "ladder":
+        src = {"volume_shelf": "tested shelf", "fundamental": "value rung",
+               "level": "prior support"}.get(zone.get("source"), "level")
+        sub += f" · {src} — every moving average is overhead"
+    elif not qualifies:
         sub += " · technical"
     if dist is not None:
         sub += f' · {dist:+.1f}%'
-    return (f'<span style="color:{colour};font-weight:{weight};'
+
+    # The rungs below today's price, as a second line. Zone 1 is where
+    # price arrives next; 2 and 3 are where you would still be adding.
+    # Shown here rather than only in the reasoning panel because "the next
+    # three places I would buy" is the question the column is asked, and a
+    # single band answers it only when a band happens to be underfoot.
+    ladder = ((r.get("buy_zones") or {}).get("ladder")) or []
+    note = (r.get("buy_zones") or {}).get("ladder_note")
+    rungs = ""
+    if len(ladder) > 1:
+        bits = []
+        for g in ladder[:3]:
+            price_txt = (f'${g["low"]:,.0f}–{g["high"]:,.0f}'
+                         if g["high"] != g["low"] else f'${g["price"]:,.2f}')
+            bits.append(f'Z{g["zone"]} {price_txt} ({g["distance_pct"]:+.1f}%)')
+        rungs = (f'<div style="font-size:10px;color:#898781;'
+                 f'white-space:nowrap" title="{esc(note or "Accumulation "
+                 "rungs below today’s price, nearest first")}">'
+                 f'{esc(" · ".join(bits))}'
+                 # A short ladder and a full one look alike, and the reader
+                 # cannot tell "this is all the structure there is" from
+                 # "something failed" without being told which.
+                 + (f' <span style="color:#b5b3ad">·  only {len(ladder)}</span>'
+                    if note else "")
+                 + f'</div>')
+
+    prox = _zone_flag(r)
+    mark = ""
+    if prox and prox["near"]:
+        fg, bg, label = _ZONE_MARK[prox["state"]]
+        gap = ("price is inside the zone now" if prox["state"] == "IN_ZONE"
+               else f'{abs(prox["gap_pct"]):.1f}% above the top of the zone')
+        mark = (f'<span title="{esc(gap)}" style="background:{bg};color:{fg};'
+                f'font-size:9px;font-weight:700;letter-spacing:.04em;'
+                f'padding:1px 5px;border-radius:4px;margin-right:5px;'
+                f'vertical-align:1px">{label}</span>')
+
+    return (f'{mark}<span style="color:{colour};font-weight:{weight};'
             f'white-space:nowrap" title="{esc(zone.get("basis") or "")}">'
             f'${zone["low"]:,.0f} – ${zone["high"]:,.0f}</span>'
             f'<div style="font-size:10px;color:#898781;white-space:nowrap">'
-            f'{sub}</div>',
-            # Qualifying zones sort above technical bands; within each, the
+            f'{sub}</div>{rungs}',
+            # Names at or near their zone sort above everything, because that
+            # is the event this column now exists to surface. Within that,
+            # qualifying zones above technical bands, and within each the
             # nearest to today's price first.
-            (1000 if qualifies else 0) - abs(dist if dist is not None else 999))
+            (2000 if (prox and prox["near"]) else 0)
+            + (1000 if qualifies else 0)
+            - abs(dist if dist is not None else 999))
 
 
 def _swing_trade_cell(r):
@@ -2042,15 +2267,29 @@ def _resistance_cell(pullback):
 _COLUMNS = (
     ("ticker", "Ticker", "left", "text"),
     ("price", "Price", "right", "num"),
+    # Immediately after price. The zone is a statement ABOUT the price —
+    # "$328–334" means nothing until you know the stock is at $345.90 — and
+    # with the zone eleven columns to the right the two halves of that
+    # sentence could not be on screen at once. It is also what the alert bar
+    # above the table points at, so the thing the page just told you to look
+    # at is the next thing you can see. Left unpinned deliberately: a third
+    # frozen column would cost roughly a sixth of the viewport permanently,
+    # and unlike ticker and price this one is draggable away by anyone who
+    # would rather have it elsewhere.
+    #
+    # Present for EVERY name, not only the ones with a qualifying zone: a
+    # blank cell made "no price qualifies today" and "no support below this"
+    # look like the same finding.
+    ("buy_zone", "Buy Zone", "right", "num"),
+    # Which accumulation rung price has reached, and whether the drawdown
+    # behind it makes this a tranche. Additive: the Action column keeps its
+    # own verdict, and this reports a fact beside it.
+    ("dca", "DCA", "left", "num"),
     ("lquality", "LQuality", "left", "num"),
     ("valuation", "Valuation", "left", "num"),
     ("trend", "Trend", "center", "num"),
     ("pullback", "Pullback", "left", "num"),
     ("support", "Support", "left", "num"),
-    # Present for EVERY name, not only the 14 with a qualifying zone: a blank
-    # cell made "no price qualifies today" and "no support below this" look
-    # like the same finding.
-    ("buy_zone", "Buy Zone", "right", "num"),
     ("buyzone", "S1 \u00b7 Support", "right", "num"),
     ("resistance", "R1 \u00b7 Resistance", "right", "num"),
     ("rs", "RS", "center", "num"),
@@ -2092,7 +2331,47 @@ _ACTION_ORDER = ("BUY NOW", "BUY ON CONFIRMATION", "BUY ON 8/21 EMA",
 _ACTION_RANK = {a: len(_ACTION_ORDER) - i for i, a in enumerate(_ACTION_ORDER)}
 
 
-def _cells(r):
+def _select_box(r) -> str:
+    """The per-row tick, for sending a set of names to the CSP scan.
+
+    It lives INSIDE the ticker cell rather than in a column of its own, and
+    that is the whole reason it works. Ticker is pinned, so the box stays on
+    screen at any horizontal scroll; a twenty-third column would be
+    draggable, hideable and — being unpinned — off-screen exactly when you
+    have scrolled out to read the numbers you are selecting on.
+
+    `data-elig` carries whether the CSP engine's company gate would accept
+    the name, so the bar can warn before a scan is spent rather than after.
+    """
+    ok = _csp_eligible(r)
+    return (f'<input type="checkbox" class="lt-pick" '
+            f'value="{esc(r["ticker"])}" data-elig="{"1" if ok else "0"}" '
+            f'onclick="event.stopPropagation()" onchange="ltPickChanged()" '
+            f'title="Select for a cash-secured put scan" '
+            f'style="margin-right:6px;vertical-align:middle;cursor:pointer">')
+
+
+def _csp_eligible(r) -> bool:
+    """Whether core.csp's COMPANY gate would let this name reach a chain.
+
+    Asked here, on the page where the selection is made, so that "18 of your
+    24 will be rejected before a single chain is fetched" is something you
+    learn while choosing rather than three minutes into a scan. It is the
+    engine's own classifier, not a restatement of its rules — a second copy
+    would drift the first time a threshold moved.
+    """
+    if "_csp_elig" not in r:
+        try:
+            from stockanalysis.core.csp import eligibility as EL
+            r["_csp_elig"] = EL.classify(r)["status"] != "CSP REJECTED"
+        except Exception:
+            # A page that will not render because the CSP package moved is
+            # worse than a selection bar that cannot pre-warn.
+            r["_csp_elig"] = True
+    return r["_csp_elig"]
+
+
+def _cells(r, selectable: bool = False):
     """(column key -> (html, sort_value)) for one result row."""
     q, v, p, conf, rs = (r["quality"], r["valuation"], r["pullback"],
                          r["confluence"], r["rs"])
@@ -2107,7 +2386,8 @@ def _cells(r):
 
     out = {
         "ticker": (
-            f'<a href="{tv_url(r["ticker"])}" target="_blank" '
+            (_select_box(r) if selectable else "")
+            + f'<a href="{tv_url(r["ticker"])}" target="_blank" '
             f'style="font-weight:700;color:#0b0b0b;text-decoration:none">'
             f'{esc(r["ticker"])}</a>'
             f'<div style="font-size:10px;color:#898781;max-width:150px;'
@@ -2135,6 +2415,7 @@ def _cells(r):
         "resistance": _resistance_cell(p),
         "support": _support_confluence_cell(conf, r.get("ma_cluster") or {}),
         "buy_zone": _buy_zone_cell(r),
+        "dca": _dca_cell(r),
         "investment": _status_cell(r.get("investment") or {}, _INVEST_STYLE),
         "entry_score": (
             f'<strong>{(r.get("entry") or {}).get("score", "—")}</strong>'
@@ -2155,10 +2436,27 @@ def _cells(r):
             + (f'<div style="font-size:10px;color:#898781">'
                f'{r["tranche_pct"]}% of target</div>'
                if r.get("tranche_pct") else "")
-            + _action_sizing_line(r),
+            + _action_sizing_line(r)
+            + _dca_line(r),
             _ACTION_RANK.get(r["action"])),
     }
     return out
+
+
+def _dca_line(r) -> str:
+    """The DCA note under the verdict — additive, never instead of it.
+
+    The Action column still says what the engine's gates concluded; this
+    adds the separate observation that price has reached an accumulation
+    rung on a business good enough for a tranche. META reads "OWN / WAIT
+    FOR TREND" and "Zone 1 · 31% off the high" at the same time, and both
+    are true.
+    """
+    _hit, note = _dca_read(r)
+    if not note:
+        return ""
+    return (f'<div style="font-size:10px;color:#0F6E56;font-weight:600;'
+            f'white-space:nowrap">🧱 {esc(note)}</div>')
 
 
 def _action_sizing_line(r) -> str:
@@ -2180,10 +2478,11 @@ def _action_sizing_line(r) -> str:
             f'{esc(" · ".join(bits))}</div>')
 
 
-def _row(r, open_detail: bool = False, order=None):
+def _row(r, open_detail: bool = False, order=None,
+         selectable: bool = False):
     order = order or [c[0] for c in _COLUMNS]
     align = {c[0]: c[2] for c in _COLUMNS}
-    cells = _cells(r)
+    cells = _cells(r, selectable)
     tds = []
     for key in order:
         html, sort_value = cells.get(key, ("", None))
@@ -2197,7 +2496,11 @@ def _row(r, open_detail: bool = False, order=None):
                    f'style="{_TD};text-align:{align.get(key, "left")}">'
                    f'<span data-colw="{key}">{html}</span></td>')
 
-    return (f'<tr data-main="1">{"".join(tds)}</tr>'
+    # Anchored by ticker so the buy-zone alert bar can hand you the row
+    # rather than the ticker's name. On a 60-row table the difference between
+    # "GOOGL is at its zone" and being able to READ GOOGL's row is the whole
+    # value of the alert.
+    return (f'<tr data-main="1" id="ltr-{esc(r["ticker"])}">{"".join(tds)}</tr>'
             f'<tr data-detail="1"><td colspan="{len(_COLUMNS)}" '
             f'style="padding:0 8px 10px;border-bottom:0.5px solid #f1efea">'
             f'<details{" open" if open_detail else ""}>'
@@ -2247,7 +2550,8 @@ PIN_CSS = """
 
 
 def analysis_table(rows, open_detail: bool = False,
-                   empty_msg: str = "Nothing matches this filter.") -> str:
+                   empty_msg: str = "Nothing matches this filter.",
+                   selectable: bool = False) -> str:
     """The engine's table for an arbitrary set of evaluated rows.
 
     Both the Long-Term page and the Dashboard's Scan & Analyze panel render
@@ -2258,6 +2562,11 @@ def analysis_table(rows, open_detail: bool = False,
     min-width matters: without it `width:100%` makes the browser compress the
     columns to fit the card instead of overflowing, and Action — the one the
     table exists to show — is what gets crushed.
+
+    `selectable` adds the per-row tick that feeds the CSP scan. Off by
+    default, so the Dashboard's Scan & Analyze panel — which renders through
+    here and has no selection bar to act on them — does not grow a column of
+    checkboxes that do nothing.
     """
     headers = ""
     for key, label, align, stype in _COLUMNS:
@@ -2277,7 +2586,8 @@ def analysis_table(rows, open_detail: bool = False,
               f'<span data-colw="{key}">{esc(label)}</span>'
               f'<span class="lt-arrow"></span>'
               f'<span class="col-resizer" draggable="false"></span></th>')
-    body_rows = "".join(_row(r, open_detail=open_detail) for r in rows) or (
+    body_rows = "".join(_row(r, open_detail=open_detail,
+                             selectable=selectable) for r in rows) or (
         f'<tr><td colspan="{len(_COLUMNS)}" style="padding:24px;'
         f'text-align:center">{empty(empty_msg)}</td></tr>')
     # border-collapse:separate — `collapse` drops the borders of a sticky
@@ -2360,14 +2670,32 @@ def _list_options(active: str) -> str:
     return "".join(out)
 
 
-def _preset_bar(link, active_rules, needs_rescan, counts):
+def _default_screen():
+    """The long-term screen module — the default for every builder below.
+
+    These builders render a preset pill, a removable rule and a
+    field/operator/value form, and none of that is specific to WHICH set of
+    fields is being screened. /csp supplies its own module exposing the same
+    names (PRESETS, PRESET_GROUPS, FIELD_GROUPS, describe, and a field
+    tuple), so the two pages share one implementation rather than growing a
+    second that drifts.
+    """
+    from stockanalysis.core.longterm import screen as LS
+    return LS
+
+
+def _preset_bar(link, active_rules, needs_rescan, counts, mod=None):
     """The screens a manager actually runs, grouped by the question asked.
 
     Ordered "what to own" -> "when to buy" -> "what would stop me" because
     that is the order the work happens in, and it is the framework's own
     hierarchy. A preset list organised by field type would scatter it.
     """
-    from stockanalysis.core.longterm import screen as LS
+    # `mod` is the screen module supplying PRESET_GROUPS/PRESETS. Defaults
+    # to the long-term one; /csp passes core.csp.screen, which exposes the
+    # same names. Parameterised rather than copied so there is one builder
+    # for a preset pill and not two that drift.
+    LS = mod or _default_screen()
     current = set(active_rules)
     sections = []
     for group in LS.PRESET_GROUPS:
@@ -2415,10 +2743,10 @@ def _preset_bar(link, active_rules, needs_rescan, counts):
             f'{"".join(sections)}</div>')
 
 
-def _rule_pills(conds, link):
+def _rule_pills(conds, link, mod=None):
     """Active rules, each removable. Rules live in the URL, so a filtered
     view is a link and the back button undoes one rule at a time."""
-    from stockanalysis.core.longterm import screen as LS
+    LS = mod or _default_screen()
     if not conds:
         return ""
     out = []
@@ -2453,7 +2781,8 @@ def _rule_text(cond) -> str:
 
 
 def _rule_builder(conds, rule_op, link, stats, n_matched, n_total,
-                  search_q=""):
+                  search_q="", mod=None, action="/longterm",
+                  search_name="q"):
     """Field -> operator -> value, as a plain GET form.
 
     The operator list and the value widget both depend on the field's kind,
@@ -2461,18 +2790,19 @@ def _rule_builder(conds, rule_op, link, stats, n_matched, n_total,
     this page is a link.
     """
     import json as _json
-    from stockanalysis.core.longterm import screen as LS
 
     from stockanalysis.core.screener import OPS_FOR_KIND
 
+    LS = mod or _default_screen()
+    fields = getattr(LS, "LONGTERM_FIELDS", None) or LS.CSP_FIELDS
     meta = {f.key: {"kind": f.kind, "ops": list(OPS_FOR_KIND.get(f.kind, ())),
                     "values": list(f.values), "unit": f.unit,
                     "hint": f.hint, "label": f.label}
-            for f in LS.LONGTERM_FIELDS}
+            for f in fields}
 
     options = []
     for group in LS.FIELD_GROUPS:
-        items = [f for f in LS.LONGTERM_FIELDS if f.group == group]
+        items = [f for f in fields if f.group == group]
         if not items:
             continue
         options.append(f'<optgroup label="{esc(group)}">' + "".join(
@@ -2532,10 +2862,10 @@ def _rule_builder(conds, rule_op, link, stats, n_matched, n_total,
     return f"""
 <div style="background:white;border:0.5px solid #e1e0d9;border-radius:12px;
             padding:12px 14px;margin-bottom:14px">
-  <form method="get" action="/longterm"
+  <form method="get" action="{esc(action)}"
         style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     {hidden}
-    <input type="hidden" name="q" value="{esc(search_q or '')}">
+    <input type="hidden" name="{esc(search_name)}" value="{esc(search_q or '')}">
     <input type="hidden" name="rule_op" value="{esc(rule_op)}">
     <span style="font-size:11px;color:#898781;text-transform:uppercase;
                  letter-spacing:.06em">Add rule</span>
@@ -2551,7 +2881,7 @@ def _rule_builder(conds, rule_op, link, stats, n_matched, n_total,
   </form>
   <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;
               margin-top:{'10px' if conds else '0'}">
-    {_rule_pills(conds, link)}{toggle}
+    {_rule_pills(conds, link, mod=LS)}{toggle}
     {f'<a href="{esc(link(rule=[]))}" style="font-size:11px;color:#185FA5;margin-left:auto">Clear rules</a>' if conds else ''}
   </div>
   {diag}
@@ -2573,6 +2903,299 @@ async function saveRiskSettings(form) {
   } catch (e) { toast('Save failed: ' + e, 'err'); }
   return false;
 }
+"""
+
+EXPORT_JS = r"""
+// Comma-separated tickers for the current selection, as a rescan input.
+function ltCopy(which) {
+  var box = document.getElementById('lt-export');
+  var area = document.getElementById('lt-export-box');
+  var note = document.getElementById('lt-export-note');
+  if (!box || !area) return;
+  var text = box.getAttribute('data-' + which) || '';
+  if (!text) { toast('Nothing to copy', 'err'); return; }
+
+  // Shown BEFORE the copy is attempted, not after it succeeds. Over plain
+  // http from another machine navigator.clipboard is undefined and the
+  // catch below is the normal path, not the exceptional one — the reader
+  // needs the text on screen to select by hand either way.
+  area.value = text;
+  area.style.display = '';
+  var n = text.split(',').length;
+  if (note) note.textContent = which === 'library'
+    ? n + ' tickers — the whole library'
+    : n + ' tickers — the rows these filters left';
+
+  var done = function () {
+    toast('Copied ' + n + ' tickers', 'ok');
+  };
+  var manual = function () {
+    area.focus();
+    area.select();
+    try {
+      if (document.execCommand('copy')) { done(); return; }
+    } catch (e) { /* fall through to the message below */ }
+    toast('Select the box and copy — this browser blocked the clipboard',
+          'err');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, manual);
+  } else {
+    manual();
+  }
+}
+
+// ── CSV export ──────────────────────────────────────────────────────────────
+// The data is server-rendered into #lt-csv-data — every row the filters left,
+// one scalar per field. This side only chooses columns, orders rows and
+// assembles the file, so the numbers in the CSV are the same objects the
+// table was rendered from rather than a second reading of the DOM.
+var LT_CSV_KEY = 'lt.csvcols.v1';
+
+function ltCsvData() {
+  var tag = document.getElementById('lt-csv-data');
+  if (!tag) return null;
+  try { return JSON.parse(tag.textContent || 'null'); } catch (e) { return null; }
+}
+
+function ltCsvBoxes() {
+  return Array.prototype.slice.call(
+    document.querySelectorAll('.lt-csv-col'));
+}
+
+// Selected columns, in the order the picker lists them — which is the order
+// _CSV_FIELDS declares, so a reader who ticks Price and Ticker still gets
+// Ticker first rather than an order that depends on which they clicked.
+function ltCsvChosen() {
+  return ltCsvBoxes().filter(function (b) { return b.checked; })
+                     .map(function (b) { return b.value; });
+}
+
+// Stored as {key: true|false} rather than a list of the ticked ones, so a
+// field ADDED to _CSV_FIELDS later is absent from the record rather than
+// recorded as unwanted — see initLtCsv().
+function ltCsvSaveCols() {
+  var state = {};
+  ltCsvBoxes().forEach(function (b) { state[b.value] = b.checked; });
+  try { localStorage.setItem(LT_CSV_KEY, JSON.stringify(state)); } catch (e) {}
+  ltCsvNote();
+}
+
+function ltCsvNote() {
+  var note = document.getElementById('lt-csv-note');
+  if (!note) return;
+  var n = ltCsvChosen().length;
+  note.textContent = n ? n + ' column' + (n === 1 ? '' : 's') + ' selected'
+                       : 'no columns selected';
+}
+
+// 1 = all, 0 = none, -1 = back to the server's defaults.
+function ltCsvSelect(mode) {
+  ltCsvBoxes().forEach(function (b) {
+    b.checked = mode === 1 ? true
+              : mode === 0 ? false
+              : b.dataset.default === '1';
+  });
+  ltCsvSaveCols();
+}
+
+function ltCsvQuote(v) {
+  if (v === null || v === undefined) return '';
+  var s = String(v);
+  if (s === 'true') s = 'yes';
+  else if (s === 'false') s = 'no';
+  // RFC 4180: quote anything carrying a delimiter, a quote or a newline, and
+  // double the quotes inside. Company names arrive with commas in them.
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// Rows in the order they are on screen. The table sorts client-side, so the
+// server's order is only the starting point; exporting in it would hand back
+// a different ranking from the one being looked at. Rows the page truncated
+// away are still exported — appended in the server's order, after the ones
+// that are visible.
+//
+// A row is an ARRAY positioned against data.fields, so `at` is the index of
+// the ticker field rather than a property name.
+function ltCsvOrder(rows, at) {
+  var seen = {}, out = [], byTicker = {};
+  rows.forEach(function (r) { byTicker[r[at]] = r; });
+  var cells = document.querySelectorAll(
+    '#lt-table tbody tr[data-main] td[data-col="ticker"]');
+  Array.prototype.forEach.call(cells, function (td) {
+    var t = td.getAttribute('data-sort');
+    if (t && byTicker[t] && !seen[t]) { seen[t] = 1; out.push(byTicker[t]); }
+  });
+  rows.forEach(function (r) { if (!seen[r[at]]) out.push(r); });
+  return out;
+}
+
+function ltCsvDownload() {
+  var data = ltCsvData();
+  if (!data || !data.rows || !data.rows.length) {
+    toast('Nothing to export', 'err'); return;
+  }
+  var chosen = ltCsvChosen();
+  if (!chosen.length) { toast('Pick at least one column', 'err'); return; }
+
+  var labels = {}, index = {}, tickerAt = 0;
+  data.fields.forEach(function (f, i) {
+    labels[f.key] = f.label;
+    index[f.key] = i;
+    if (f.key === 'ticker') tickerAt = i;
+  });
+
+  var lines = [chosen.map(function (k) {
+    return ltCsvQuote(labels[k] || k);
+  }).join(',')];
+  ltCsvOrder(data.rows, tickerAt).forEach(function (r) {
+    lines.push(chosen.map(function (k) {
+      return ltCsvQuote(r[index[k]]);
+    }).join(','));
+  });
+
+  // CRLF and a BOM: without the BOM Excel reads the file as Latin-1 and the
+  // sector names and · separators come through as mojibake, which looks like
+  // corrupted data rather than an encoding default.
+  var blob = new Blob(['﻿' + lines.join('\r\n') + '\r\n'],
+                      { type: 'text/csv;charset=utf-8;' });
+  var stamp = new Date().toISOString().slice(0, 10);
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'longterm-' + stamp + '-' + data.rows.length + 'rows.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  toast('Downloaded ' + data.rows.length + ' rows × ' + chosen.length +
+        ' columns', 'ok');
+}
+
+// ── Send a selection to the CSP scan ────────────────────────────────────────
+// The scan is a job of minutes, so this starts one and hands back a link to
+// /csp filtered to exactly the selection. It never blocks and never claims
+// to know the answer yet.
+var LT_MAX_PICK = 60;
+
+function ltPicks() {
+  return Array.prototype.slice.call(document.querySelectorAll('.lt-pick'));
+}
+
+function ltPicked() {
+  return ltPicks().filter(function (b) { return b.checked; });
+}
+
+function ltPickChanged() {
+  var bar = document.getElementById('lt-csp-bar');
+  if (!bar) return;
+  var on = ltPicked();
+  bar.style.display = on.length ? '' : 'none';
+  var count = document.getElementById('lt-csp-count');
+  var warn = document.getElementById('lt-csp-warn');
+  if (count) {
+    count.textContent = on.length + ' selected';
+  }
+  if (warn) {
+    // Counted before the scan rather than reported after it. Naming a
+    // ticker makes the scan fetch its chain even when the company gate
+    // says no, so these are NOT names that come back blank — they come
+    // back rejected with their premiums attached, for you to judge. Saying
+    // "will be rejected before any chain is fetched" was true of a bulk
+    // scan and false of this one.
+    var bad = on.filter(function (b) { return b.dataset.elig === '0'; }).length;
+    var bits = [];
+    if (bad) {
+      bits.push(bad + ' fail the company gate — priced as reference, '
+                + 'not ranked');
+    }
+    if (on.length > LT_MAX_PICK) {
+      bits.push('only the first ' + LT_MAX_PICK + ' will be scanned');
+    }
+    warn.textContent = bits.join(' · ');
+  }
+}
+
+// mode 1 = every row on screen, 0 = none.
+function ltPickAll(mode) {
+  ltPicks().forEach(function (b) { b.checked = !!mode; });
+  ltPickChanged();
+}
+
+// The subset the CSP engine would actually take a chain for. The single
+// most useful button here: it turns "these twenty look cheap" into "these
+// eleven are worth the scan".
+function ltPickEligible() {
+  ltPicks().forEach(function (b) { b.checked = b.dataset.elig === '1'; });
+  ltPickChanged();
+}
+
+function ltPickScan() {
+  var on = ltPicked().map(function (b) { return b.value; });
+  if (!on.length) { toast('Nothing selected', 'err'); return; }
+  var msg = document.getElementById('lt-csp-msg');
+  var go = document.getElementById('lt-csp-go');
+  var list = on.slice(0, LT_MAX_PICK);
+  var dte = parseInt((document.getElementById('lt-csp-dte') || {}).value, 10);
+  if (!dte || dte < 7 || dte > 120) dte = 35;
+
+  var body = new URLSearchParams();
+  body.append('action', 'csp_scan');
+  body.append('tickers', list.join(','));
+  body.append('target_dte', dte);
+  // A window around the target rather than the page default, so a 35-day
+  // target does not land in a 20-45 window that also admits 20-day weeklies.
+  body.append('min_dte', Math.max(7, dte - 14));
+  body.append('max_dte', dte + 14);
+  body.append('earnings_policy',
+              (document.getElementById('lt-csp-earn') || {}).value || 'AVOID');
+  // The scan's `limit` caps how many SURVIVORS get chain work. Left at its
+  // default of 25 a selection of forty would quietly lose its tail after
+  // the eligibility pass, which is the one failure a hand-picked list must
+  // not have.
+  body.append('limit', list.length);
+
+  if (go) { go.disabled = true; go.textContent = 'starting…'; }
+  if (msg) msg.textContent = '';
+  var href = '/csp?tickers=' + encodeURIComponent(list.join(','));
+  fetch('/run', { method: 'POST', body: body })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (go) { go.disabled = false; go.textContent = '🪙 Scan for put premiums →'; }
+      if (!d.ok) { if (msg) msg.textContent = d.message || 'could not start'; return; }
+      if (msg) {
+        msg.innerHTML = 'Scanning ' + list.length + ' name(s) — a few minutes. '
+          + 'Results appear on <a href="' + href + '" style="color:#8FBEF0">'
+          + 'the CSP page →</a> when the job tray clears.';
+      }
+      toast('CSP scan started for ' + list.length + ' names', 'ok');
+    })
+    .catch(function () {
+      if (go) { go.disabled = false; go.textContent = '🪙 Scan for put premiums →'; }
+      if (msg) msg.textContent = 'could not reach the server';
+    });
+}
+
+(function initLtCsv() {
+  var boxes = ltCsvBoxes();
+  if (!boxes.length) return;
+  // A remembered choice only overrides fields it actually has an opinion
+  // about. A field removed from _CSV_FIELDS has no checkbox and disappears;
+  // a field ADDED since the choice was saved keeps its server default rather
+  // than arriving silently unticked, which is how a new column would
+  // otherwise go unnoticed forever by the people who use the export most.
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem(LT_CSV_KEY) || 'null'); }
+  catch (e) {}
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+    boxes.forEach(function (b) {
+      if (Object.prototype.hasOwnProperty.call(saved, b.value)) {
+        b.checked = !!saved[b.value];
+      }
+    });
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', ltCsvSaveCols); });
+  ltCsvNote();
+})();
 """
 
 
@@ -2673,6 +3296,582 @@ def _risk_dashboard(summary: dict, s: dict) -> str:
                   'margin-top:14px">' + tiles + '</div>' + note, "🛡️")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# BUY-ZONE ALERT — the one thing on this page that is an event
+# ─────────────────────────────────────────────────────────────────────────────
+# Everything else the engine publishes is a standing judgment: a quality
+# score, a valuation band, a zone that sits below the market for weeks. None
+# of it changes between visits, which is why the page can be read at leisure.
+# Price arriving at a zone is the exception — it is dated, it is the thing
+# the zone was computed FOR, and it is invisible in a table sorted by
+# anything else. So it gets stated at the top, in words, before the table.
+#
+# Deliberately not framed as a buy list. The engine's own verdict lives in
+# the Action column and disagrees with proximity often: a name can sit inside
+# a technical band while quality, valuation or the thesis all say no. The bar
+# reports where price is and hands you the row.
+
+
+def _ownable(r) -> bool:
+    """Whether the engine considers this a business worth owning at all.
+
+    The gate the alert needs, and the reason it is a gate rather than a
+    sort. Measured over the live library, 223 of 657 names are at or within
+    5% of the zone in their Buy Zone column — and 166 of those are names the
+    engine has already REJECTED on the business. Support arriving under a
+    company that failed the quality gate is not an event; the price was
+    always going to reach some moving average eventually, and the reason not
+    to buy it was never the price.
+
+    Firing on all 223 would reproduce exactly the failure entry_alerts.py
+    documents: an alert that cannot fail to trigger carries no information.
+    So the bar reports the 57 that survive and SAYS how many it withheld,
+    with a link — hidden and unsaid are different things.
+    """
+    return (r.get("investment") or {}).get("status") != "REJECT"
+
+
+def zone_alerts(rows, ownable_only: bool = True) -> list[tuple[dict, dict]]:
+    """(row, proximity) for every name at or approaching its buy zone.
+
+    Ordered the way the reader should work through them: names already in a
+    zone first, then names approaching, each group nearest-first, and within
+    that a qualifying investment zone ahead of a technical band — being
+    inside a zone valuation also endorses is a different event from touching
+    a moving average.
+    """
+    out = []
+    for r in rows:
+        prox = _zone_flag(r)
+        if prox and prox["near"] and (not ownable_only or _ownable(r)):
+            out.append((r, prox))
+    out.sort(key=lambda rp: (0 if rp[1]["state"] == "IN_ZONE" else 1,
+                             0 if rp[1]["qualifies"] else 1,
+                             abs(rp[1]["gap_pct"])))
+    return out
+
+
+def _nearest_miss(rows) -> tuple[dict, dict] | None:
+    """The closest name that did NOT make the cut, with its gap.
+
+    The empty state is the reason this exists. "Nothing is near a zone" alone
+    reads as a broken filter; "nothing within 5% — the closest is AMD at
+    6.3%" reads as a measurement, and tells you whether to look again
+    tomorrow or next month.
+    """
+    best = None
+    for r in rows:
+        prox = _zone_flag(r)
+        if not prox or prox["state"] != "ABOVE":
+            continue
+        if best is None or abs(prox["gap_pct"]) < abs(best[1]["gap_pct"]):
+            best = (r, prox)
+    return best
+
+
+# Past this many the bar stops being something you read and becomes a second
+# table above the table. The rest are one click away behind the filter.
+MAX_ZONE_PILLS = 24
+
+
+def _zone_alert_bar(rows, link, near_mode: str) -> str:
+    """The alert itself: who is at their zone, and a filter down to them."""
+    alerts = zone_alerts(rows)
+    withheld = len(zone_alerts(rows, ownable_only=False)) - len(alerts)
+    near_on = bool(near_mode)
+    if not alerts:
+        miss = _nearest_miss(rows)
+        tail = ""
+        if miss:
+            r, prox = miss
+            tail = (f' The closest is <strong>{esc(r["ticker"])}</strong>, '
+                    f'{abs(prox["gap_pct"]):.1f}% above the top of its '
+                    f'{esc(prox.get("label") or "")} zone.')
+        return (f'<div style="background:#F1EFE8;border-radius:10px;'
+                f'padding:10px 13px;margin-bottom:14px;font-size:12px;'
+                f'color:#444441">Nothing in this view is within '
+                f'{BZ.NEAR_ZONE_PCT:.0f}% of its buy zone.{tail}</div>')
+
+    in_zone = [a for a in alerts if a[1]["state"] == "IN_ZONE"]
+    pills = []
+    for r, prox in alerts[:MAX_ZONE_PILLS]:
+        fg, bg, _label = _ZONE_MARK[prox["state"]]
+        gap = ("in zone" if prox["state"] == "IN_ZONE"
+               else f'{abs(prox["gap_pct"]):.1f}% away')
+        # The verdict travels WITH the ticker rather than being looked up in
+        # the table afterwards. A list of names under an alert heading reads
+        # as a recommendation unless the engine's actual answer is on the
+        # same line, and for a good number of these it is WATCH or AVOID.
+        action = _ACTION_SHORT.get(r.get("action"), r.get("action") or "")
+        title = (f'{prox.get("label") or "zone"} '
+                 f'${prox["low"]:,.2f}–${prox["high"]:,.2f}'
+                 f' · {r.get("action") or ""}')
+        # A row that reached its zone with no price on it cannot exist —
+        # proximity is measured FROM the price — but the cell renderers all
+        # guard the same way and a formatting crash here would take the whole
+        # page rather than one number.
+        price = (f'${r["price"]:,.2f} → ' if r.get("price") else "")
+        pills.append(
+            f'<a href="#ltr-{esc(r["ticker"])}" title="{esc(title)}" '
+            f'style="display:inline-flex;gap:6px;align-items:baseline;'
+            f'background:{bg};color:{fg};border-radius:7px;padding:4px 9px;'
+            f'text-decoration:none;white-space:nowrap;font-size:11px">'
+            f'<strong style="font-size:12px">{esc(r["ticker"])}</strong>'
+            f'<span style="opacity:.85">{price}'
+            f'${prox["low"]:,.0f}–${prox["high"]:,.0f}</span>'
+            f'<span style="opacity:.7">{esc(gap)}</span>'
+            f'<span style="opacity:.6">· {esc(action)}</span></a>')
+
+    if len(alerts) > MAX_ZONE_PILLS:
+        pills.append(
+            f'<a href="{esc(link(near="1", limit=""))}" '
+            f'style="display:inline-flex;align-items:center;'
+            f'background:#F1EFE8;color:#444441;border-radius:7px;'
+            f'padding:4px 9px;text-decoration:none;font-size:11px;'
+            f'font-weight:600">+{len(alerts) - MAX_ZONE_PILLS} more →</a>')
+
+    head = (f'{len(in_zone)} in a zone now'
+            if len(in_zone) == len(alerts) else
+            f'{len(alerts)} at or within {BZ.NEAR_ZONE_PCT:.0f}% of a buy zone'
+            + (f' · {len(in_zone)} inside one now' if in_zone else ''))
+
+    toggle = (f'<a href="{esc(link(near="" if near_on else "1", limit=""))}" '
+              f'style="margin-left:auto;font-size:11px;font-weight:600;'
+              f'color:#0C447C;text-decoration:none;white-space:nowrap">'
+              f'{"Show every name" if near_on else "Show only these →"}</a>')
+
+    # Withheld, and said so. The alternative — quietly dropping 166 names —
+    # would make the bar's count unreproducible from the table beside it,
+    # which is the one thing a page built on "every claim is checkable"
+    # cannot do.
+    held = ""
+    if withheld:
+        held = (f' <a href="{esc(link(near="all", limit=""))}" '
+                f'style="color:#185FA5">{withheld} more</a> reached a zone '
+                f'on a business the engine has rejected, and are not counted '
+                f'here — the price was never the reason to pass on those.')
+
+    return (
+        f'<div style="background:#FFFDF7;border:0.5px solid #e8d5aa;'
+        f'border-radius:12px;padding:11px 13px;margin-bottom:14px">'
+        f'<div style="display:flex;gap:10px;align-items:baseline;'
+        f'flex-wrap:wrap;margin-bottom:8px">'
+        f'<span style="font-size:12px;font-weight:700;color:#633806">'
+        f'⚑ Approaching a buy zone</span>'
+        f'<span style="font-size:11px;color:#8a6d1a">{esc(head)}</span>'
+        f'{toggle}</div>'
+        f'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        f'{"".join(pills)}</div>'
+        f'<div style="font-size:10px;color:#898781;margin-top:8px">'
+        f'A price event, not a verdict — the zone is where support and, for '
+        f'the green ones, valuation both sit, and the engine\'s own answer is '
+        f'the last item on each pill. Measured against the same zone the Buy '
+        f'Zone column shows, so every claim here is checkable one click away.'
+        f'{held}</div></div>')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CSV EXPORT — the engine's numbers, in a spreadsheet
+# ─────────────────────────────────────────────────────────────────────────────
+# Deliberately NOT a dump of the table's cells. A table cell is a rendered
+# judgment — "$328 – $334 · 200 MA · -4.9%" is one string carrying four
+# facts, and pasted into a spreadsheet it is four facts you cannot sort on.
+# So the export has its own field list, one scalar per field, and a cell that
+# stacks two numbers becomes two columns.
+#
+# The values come from screen.flatten() wherever it already computes them.
+# That module exists precisely to turn one nested result into scalars for the
+# rule engine, and a second flattener here would be the one that goes stale
+# the next time a score is renamed. Only what flatten has no reason to carry
+# — the sized plan's own prices, the zone's upper bound, today's proximity —
+# is extracted below.
+
+# (key, header, group, on-by-default). The default set is the answer to
+# "what did the engine conclude and at what price", which is what a CSV of
+# this page is nearly always for; everything else is one checkbox away.
+_CSV_FIELDS = (
+    ("ticker", "Ticker", "Identity", True),
+    ("name", "Company", "Identity", True),
+    ("lt_sector", "Sector", "Identity", True),
+    ("lt_price", "Price", "Identity", True),
+    ("regime", "Market regime", "Identity", False),
+
+    ("zone_low", "Buy zone low", "Buy zone", True),
+    ("zone_high", "Buy zone high", "Buy zone", True),
+    ("zone_label", "Buy zone level", "Buy zone", True),
+    ("zone_kind", "Buy zone kind", "Buy zone", True),
+    ("zone_state", "Zone proximity", "Buy zone", True),
+    ("zone_gap_pct", "Gap to zone %", "Buy zone", True),
+    ("buy_zone_reached", "Price in zone", "Buy zone", False),
+    ("buy_verdict", "Buy-zone verdict", "Buy zone", False),
+    ("buy_zone_tier", "Buy-zone tier", "Buy zone", False),
+    ("buy_zone_confidence", "Buy-zone confidence", "Buy zone", False),
+    ("buy_below", "Buy below", "Buy zone", False),
+    ("expected_cagr", "Expected CAGR %", "Buy zone", False),
+    ("return_hurdle", "Return hurdle %", "Buy zone", False),
+    ("model_value", "Model value", "Buy zone", False),
+
+    ("lquality", "LQuality", "Quality", True),
+    ("lq_tier", "Quality tier", "Quality", True),
+    ("lq_coverage", "Quality coverage %", "Quality", False),
+    ("insider", "Insider signal", "Quality", False),
+
+    ("valuation_band", "Valuation band", "Valuation", True),
+    ("valuation_method", "Valuation method", "Valuation", False),
+    ("valuation_confidence", "Valuation confidence", "Valuation", False),
+    ("implied_growth", "Implied growth %", "Valuation", False),
+    ("delivered_growth", "Delivered growth %", "Valuation", False),
+    ("growth_gap", "Growth gap pp", "Valuation", False),
+    ("upside", "Upside to fair value %", "Valuation", False),
+
+    ("trend_state", "Trend state", "Trend & levels", True),
+    ("trend_score", "Trend score", "Trend & levels", False),
+    ("stage", "Pullback stage", "Trend & levels", True),
+    ("s1_price", "S1 support", "Trend & levels", False),
+    ("s1_distance", "S1 distance %", "Trend & levels", False),
+    ("r1_price", "R1 resistance", "Trend & levels", False),
+    ("r1_distance", "R1 distance %", "Trend & levels", False),
+    ("cluster", "Level cluster", "Trend & levels", False),
+    ("confluence_hits", "Support levels holding", "Trend & levels", False),
+    ("lt_pct_vs_50ma", "vs 50 MA %", "Trend & levels", False),
+    ("lt_pct_vs_200ma", "vs 200 MA %", "Trend & levels", False),
+
+    ("technical", "Technical score", "Timing", False),
+    ("entry_score", "Entry score", "Timing", True),
+    ("swing_score", "Swing score", "Timing", False),
+    ("swing_state", "Swing state", "Timing", False),
+    ("swing_setup", "Swing setup", "Timing", False),
+    ("lt_rs_rank", "RS rank", "Timing", False),
+    ("lt_days_to_earnings", "Days to earnings", "Timing", False),
+
+    ("action", "Action", "Verdict", True),
+    ("gate", "Stopped at gate", "Verdict", False),
+    ("investment_status", "Investment status", "Verdict", False),
+    ("lt_score", "LT score", "Verdict", False),
+    ("tranche", "Tranche % of target", "Verdict", False),
+
+    ("entry_price", "LT entry", "Position", True),
+    ("stop_price", "Stop", "Position", True),
+    ("stop_pct", "Stop distance %", "Position", False),
+    ("shares", "Shares", "Position", True),
+    ("position_value", "Position $", "Position", True),
+    ("risk_dollars", "Risk $", "Position", True),
+    ("allocation_pct", "Allocation %", "Position", False),
+    ("rr", "R:R", "Position", True),
+    ("risk_status", "Sizing status", "Position", False),
+)
+
+_CSV_GROUPS = ("Identity", "Buy zone", "Quality", "Valuation",
+               "Trend & levels", "Timing", "Verdict", "Position")
+
+
+def _csv_row(r) -> dict:
+    """One evaluated result -> one flat dict keyed by _CSV_FIELDS."""
+    from stockanalysis.core.longterm import screen as LS
+
+    flat = LS.flatten(r)
+    zone = ((r.get("buy_zones") or {}).get("display_zone")) or {}
+    prox = _zone_flag(r) or {}
+    plan = r.get("sizing_plan") or {}
+    sizing = plan.get("sizing") or {}
+
+    out = {k: flat.get(k) for k, _h, _g, _d in _CSV_FIELDS}
+    out.update({
+        "name": r.get("name"),
+        "regime": r.get("regime"),
+        "zone_low": zone.get("low"),
+        "zone_high": zone.get("high"),
+        "zone_label": zone.get("label"),
+        # "investment" / "technical" — the distinction the column's colour
+        # carries and a CSV otherwise loses entirely.
+        "zone_kind": zone.get("kind"),
+        # Blank rather than a state word when there is no zone to be near:
+        # "ABOVE" against an empty zone would be a claim about nothing.
+        "zone_state": prox.get("state"),
+        "zone_gap_pct": prox.get("gap_pct"),
+        "entry_score": (r.get("entry") or {}).get("score"),
+        # Only from a plan the engine actually sized. A pending plan's prices
+        # are real, but shares/risk on an unsized one are absent, and half a
+        # row of position figures is worse than none.
+        "entry_price": (plan.get("entry") or {}).get("price"),
+        "stop_price": (plan.get("stop") or {}).get("price"),
+        "shares": sizing.get("shares"),
+        "position_value": sizing.get("position_value"),
+        "risk_dollars": sizing.get("actual_risk"),
+    })
+    return {k: v for k, v in out.items()
+            if k in {f[0] for f in _CSV_FIELDS}}
+
+
+def _csv_scalar(v):
+    """One value, small. Floats arrive off numpy and pandas arithmetic
+    carrying fifteen digits — 91.40000000000001 is both wrong-looking in a
+    spreadsheet and, multiplied by 62 fields and 657 rows, most of the
+    payload. Four decimals is more precision than any field here has."""
+    if isinstance(v, float):
+        return None if v != v else round(v, 4)
+    if v is None or isinstance(v, (int, bool, str)):
+        return v
+    return str(v)
+
+
+def _csv_payload(rows) -> str:
+    """Field spec + one record per row, as JSON the picker's JS reads.
+
+    Emitted for every row the filters left, not only the page's first
+    `limit` — a download that silently stopped at row 60 would be the same
+    bug the ticker export was written to avoid, and harder to notice in a
+    spreadsheet than on screen.
+
+    Rows are ARRAYS positioned against `fields`, not objects. As objects the
+    unfiltered page carried 942KB, of which roughly two thirds was the same
+    62 key names repeated 657 times — a cost paid on every page load by
+    everyone, including the majority who never open the export.
+    """
+    import json as _json
+
+    keys = [k for k, _h, _g, _d in _CSV_FIELDS]
+    payload = {
+        "fields": [{"key": k, "label": h, "group": g, "default": d}
+                   for k, h, g, d in _CSV_FIELDS],
+        "groups": list(_CSV_GROUPS),
+        "rows": [[_csv_scalar(row.get(k)) for k in keys]
+                 for row in (_csv_row(r) for r in rows)],
+    }
+    # </script> inside a JSON string would close this block early. The rest
+    # is belt-and-braces against an HTML comment opener doing the same.
+    text = _json.dumps(payload, default=str,
+                       separators=(",", ":")).replace("</", "<\\/")
+    return (f'<script type="application/json" id="lt-csv-data">{text}'
+            f'</script>')
+
+
+def _csv_bar(n_rows: int, filtered: bool) -> str:
+    """The download button and its column picker.
+
+    The picker is server-rendered rather than built in JS so that the field
+    list has exactly one definition — _CSV_FIELDS above — instead of a Python
+    copy for the payload and a JavaScript copy for the checkboxes.
+    """
+    if not n_rows:
+        return ""
+    boxes = []
+    for group in _CSV_GROUPS:
+        items = [(k, h, d) for k, h, g, d in _CSV_FIELDS if g == group]
+        if not items:
+            continue
+        checks = "".join(
+            f'<label style="display:inline-flex;gap:5px;align-items:center;'
+            f'font-size:11px;color:#444441;white-space:nowrap;cursor:pointer">'
+            f'<input type="checkbox" class="lt-csv-col" value="{esc(k)}"'
+            f'{" checked" if default else ""} data-default='
+            f'"{"1" if default else "0"}">{esc(label)}</label>'
+            for k, label, default in items)
+        boxes.append(
+            f'<div style="display:flex;gap:10px;flex-wrap:wrap;'
+            f'align-items:center;margin-bottom:5px">'
+            f'<span style="font-size:10px;text-transform:uppercase;'
+            f'letter-spacing:.06em;color:#898781;min-width:104px">'
+            f'{esc(group)}</span>{checks}</div>')
+
+    scope = ("the rows these filters left" if filtered
+             else "every name the engine scored")
+    return (
+        f'<details id="lt-csv" style="margin:-6px 0 14px">'
+        f'<summary style="cursor:pointer;font-size:11px;font-weight:600;'
+        f'color:#185FA5;list-style:none">⬇ Download CSV — choose columns</summary>'
+        f'<div style="background:white;border:0.5px solid #e1e0d9;'
+        f'border-radius:12px;padding:12px 14px;margin-top:8px">'
+        f'{"".join(boxes)}'
+        f'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;'
+        f'margin-top:10px;padding-top:10px;border-top:0.5px solid #f1efea">'
+        f'<button type="button" class="btn" onclick="ltCsvDownload()" '
+        f'style="padding:6px 14px;font-size:11px">Download '
+        f'<span id="lt-csv-count">{n_rows}</span> rows</button>'
+        f'<a href="#" onclick="ltCsvSelect(1);return false" '
+        f'style="font-size:11px;color:#185FA5">All</a>'
+        f'<a href="#" onclick="ltCsvSelect(0);return false" '
+        f'style="font-size:11px;color:#185FA5">None</a>'
+        f'<a href="#" onclick="ltCsvSelect(-1);return false" '
+        f'style="font-size:11px;color:#185FA5">Reset</a>'
+        f'<span id="lt-csv-note" style="font-size:10px;color:#898781"></span>'
+        f'</div>'
+        f'<div style="font-size:10px;color:#898781;margin-top:8px">'
+        f'{esc(n_rows)} rows — {esc(scope)}, not just the page you can see. '
+        f'Rows come out in the order the table is currently sorted, and '
+        f'columns in the order they are listed here. Your choice of columns '
+        f'is remembered in this browser.</div>'
+        f'</div></details>')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CSP HAND-OFF — send a chosen set of names to the put scan
+# ─────────────────────────────────────────────────────────────────────────────
+# The two pages already share a spine: /csp consumes /longterm's company
+# verdict and adds the options layer. What was missing is the step between
+# them — you could see that twenty quality names had pulled back, and then
+# had to retype them into the CSP box.
+#
+# Why the selection is made HERE and not on /csp: choosing which businesses
+# you would accept being assigned into is a question about quality,
+# valuation and how far price has fallen, and those three columns live on
+# this page. /csp cannot show them, because it consumes the verdict rather
+# than recomputing it.
+#
+# The scan is a job (minutes of option chains), so this starts one and hands
+# back a link. It does not wait, and it does not pretend to.
+
+# The scan's own per-survivor cap. A selection larger than this would have
+# its tail silently dropped after the chains had already been paid for.
+MAX_CSP_SELECTION = 60
+
+
+def _csp_bar() -> str:
+    """The bar that appears once something is ticked.
+
+    Rendered always and hidden by CSS until a box is checked — building it
+    in JS would put the copy explaining what the scan does inside a string
+    literal, where nobody edits it.
+    """
+    def btn(label, onclick, primary=False, ident=""):
+        bg, fg, bd = (("#0b0b0b", "white", "#0b0b0b") if primary
+                      else ("white", "#444441", "#d9d7ce"))
+        return (f'<button type="button"{f" id={ident}" if ident else ""} '
+                f'onclick="{onclick}" style="background:{bg};color:{fg};'
+                f'border:1px solid {bd};font-size:11px;font-weight:600;'
+                f'padding:6px 12px;border-radius:6px;cursor:pointer;'
+                f'white-space:nowrap">{label}</button>')
+
+    return (
+        f'<div id="lt-csp-bar" style="display:none;position:sticky;bottom:0;'
+        f'z-index:5;background:#0b0b0b;color:white;border-radius:12px;'
+        f'padding:10px 14px;margin:10px 0 14px;box-shadow:0 2px 14px '
+        f'rgba(0,0,0,.18)">'
+        f'<div style="display:flex;gap:10px;flex-wrap:wrap;'
+        f'align-items:center">'
+        f'<span id="lt-csp-count" style="font-size:12px;font-weight:700"></span>'
+        f'<span id="lt-csp-warn" style="font-size:11px;color:#F0C674"></span>'
+        + btn("Select all shown", "ltPickAll(1)")
+        + btn("Only CSP-eligible", "ltPickEligible()")
+        + btn("Clear", "ltPickAll(0)")
+        + f'<label style="font-size:11px;display:inline-flex;gap:5px;'
+          f'align-items:center;margin-left:6px">Target DTE'
+          f'<input id="lt-csp-dte" type="number" min="7" max="120" value="35" '
+          f'style="width:58px;padding:4px 6px;font-size:11px;border-radius:5px;'
+          f'border:1px solid #4a4a48;background:#1c1c1b;color:white"></label>'
+        + f'<label style="font-size:11px;display:inline-flex;gap:5px;'
+          f'align-items:center" title="AVOID skips any expiry containing an '
+          f'earnings print; a LATER expiry never clears one">Earnings'
+          f'<select id="lt-csp-earn" style="padding:4px 6px;font-size:11px;'
+          f'border-radius:5px;border:1px solid #4a4a48;background:#1c1c1b;'
+          f'color:white">'
+          f'<option value="AVOID">avoid</option>'
+          f'<option value="CONTROLLED">controlled</option>'
+          f'<option value="ACCEPT">accept</option></select></label>'
+        + '<span style="margin-left:auto;display:flex;gap:8px;'
+          'align-items:center">'
+        + btn("🪙 Scan for put premiums →", "ltPickScan()", primary=True,
+              ident="lt-csp-go")
+        + '</span></div>'
+        f'<div id="lt-csp-msg" style="font-size:11px;color:#c9c7c1;'
+        f'margin-top:7px"></div>'
+        f'<div style="font-size:10px;color:#8d8b86;margin-top:5px">'
+        f'Starts a cash-secured put scan on exactly these names — one option '
+        f'chain each, so this takes minutes rather than seconds. Because you '
+        f'named them, <b>every one gets priced, including the rejects</b>: '
+        f'a name that fails on quality, valuation or a broken trend comes '
+        f'back with its chain attached as reference, so you can read the '
+        f'premium and weigh the risk yourself. What it does not get is a '
+        f'score or a place in the ranked list — the gate still decides what '
+        f'is offered, you still decide what is taken. Premiums are judged '
+        f'against a required yield, so "attractive" is the engine\'s verdict '
+        f'rather than the biggest number.<br>'
+        f'<b>Earnings</b>: <i>avoid</i> skips any expiry containing a print, '
+        f'which is why a name reporting soon can come back with no contract '
+        f'at all — switch to <i>controlled</i> to see it with a scoring '
+        f'penalty, or <i>accept</i> to take it unpenalised when quality, '
+        f'delta, liquidity and premium are all strong enough to be paid for '
+        f'the gap.</div>'
+        f'</div>')
+
+
+# Above this, a "Scan these" deep link stops being the right tool: the URL
+# gets long, and a rescan of that many names is a universe scan, which the
+# Scanner's own category checkboxes already do better. Copy still works at
+# any size — only the one-click link is withheld, and the bar says why.
+MAX_DEEP_LINK_TICKERS = 200
+
+
+def _export_bar(matching: list[str], library: list[str], filtered: bool) -> str:
+    """Hand the current selection back as a rescan input.
+
+    Two lists, always both offered. "Filtered" is whatever the chips, rules,
+    search and saved list have left; "whole library" is every name the engine
+    scored. They are the same set on an unfiltered page, and the bar collapses
+    to one button rather than offering the same thing twice under two names.
+
+    The textarea is not decoration. navigator.clipboard is unavailable over
+    plain http from another machine on the LAN — which is how this
+    workstation is often reached — so the copy has to degrade to something
+    the reader can select by hand rather than failing silently.
+    """
+    if not matching and not library:
+        return ""
+    same = matching == library
+    csv_matching = ", ".join(matching)
+    csv_library = ", ".join(library)
+
+    def button(label, target, count, primary):
+        bg, fg, bd = (("#0b0b0b", "white", "#0b0b0b") if primary
+                      else ("white", "#444441", "#d9d7ce"))
+        return (f'<button type="button" onclick="ltCopy(\'{target}\')" '
+                f'style="background:{bg};color:{fg};border:1px solid {bd};'
+                f'font-size:11px;font-weight:600;padding:5px 11px;'
+                f'border-radius:6px;cursor:pointer;white-space:nowrap">'
+                f'{esc(label)} ({count})</button>')
+
+    buttons = [button("📋 Copy filtered" if not same else "📋 Copy tickers",
+                      "matching", len(matching), True)]
+    if not same:
+        buttons.append(button("📋 Whole library", "library", len(library),
+                              False))
+
+    # One click straight into a scan of exactly this set. Withheld rather
+    # than truncated past the cap — a link that silently scanned the first
+    # 200 of 552 would be worse than no link.
+    scan = ""
+    if matching and len(matching) <= MAX_DEEP_LINK_TICKERS:
+        href = "/scanner?" + urlencode({"tickers": csv_matching})
+        scan = (f'<a href="{esc(href)}" '
+                f'style="font-size:11px;font-weight:600;padding:5px 11px;'
+                f'border-radius:6px;text-decoration:none;color:#185FA5;'
+                f'border:1px solid #d9d7ce;white-space:nowrap">'
+                f'Rescan these {len(matching)} →</a>')
+    elif matching:
+        scan = (f'<span style="font-size:10px;color:#898781">'
+                f'{len(matching)} is past the {MAX_DEEP_LINK_TICKERS}-name '
+                f'deep-link cap — copy and paste into the Scanner, or tick a '
+                f'category there.</span>')
+
+    note = ("the rows these filters left, not just the page you can see"
+            if filtered else "every name the engine scored")
+
+    return (
+        f'<div id="lt-export" data-matching="{esc(csv_matching)}" '
+        f'data-library="{esc(csv_library)}" '
+        f'style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;'
+        f'margin:-6px 0 14px">'
+        + "".join(buttons) + scan
+        + f'<span id="lt-export-note" style="font-size:10px;color:#898781">'
+          f'{esc(note)}</span>'
+        + '<textarea id="lt-export-box" readonly rows="2" '
+          'style="display:none;width:100%;margin-top:6px;padding:7px 9px;'
+          'border:1px solid #d9d7ce;border-radius:7px;font-size:11px;'
+          'font-family:ui-monospace,SFMono-Regular,Menlo,monospace;'
+          'resize:vertical"></textarea>'
+        + '</div>')
+
+
 def longterm_page(query: dict | None = None) -> tuple[str, str]:
     from . import api
 
@@ -2684,6 +3883,19 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     rule_texts = [r for r in (query.get("rule") or []) if r.strip()]
     rule_op = ((query.get("rule_op") or ["AND"])[0].strip().upper()
                or "AND")
+    # The buy-zone alert's own filter. A separate parameter rather than a
+    # rule, because it is a property of TODAY's price against a stored level
+    # and the rule set is a description of the company — mixing them would
+    # make a saved rule URL mean something different next week.
+    #
+    # Two modes, because the bar makes two different claims: "1" is the names
+    # it alerted on, "all" is every name at a zone including the ones whose
+    # business it rejected. Without the second the bar would cite a number
+    # the page had no way to show.
+    raw_near = (query.get("near") or [""])[0].strip().lower()
+    near_mode = ("all" if raw_near == "all"
+                 else "1" if raw_near in ("1", "true", "on") else "")
+    near_on = bool(near_mode)
     wanted = parse_tickers(raw_query)
     # Default FIRST, clamp second. Clamping an absent value ran
     # max(10, min(500, 0)) -> 10, so `or DEFAULT_LIMIT` could never fire and
@@ -2710,6 +3922,7 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
         state = {"q": raw_query.strip(), "list": list_name,
                  "action": action_filter,
                  "regime": regime_override or "",
+                 "near": near_mode,
                  "rule": list(rule_texts),
                  "rule_op": "" if rule_op == "AND" else rule_op}
         for key, value in params.items():
@@ -2758,6 +3971,16 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     preset_counts = LS.preset_counts(base)
     before_rules = len(base)
     base, rule_conds, rule_stats = LS.apply_rules(base, rule_texts, rule_op)
+
+    # Built from what the rules left, BEFORE ?near= narrows it — otherwise
+    # turning the filter on would rewrite the alert that offered it, and the
+    # bar would always read "N at a zone, all N shown" whatever the truth.
+    zone_bar = _zone_alert_bar(base, link, near_mode)
+    n_near = len(zone_alerts(base))
+    if near_mode == "all":
+        base = [r for r in base if (_zone_flag(r) or {}).get("near")]
+    elif near_mode:
+        base = [r for r, _p in zone_alerts(base)]
 
     counts = {}
     for r in base:
@@ -2846,12 +4069,41 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
             chips.append(chip(_ACTION_SHORT.get(action, action), action,
                               counts[action]))
 
+    # Sits with the action chips because it filters the same table, but
+    # coloured apart from them because it asks a different question: those
+    # select on the engine's verdict, this one on where price is today. A
+    # name can be AVOID and at its zone, and both chips are then true of it.
+    if n_near or near_on:
+        nz_bg, nz_fg = (("#633806", "white") if near_on
+                        else ("#FAEEDA", "#633806"))
+        nz_label = ("⚑ At buy zone · all" if near_mode == "all"
+                    else f'⚑ At buy zone {n_near}')
+        chips.append(
+            f'<a href="{esc(link(near="" if near_on else "1", limit=""))}" '
+            f'title="Price is inside, or within {BZ.NEAR_ZONE_PCT:.0f}% of, '
+            f'the zone in the Buy Zone column, on a business the engine has '
+            f'not rejected" '
+            f'style="background:{nz_bg};color:{nz_fg};font-size:11px;'
+            f'font-weight:600;padding:5px 11px;border-radius:6px;'
+            f'text-decoration:none;white-space:nowrap">{nz_label}</a>')
+
     shown = base
     if action_filter == "BUY":
         shown = [r for r in base if r["action"] in _BUY_ACTIONS]
     elif action_filter:
         shown = [r for r in base if r["action"] == action_filter]
     total_matching = len(shown)
+    # Captured HERE, before the `[:limit]` truncation below. The export is a
+    # rescan input, so it has to be everything the filters left rather than
+    # everything the page happens to be showing — a filter matching 51 names
+    # under a 60-row page looks identical either way, and a filter matching
+    # 300 would silently hand back 60 and rescan the wrong set.
+    matching_tickers = [r["ticker"] for r in shown]
+    library_tickers = [r["ticker"] for r in data["rows"]]
+    # Same rule for the CSV, and for the same reason: a download that stopped
+    # at the page's row limit would be wrong in a file, where there is no
+    # "Show all 300" link underneath to reveal that it had.
+    csv_source = list(shown)
     # Aggregated over everything the filters left, not just the first page —
     # a concentration figure that changed when you clicked "show all" would
     # be describing the pagination rather than the portfolio.
@@ -2878,8 +4130,15 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
     regime_pill = {"FAVORABLE": "good", "SELECTIVE": "watch",
                    "DEFENSIVE": "bad"}.get(data["regime"], "muted")
 
+    is_filtered = bool(action_filter or rule_texts or wanted or list_name
+                       or near_on)
+    export = _export_bar(matching_tickers, library_tickers,
+                         filtered=is_filtered)
+    csv_bar = (_csv_bar(len(csv_source), is_filtered)
+               + _csv_payload(csv_source))
+
     table = analysis_table(shown, open_detail=len(shown) == 1,
-                           empty_msg=empty_msg) + more
+                           empty_msg=empty_msg, selectable=True) + more
 
     body = f"""
 <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;
@@ -2902,6 +4161,7 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
 </div>
 
 {warn}
+{zone_bar}
 {_risk_dashboard(risk_summary, settings)}
 {search}
 {notfound}
@@ -2914,10 +4174,14 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
   {"".join(chips)}
 </div>
 
+{export}
+{csv_bar}
+
 <div id="lt-sort-note" style="display:none;font-size:11px;color:#898781;
      margin:-4px 0 8px"></div>
 
 {card("", table, pad="6px 10px 10px")}
+{_csp_bar()}
 
 <div style="font-size:10px;color:#898781;margin-top:-6px">
   Click a header to sort; <strong>shift-click a second header</strong> to
@@ -2942,7 +4206,7 @@ def longterm_page(query: dict | None = None) -> tuple[str, str]:
   proxies, marked ⚠ where the evidence is thinner than the weight.
 </div>
 """
-    return body, TABLE_JS + _RULE_JS + RISK_JS
+    return body, TABLE_JS + _RULE_JS + RISK_JS + EXPORT_JS
 
 
 # ─────────────────────────────────────────────────────────────────────────────

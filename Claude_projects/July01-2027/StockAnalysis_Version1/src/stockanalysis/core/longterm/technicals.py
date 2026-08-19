@@ -1158,6 +1158,164 @@ def compute_support_confluence(row: dict) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# LEVEL STRENGTH — how good is a support, asked about the LEVEL not the price
+# ─────────────────────────────────────────────────────────────────────────────
+# compute_support_confluence above scores TODAY'S PRICE: it is direction-aware
+# and counts only levels price currently sits above, which is exactly right
+# for "should I buy now" and useless for "is $193 a good place to add". A
+# level 13% below the tape supports nothing yet — by that function's rule it
+# scores zero, and an accumulation ladder needs to compare three such levels
+# against each other before price reaches any of them.
+#
+# So this asks the other question. Given a price, how strong is the support
+# THERE: what kind of level is it, how many independent levels agree with it,
+# and did the market trade heavily at it.
+#
+# What is deliberately NOT scored
+# --------------------------------
+# Touch count. `Touches` comes from core.key_levels, which builds S1 from
+# ~20 days of 5-MINUTE bars, so it counts bars spent near a level rather than
+# times a level was defended. Measured on the live library it runs from 4 to
+# 1,015 with a median of 181 — a distribution with no defensible saturation
+# point, and one whose scale is an artifact of the bar size rather than a
+# property of the level. `Volume_Confirmation` is derived from the same data
+# but as a RATIO (touch volume >= 1.2x), which is scale-free and does carry a
+# claim, so that is what earns points here. The raw count is passed through as
+# context and given no weight.
+#
+# Historical defence — how often price fell to this level and bounced — is the
+# input that would most improve this score and is not derivable from a scan
+# row. It needs the daily frame, which is why it belongs in daily_signals.py
+# and is not faked here.
+
+# What the level IS, and which FAMILY it belongs to. A 200-day average is a
+# different kind of object from an 8-day one: more capital has been priced
+# against it, more systematic strategies watch it, and it moves slowly enough
+# that it is in the same place next week. That is the whole reason a
+# three-rung ladder gets deeper rather than merely lower.
+#
+# The family is what stops the 8 and 21 EMA agreeing with each other. They are
+# one short-term signal read at two lookbacks — compute_support_confluence
+# above counts them once for the same reason. Scored without families the
+# EMA rung measured out STRONGER than the 200 MA rung across the live library
+# (median 70 vs 40), purely because its two members are always within
+# tolerance of one another. Two EMAs at one price is not a cluster.
+LEVEL_IDENTITY = (
+    ("200MA", "200ma", "200 MA", 45),
+    ("50MA", "50ma", "50 MA", 32),
+    ("Prior_Breakout_Level", "breakout", "prior breakout", 26),
+    ("21EMA", "ema", "21 EMA", 15),
+    ("8EMA", "ema", "8 EMA", 12),
+)
+# Each other FAMILY sitting within tolerance of the level being scored. This
+# is the user-facing "support cluster": three independent things at one price
+# is a level the market has to work through, not a line on a chart.
+LEVEL_AGREEMENT_POINTS = 14
+LEVEL_AGREEMENT_MAX = 35
+LEVEL_VOLUME_POINTS = 20
+
+# Bands calibrated against the live 552-name library rather than adopted from
+# the framework's suggested 90/75/60, which measured out badly: on the real
+# distribution those cutoffs left the top band nearly empty and filed most of
+# the ladder under "weak", so the label only repeated what the rung name
+# already said. These sit where the score actually separates a lone moving
+# average (45) from a genuine confluence.
+LEVEL_BANDS = ((75, "🟢 Major"), (55, "🟡 Strong"),
+               (40, "🟠 Moderate"), (0, "🔴 Weak"))
+
+
+def score_support_level(row: dict, level_price: float | None) -> dict:
+    """How strong is support at `level_price`, from the row alone.
+
+    Scores a PRICE, not the current tape, so it is meaningful for levels
+    price has not reached — which is the only reason an accumulation ladder
+    can rank its own rungs before any of them fill.
+
+    Returns {"score" 0-100, "label", "identity", "agreeing", "hits",
+             "misses", "touches"}. `score` is None when `level_price` is
+    missing; a level with no recognisable identity scores 0 rather than
+    None, because "nothing tracked is here" is a measurement.
+    """
+    out = {"score": None, "label": None, "identity": None, "agreeing": [],
+           "hits": [], "misses": [], "touches": f(row.get("Touches"))}
+    price = f(level_price)
+    if price is None or price <= 0:
+        return out
+
+    tol = _tolerance(row)
+
+    def near(value) -> bool:
+        return value is not None and value > 0 and \
+            abs(value / price - 1) * 100.0 <= tol
+
+    score = 0
+    hits, misses = [], []
+
+    # ── Identity: the strongest tracked level standing at this price ────────
+    # Strongest, not nearest. When the 50 MA and the 8 EMA are both within
+    # tolerance the level is a 50 MA that an 8 EMA happens to be visiting,
+    # and scoring it as the 8 EMA would rank the rung by its weakest member.
+    matched = [(key, family, name, pts)
+               for key, family, name, pts in LEVEL_IDENTITY
+               if near(f(row.get(key)))]
+    own_family = None
+    if matched:
+        key, own_family, name, pts = max(matched, key=lambda m: m[3])
+        score += pts
+        out["identity"] = name
+        hits.append({"name": f"Level is the {name}", "points": pts,
+                     "detail": f"${f(row.get(key)):,.2f}"})
+    else:
+        misses.append({"name": "Level identity", "points": LEVEL_IDENTITY[0][3],
+                       "detail": "no tracked average or breakout at this price"})
+
+    # ── Agreement: the other FAMILIES standing at the same price ────────────
+    # By family, so the 8 EMA cannot corroborate the 21 EMA. Best member of
+    # each family names it, so "50 MA" is reported rather than whichever
+    # member happened to be listed first.
+    agreeing, seen = [], {own_family}
+    for _key, family, name, _pts in LEVEL_IDENTITY:
+        if family in seen or not near(f(row.get(_key))):
+            continue
+        seen.add(family)
+        agreeing.append(name)
+    s1 = f(row.get("S1"))
+    if near(s1):
+        agreeing.append("volume shelf")
+    out["agreeing"] = agreeing
+    if agreeing:
+        pts = min(LEVEL_AGREEMENT_MAX,
+                  LEVEL_AGREEMENT_POINTS * len(agreeing))
+        score += pts
+        hits.append({"name": f"{len(agreeing)} independent level"
+                             f"{'s' if len(agreeing) > 1 else ''} agree",
+                     "points": pts, "detail": ", ".join(agreeing)})
+    else:
+        misses.append({"name": "Level agreement",
+                       "points": LEVEL_AGREEMENT_POINTS,
+                       "detail": "this level stands alone"})
+
+    # ── Volume: did the market trade size here ──────────────────────────────
+    vol_conf = b(row.get("Volume_Confirmation"))
+    if near(s1) and vol_conf:
+        score += LEVEL_VOLUME_POINTS
+        hits.append({"name": "Volume-confirmed", "points": LEVEL_VOLUME_POINTS,
+                     "detail": f"heavy trade at ${s1:,.2f}"})
+    else:
+        misses.append({"name": "Volume-confirmed", "points": LEVEL_VOLUME_POINTS,
+                       "detail": ("volume shelf here but not confirmed"
+                                  if near(s1) else
+                                  "no volume-confirmed level at this price")})
+
+    score = int(min(100, score))
+    out.update({"score": score,
+                "label": next(name for floor, name in LEVEL_BANDS
+                              if score >= floor),
+                "hits": hits, "misses": misses})
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PULLBACK VOLUME — §10. Is this a rest or a run for the exit?
 # ─────────────────────────────────────────────────────────────────────────────
 

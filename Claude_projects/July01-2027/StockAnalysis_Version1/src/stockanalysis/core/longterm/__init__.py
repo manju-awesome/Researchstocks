@@ -19,7 +19,18 @@ is the exact failure this engine is built to refuse.
     quality.py      LQuality 0-100 — what deserves to be owned
     valuation.py    fair value + discount band — what it is worth
     technicals.py   trend gate, pullback zone, support confluence — when
+    thesis.py       has the business actually deteriorated — whether to keep
     engine.py       the four gates in order, one action per ticker
+
+Opening a position and adding to one are different questions
+-------------------------------------------------------------
+The hierarchy above answers the first. `thesis.py` exists because the second
+cannot use it: measured across the live library, valuation returns the same
+verdict at the 8/21 EMA and at the 200 MA for 55 of 56 quality names, so it
+grades a company rather than a price and cannot size a tranche. Accumulation
+gates on quality and an intact thesis, prices its rungs off support, and
+lets valuation modify how much rather than whether. See thesis.py's docstring
+for the measurements.
 
 Naming
 ------
@@ -46,12 +57,18 @@ from stockanalysis.core.longterm.quality import compute_lquality
 from stockanalysis.core.longterm.valuation import compute_valuation
 from stockanalysis.core.longterm.technicals import (
     compute_trend, compute_pullback, compute_support_confluence,
-    compute_pullback_volume,
+    compute_pullback_volume, score_support_level,
+)
+from stockanalysis.core.longterm.thesis import compute_thesis
+from stockanalysis.core.longterm.buy_zones import (
+    zone_proximity, NEAR_ZONE_PCT,
 )
 from stockanalysis.core.longterm.engine import evaluate, evaluate_universe
 
 __all__ = [
     "compute_lquality", "compute_valuation", "compute_trend",
     "compute_pullback", "compute_support_confluence",
-    "compute_pullback_volume", "evaluate", "evaluate_universe",
+    "compute_pullback_volume", "score_support_level", "compute_thesis",
+    "zone_proximity", "NEAR_ZONE_PCT",
+    "evaluate", "evaluate_universe",
 ]

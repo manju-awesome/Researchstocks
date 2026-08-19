@@ -460,6 +460,11 @@ def _table(rows, offset=0, detail=True, table_id="fc-t"):
             f' data-funding="{esc(surv.get("classification") or "")}"'
             f' data-disc="{esc(disc.get("state") or "")}"'
             f' data-band="{esc(r.get("cap_band") or "")}"'
+            # Stage 1-2 as one flag rather than two select values: the header
+            # counts them together ("61 at stage 1-2") because they are one
+            # idea — a company still proving the thing works — and a facet
+            # select can only match one value at a time.
+            f' data-early="{1 if (st.get("stage") or 9) <= 2 else 0}"'
             f' data-tier="{esc(r.get("tier") or "")}"'
             f' data-risks="{len(flags)}"'
             f' data-score="{_d(r.get("score"))}"')
@@ -604,6 +609,13 @@ def _filter_bar(rows, table_id):
           f'align-items:center"><input type="checkbox" data-attr="_norisk" '
           f'onchange="fcFilter(\'{table_id}\')"> hide names with material '
           f'risks</label>'
+        # A real control rather than a hidden state the header badge sets
+        # behind the reader's back: clicking "61 at stage 1–2" has to leave
+        # something on screen explaining why 61 of 141 rows are showing, and
+        # something to untick.
+        + f'<label style="font-size:11px;color:#898781;display:flex;gap:4px;'
+          f'align-items:center"><input type="checkbox" data-attr="_early" '
+          f'onchange="fcFilter(\'{table_id}\')"> stage 1–2 only</label>'
         + f'<button type="button" onclick="fcReset(\'{table_id}\')" '
           f'style="padding:5px 10px;border:1px solid #d9d7ce;border-radius:6px;'
           f'font-size:11px;background:white;cursor:pointer">Reset</button>'
@@ -642,6 +654,37 @@ _THESIS = (
     'for the price and entry question.</div>')
 
 
+# Header count -> the filter that reproduces it, as (facet attr, value).
+# `_all` clears everything; `_early` is the pseudo-facet defined on the row
+# above. The keys are also URL values (`/compounder?focus=conviction`), so a
+# filtered view is linkable and survives a reload.
+_FOCUS = {
+    "all":        ("_all", ""),
+    "in-band":    ("band", "IN BAND"),
+    "graduated":  ("band", "GRADUATED"),
+    "conviction": ("tier", "CONVICTION"),
+    "strong":     ("tier", "STRONG CANDIDATE"),
+    "watch":      ("tier", "WATCH"),
+    "early":      ("_early", "1"),
+}
+
+
+def _count_badge(text, status, focus_key) -> str:
+    """A header count that shows you the rows it counted.
+
+    The click is handled in JS when the full table is on the page, and falls
+    through to a real navigation when it is not — which is the case whenever
+    a ticker filter is active, since that view renders `fc-sel` and no filter
+    bar. Same href either way, so the counts stay linkable and a middle-click
+    or a bookmark behaves the way the underline promises.
+    """
+    inner = badge(text, status)
+    return (f'<a href="/compounder?focus={focus_key}" '
+            f'onclick="return fcFocus(\'{focus_key}\')" '
+            f'title="Show these {esc(text)}" '
+            f'style="text-decoration:none;cursor:pointer">{inner}</a>')
+
+
 def _header(snap, rows):
     status, note = CS.age_note(snap)
     counts = CE.counts(rows)
@@ -649,23 +692,29 @@ def _header(snap, rows):
     in_band = sum(1 for r in rows if r.get("cap_band") == "IN BAND")
     grads = sum(1 for r in rows if r.get("cap_band") == "GRADUATED")
 
-    bits = [badge(f"{len(rows)} companies", "muted"),
-            badge(f"{in_band} in the $300M–$20B band", "info")]
+    bits = [_count_badge(f"{len(rows)} companies", "muted", "all"),
+            _count_badge(f"{in_band} in the $300M–$20B band", "info",
+                         "in-band")]
     if grads:
-        bits.append(badge(f"{grads} graduated above $20B", "watch"))
-    for tier_name in ("CONVICTION", "STRONG CANDIDATE", "WATCH"):
+        bits.append(_count_badge(f"{grads} graduated above $20B", "watch",
+                                 "graduated"))
+    for tier_name, key in (("CONVICTION", "conviction"),
+                           ("STRONG CANDIDATE", "strong"),
+                           ("WATCH", "watch")):
         if counts.get(tier_name):
-            bits.append(badge(f"{counts[tier_name]} {tier_name.lower()}",
-                              _TIER_STATUS.get(tier_name, "muted")))
+            bits.append(_count_badge(f"{counts[tier_name]} {tier_name.lower()}",
+                                     _TIER_STATUS.get(tier_name, "muted"), key))
     early = sum(v for k, v in stages.items()
                 if k in ("DISCOVERY", "VALIDATION"))
     if early:
-        bits.append(badge(f"{early} at stage 1–2", "info"))
+        bits.append(_count_badge(f"{early} at stage 1–2", "info", "early"))
 
     return ('<div style="display:flex;gap:8px;flex-wrap:wrap;'
             'align-items:center;margin-bottom:8px">' + "".join(bits) +
-            '</div>' + _sub(note, "#8a6d1a" if status != "fresh" else "#898781",
-                            "11px"))
+            '</div>'
+            + _sub("Click any count to show the companies behind it.")
+            + _sub(note, "#8a6d1a" if status != "fresh" else "#898781",
+                   "11px"))
 
 
 def _watchlist_block(wl):
@@ -869,7 +918,7 @@ function fcFilter(tableId){
   var bar=document.getElementById(tableId+'-filters');
   if(!table||!bar) return;
 
-  var facets=[], text='', minScore=0, noRisk=false;
+  var facets=[], text='', minScore=0, noRisk=false, early=false;
   bar.querySelectorAll('[data-attr]').forEach(function(el){
     var a=el.getAttribute('data-attr');
     if(a==='_text'){ text=el.value.trim().toLowerCase(); }
@@ -877,6 +926,7 @@ function fcFilter(tableId){
       var lbl=document.getElementById(tableId+'-minscore');
       if(lbl) lbl.textContent=el.value; }
     else if(a==='_norisk'){ noRisk=el.checked; }
+    else if(a==='_early'){ early=el.checked; }
     else if(el.value){ facets.push([a, el.value]); }
   });
 
@@ -899,6 +949,7 @@ function fcFilter(tableId){
       ok = (s!=='' && s!==null && parseFloat(s)>=minScore);
     }
     if(ok&&noRisk){ ok = (parseInt(p.row.getAttribute('data-risks')||'0',10)===0); }
+    if(ok&&early){ ok = (p.row.getAttribute('data-early')==='1'); }
 
     p.row.style.display = ok ? '' : 'none';
     if(p.detail && !ok) p.detail.style.display='none';
@@ -927,4 +978,55 @@ function fcReset(tableId){
   });
   fcFilter(tableId);
 }
+
+// Header counts -> the rows they counted.
+var FC_FOCUS={"all":["_all",""],
+              "in-band":["band","IN BAND"],
+              "graduated":["band","GRADUATED"],
+              "conviction":["tier","CONVICTION"],
+              "strong":["tier","STRONG CANDIDATE"],
+              "watch":["tier","WATCH"],
+              "early":["_early","1"]};
+
+// Returns false when it handled the click (so the <a> does not navigate) and
+// true when it could not — a ticker filter is active, so the full table and
+// its filter bar are not on this page and the href has to do the work.
+function fcFocus(key){
+  var spec=FC_FOCUS[key], bar=document.getElementById('fc-all-filters');
+  if(!spec||!bar) return true;
+  fcReset('fc-all');
+  if(spec[0]==='_early'){
+    var cb=bar.querySelector('[data-attr="_early"]');
+    if(!cb) return true;
+    cb.checked=true;
+  } else if(spec[0]!=='_all'){
+    var sel=bar.querySelector('select[data-attr="'+spec[0]+'"]');
+    // A facet with fewer than two values is never rendered, so a count can
+    // outlive its dropdown — a library where every name is IN BAND has no
+    // cap-band select. Falling through to the href would reload to the same
+    // dead end, so say what happened instead of silently doing nothing.
+    if(!sel) return true;
+    var found=false;
+    for(var i=0;i<sel.options.length;i++){
+      if(sel.options[i].value===spec[1]){ found=true; break; }
+    }
+    if(!found) return true;
+    sel.value=spec[1];
+  }
+  fcFilter('fc-all');
+  var t=document.getElementById('fc-all');
+  if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth', block:'start'});
+  return false;
+}
+
+// ?focus=<key> on load, so the counts are linkable and survive a reload.
+(function(){
+  function apply(){
+    var m=/[?&]focus=([^&]+)/.exec(window.location.search);
+    if(m) fcFocus(decodeURIComponent(m[1]));
+  }
+  if(document.readyState==='loading')
+    document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
 """

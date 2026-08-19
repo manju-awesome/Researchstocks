@@ -229,6 +229,33 @@ LONGTERM_FIELDS: tuple[S.Field, ...] = (
             "buy_zone_distance", "%", None,
             hint="How far the zone sits from today's price — negative is "
                  "below", decimals=1),
+    # ── The accumulation ladder ─────────────────────────────────────────
+    # Which rung price is sitting on, and how deep the correction is. The
+    # two are asked together on purpose: Zone 1 is the 8/21 EMA for most
+    # names and 477 of 657 are sitting on it, so "in a zone" alone is not a
+    # finding. Paired with the drawdown it is.
+    S.Field("dca_zone", "In accumulation zone", "Buy zone", NUM, "dca_zone",
+            "", None,
+            hint="Which ladder rung price is at — 1 is the nearest level "
+                 "below, 3 the deepest. Blank when price is not on one",
+            decimals=0),
+    S.Field("dca_zone_source", "Zone type", "Buy zone", ENUM,
+            "dca_zone_source",
+            values=("volume_shelf", "moving_average", "structure",
+                    "fundamental", "level"),
+            hint="What kind of level the rung is. A tested volume shelf is "
+                 "far stronger evidence than an arithmetic mean"),
+    S.Field("ladder_rungs", "Rungs below price", "Buy zone", NUM,
+            "ladder_rungs", "", UP,
+            hint="How many accumulation levels sit below today's price",
+            decimals=0),
+    S.Field("dist_52w_high", "Off the 52-week high", "Buy zone", NUM,
+            "dist_52w_high", "%", None,
+            hint="Negative is below the high. The correction measure — "
+                 "pair it with a zone hit to find quality in a real "
+                 "drawdown rather than on a routine pullback",
+            decimals=1),
+
     S.Field("buy_below", "Buy below", "Buy zone", NUM, "buy_below", "$", None,
             hint="The price at which expected return meets this business's "
                  "hurdle — the fundamental ceiling, ignoring the chart",
@@ -513,6 +540,13 @@ def flatten(result: dict) -> dict:
         "buy_zone_tier": best.get("label"),
         "buy_zone_confidence": (bz_verdict.get("confidence") or {}).get("level"),
         "buy_below": _num(fund.get("buy_below")),
+        "dca_zone": _num((bzones.get("zone_hit") or {}).get("zone")),
+        "dca_zone_source": (bzones.get("zone_hit") or {}).get("source"),
+        "ladder_rungs": len(bzones.get("ladder") or []) if bzones else None,
+        # The engine keeps the scan row it was built from; that is where
+        # the drawdown lives. Read defensively — a result assembled by a
+        # test fixture or an older cached path may not carry it.
+        "dist_52w_high": _num(result.get("dist_52w_high")),
         "buy_zone_low": _num((bzones.get("display_zone") or {}).get("low")),
         "buy_zone_distance": _num(
             (bzones.get("display_zone") or {}).get("distance_pct")),
@@ -785,6 +819,22 @@ PRESETS: tuple[dict, ...] = (
              "score independently rates well. The disagreements are the "
              "normal case, which is what makes the overlap worth a list.",
      "rules": ["investment_status:eq:CORE", "technical:gte:70"]},
+    {"key": "put_candidates", "icon": "🪙", "name": "Put-Selling Candidates",
+     "group": "When to buy",
+     "desc": "Quality that has come off its highs, at a price you would "
+             "accept, with the trend intact — the shape a cash-secured put "
+             "wants. Every rule here mirrors a gate in core.csp.eligibility, "
+             "so the list is what will actually survive a CSP scan rather "
+             "than what looks promising before one: measured over the live "
+             "library all 20 matches cleared the company gate, and a "
+             "selection sent from here spends no chain fetches on names the "
+             "engine was always going to reject. Below the 8 EMA is the "
+             "'down' test — a name at its highs has nothing to be paid to "
+             "wait for, and $15 is where collateral stops being worth the "
+             "contract.",
+     "rules": ["lquality:gte:78", "valuation_band:ne:OVERVALUED",
+               "trend_state:ne:BROKEN", "lt_pct_vs_8ema:lt:0",
+               "lt_price:gte:15"]},
     {"key": "asymmetric_sized", "icon": "📏", "name": "Sized and Asymmetric",
      "group": "When to buy",
      "desc": "3R or better on a stop tight enough that the position is worth "
@@ -800,6 +850,25 @@ PRESETS: tuple[dict, ...] = (
              "for five years. The most expensive mistake in a quality "
              "portfolio is a quality company.",
      "rules": ["lquality:gte:85", "implied_growth:gte:35"]},
+    {"key": "dca_tranche", "icon": "🧱",
+     "name": "DCA Tranche — Quality in a Correction",
+     "group": "When to buy",
+     "desc": "LQuality above 90, more than 20% off the 52-week high, and "
+             "price sitting on a tracked accumulation rung. The three "
+             "conditions are asked together because none is a finding "
+             "alone: 477 of 657 names are on Zone 1 at any moment, since "
+             "that rung is usually the 8/21 EMA, and a routine pullback is "
+             "not a correction. Pair the zone with the drawdown and the "
+             "list becomes short and specific — 13 names today. The Action "
+             "column keeps its own verdict; several of these still read "
+             "OWN / WAIT FOR TREND, and both readings are true at once.",
+     "rules": ["lquality:gt:90", "dist_52w_high:lte:-20", "dca_zone:gte:1"]},
+    {"key": "dca_deep", "icon": "🪜", "name": "DCA — Deep Rung",
+     "group": "When to buy",
+     "desc": "The same screen at the deeper end: 30%+ off the high. These "
+             "are the tranches you would be adding on the second or third "
+             "rung rather than the first.",
+     "rules": ["lquality:gt:90", "dist_52w_high:lte:-30", "dca_zone:gte:1"]},
     {"key": "fallen_quality", "icon": "🩺", "name": "Fallen Quality — Thesis Review",
      "group": "What would stop me", "desc": "Businesses that still score well while price sits below the "
              "200 MA. Either the market knows something the fundamentals "

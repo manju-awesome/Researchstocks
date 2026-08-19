@@ -57,8 +57,9 @@ from __future__ import annotations
 
 import math
 
+from stockanalysis.core.longterm import technicals as T
 from stockanalysis.core.longterm import valuation as V
-from stockanalysis.core.longterm._common import f
+from stockanalysis.core.longterm._common import f, s
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TECHNICAL — where support is. Says nothing about whether to buy.
@@ -447,6 +448,14 @@ def compute(row: dict, pullback: dict, val: dict, quality: dict, trend: dict,
     # Each technical zone gets the valuation reading AT ITS OWN PRICE, so the
     # table can say "support at $368, and $368 is still Extreme" in one line
     # instead of making the reader hold two panels in their head.
+    #
+    # And the SUPPORT STRENGTH at its own price, for the complementary reason.
+    # The valuation reading measured out nearly flat across the three bands —
+    # for 55 of 56 quality names it returns the same verdict at the 8/21 EMA
+    # and at the 200 MA — so on its own it cannot tell one rung from another,
+    # which is exactly what an accumulation ladder has to do. Strength is what
+    # ranks them: NVDA's 200 MA scores 79 with a volume shelf on it while its
+    # EMA band scores 40, and the two columns disagreeing is the finding.
     growth = fundamental.get("projection_growth_pct")
     for zone in technical:
         cagr = (V.expected_cagr_at_price(row, zone["mid"], growth, risk_free)
@@ -458,12 +467,24 @@ def compute(row: dict, pullback: dict, val: dict, quality: dict, trend: dict,
         zone["fundamental_downside_pct"] = (
             None if not fundamental.get("intrinsic") else
             round((fundamental["intrinsic"] / zone["mid"] - 1) * 100, 1))
+        zone["strength"] = T.score_support_level(row, zone["mid"])
 
     investment = _investment_zones(technical, fundamental, quality, row, val,
                                    risk_free, price)
+    # The rungs below today's price, from every source that can produce
+    # one — the tested shelf, the bands that are actually underfoot, and
+    # the value ladder. In a Stage 4 breakdown this is the only thing left
+    # with anything to say; see accumulation_ladder().
+    ladder = accumulation_ladder(pullback, technical, fundamental, price,
+                                 row=row)
+    ladder_note = _ladder_note(ladder, fundamental, pullback)
+    zone_hit = _zone_hit(ladder, price)
     return {
         "price": price,
-        "display_zone": _display_zone(investment, technical, price),
+        "ladder": ladder,
+        "ladder_note": ladder_note,
+        "zone_hit": zone_hit,
+        "display_zone": _display_zone(investment, technical, price, ladder),
         "technical": technical,
         "inverted": _inversion_note(technical),
         "fundamental": fundamental,
@@ -473,7 +494,8 @@ def compute(row: dict, pullback: dict, val: dict, quality: dict, trend: dict,
     }
 
 
-def _display_zone(investment, technical, price) -> dict | None:
+def _display_zone(investment, technical, price,
+                  ladder=None) -> dict | None:
     """The one zone to put in a table cell, for EVERY name.
 
     A qualifying investment zone when there is one — 18 names of 552. For
@@ -487,13 +509,34 @@ def _display_zone(investment, technical, price) -> dict | None:
     200 MA band at $328-334; the band is worth knowing and is not a buy
     signal, so it is shown and labelled.
     """
-    if investment:
-        top = investment[0]
-        return {"low": top["low"], "high": top["high"], "kind": "investment",
-                "label": top["label"], "basis": top["support"],
-                "qualifies": True,
-                "distance_pct": (None if not price else
-                                 round((top["high"] / price - 1) * 100, 1))}
+    def _fmt(zone, kind, label, basis, dist=None):
+        above = bool(price and zone["low"] > price)
+        return {"low": zone["low"], "high": zone["high"], "kind": kind,
+                "label": label, "basis": basis,
+                "qualifies": kind == "investment",
+                # Price has already fallen THROUGH this band. It is
+                # overhead supply now, not a level to buy at, and every
+                # consumer needs to be able to say so — "buy at $442" on a
+                # $345 stock is the reading this flag exists to prevent.
+                "above_spot": above,
+                "distance_pct": (dist if dist is not None else
+                                 (None if not price else
+                                  round((zone["high"] / price - 1) * 100, 1)))}
+
+    # An investment zone ABOVE spot is not a buy zone. The price is already
+    # better than it, and presenting it as a target says "buy at $442" of a
+    # stock trading at $345. INTU is the case: down 51.6%, straight through
+    # its 200 MA, and that band — the shallowest support still clearing the
+    # value test — became the "Preferred" zone while sitting 28% overhead.
+    #
+    # So the ladder is walked for the best zone price could actually reach.
+    # If none can, the technical fallback below takes over and reports what
+    # is genuinely under the price.
+    reachable = [z for z in (investment or ())
+                 if not price or z["low"] <= price]
+    if reachable:
+        top = reachable[0]
+        return _fmt(top, "investment", top["label"], top["support"])
     # The DEEPEST tracked band, which is the one the verdict sentence
     # already cites ("support runs down to $227"). Taking the nearest band
     # instead made the same panel say $227 in prose and $277 in the column
@@ -501,13 +544,27 @@ def _display_zone(investment, technical, price) -> dict | None:
     # answer: the shallow EMA band under today's price is where a pullback
     # pauses, and the structural level below it is where you would actually
     # want to accumulate.
-    zone = (technical or [])[-1] if technical else None
-    if not zone:
+    bands = list(technical or ())
+    reachable_bands = [z for z in bands if not price or z["low"] <= price]
+    # No band underfoot at all — a Stage 4 breakdown, where every moving
+    # average is overhead. The ladder's first rung is then the only honest
+    # answer to "where would you buy this", and for META that is a volume
+    # shelf 180 touches deep that no band builder was ever going to find.
+    if not reachable_bands and ladder:
+        rung = ladder[0]
+        return {"low": rung["low"], "high": rung["high"], "kind": "ladder",
+                "label": rung["label"], "basis": rung.get("why") or "",
+                "qualifies": False, "above_spot": False,
+                "source": rung.get("source"),
+                "distance_pct": rung.get("distance_pct")}
+    if not bands:
         return None
-    return {"low": zone["low"], "high": zone["high"], "kind": "technical",
-            "label": zone["label"], "basis": zone["basis"],
-            "qualifies": False,
-            "distance_pct": zone.get("distance_pct")}
+    # Deepest band price can actually reach. Same rule as above: a band
+    # overhead is describing where the stock came from.
+    below = [z for z in bands if not price or z["low"] <= price]
+    zone = (below or bands)[-1]
+    return _fmt(zone, "technical", zone["label"], zone["basis"],
+                dist=zone.get("distance_pct"))
 
 
 def _inversion_note(zones) -> str | None:
@@ -661,3 +718,259 @@ def _confidence(fundamental, trend, volume, technical, investment) -> dict:
                      f"or wait for a reversal, rather than skipping the zone")
     level = "High" if agree >= 3 else "Medium" if agree == 2 else "Low"
     return {"level": level, "agree": agree, "note": "; ".join(notes)}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROXIMITY — has price come to the zone yet
+# ─────────────────────────────────────────────────────────────────────────────
+# The zone is a standing level: it sits below the market for weeks and the
+# whole point of publishing it is that you are not watching the tape. What
+# changes, and is therefore worth surfacing, is price arriving at it.
+
+# How close counts as "approaching". Five percent rather than the entry
+# alert's one: an entry is an order to place today, a zone is a band you
+# want to be reading the news on before price gets there.
+NEAR_ZONE_PCT = 5.0
+
+# IN_ZONE and APPROACHING are the two states worth interrupting for; the
+# rest describe where price is without asking anything of the reader.
+ZONE_STATES = ("IN_ZONE", "APPROACHING", "BELOW", "ABOVE")
+
+
+def zone_proximity(result: dict, within_pct: float = NEAR_ZONE_PCT,
+                   price=None) -> dict | None:
+    """Where today's price sits against the zone the table shows.
+
+    Measured against the SAME zone the Buy Zone column renders — a qualifying
+    investment zone where one exists, otherwise the deepest technical band.
+    Measuring against the investment zone alone would go quiet for the ~96%
+    of the library that has none, and measuring against the nearest technical
+    band would alert on a level the column does not show.
+
+    Returns None when there is no zone or no price to measure — "not
+    measurable" and "not close" are different answers and the caller has to
+    be able to tell them apart. `gap_pct` is signed the way the rest of the
+    page signs distances: negative means the zone is BELOW price and price
+    has that far to fall.
+
+    `price` overrides the row's own, so a caller holding a live quote can
+    re-measure a stored zone without re-running the engine — the same
+    stale-levels/fresh-price asymmetry entry_alerts.py relies on.
+    """
+    zone = ((result.get("buy_zones") or {}).get("display_zone")) or {}
+    low, high = f(zone.get("low")), f(zone.get("high"))
+    price = f(price if price is not None else result.get("price"))
+    if not low or not high or not price or price <= 0:
+        return None
+
+    if low <= price <= high:
+        state, gap = "IN_ZONE", 0.0
+    elif price < low:
+        # Through the zone and below it. Not "approaching" — it arrived and
+        # kept going — but a caller filtering for names at their zone should
+        # still be able to see it, so the gap is reported the same way.
+        state, gap = "BELOW", round((low / price - 1) * 100, 1)
+    else:
+        gap = round((high / price - 1) * 100, 1)
+        state = "APPROACHING" if abs(gap) <= within_pct else "ABOVE"
+
+    return {
+        "state": state,
+        "gap_pct": gap,
+        "near": state in ("IN_ZONE", "APPROACHING"),
+        "qualifies": zone.get("kind") == "investment",
+        "low": low, "high": high,
+        "label": zone.get("label"),
+        "within_pct": within_pct,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ACCUMULATION LADDER — the rungs below TODAY'S price
+# ─────────────────────────────────────────────────────────────────────────────
+# The technical bands are built from moving averages, and in a Stage 4
+# breakdown every one of them is overhead. META is the case: price $543.67
+# with its 8/21 EMA at $576-589, its 50 MA at $588-601 and its 200 MA at
+# $618-632 — three bands, all above, and a Buy Zone column with nothing
+# useful to say.
+#
+# What META does have is a volume shelf at $541.32 with 180 touches, tested
+# and defended. That level never reached the band builder, because
+# `_technical_zones` only sees moving-average candidates. So the ladder is
+# assembled from every source that can produce a price BELOW spot:
+#
+#     the tested volume shelf   pullback.buy_zone, the strongest evidence
+#                               a price level is real
+#     moving-average bands      the ones that are actually underfoot
+#     the fundamental ladder    Fair / Attractive / Exceptional, which are
+#                               prices rather than lines on a chart
+#
+# Ordered nearest-first, because that is the order price reaches them, and
+# capped at three: a ladder longer than that is a wish rather than a plan.
+
+MAX_LADDER_RUNGS = 3
+# Two rungs closer together than this are one level described twice.
+LADDER_MIN_SEPARATION_PCT = 1.5
+
+
+# How close to a rung still counts as being AT it. A rung is a level, not
+# a tripwire, and demanding an exact touch would mean the reader never saw
+# one — price stops a few cents away far more often than it prints there.
+ZONE_HIT_TOLERANCE_PCT = 1.5
+
+
+def _zone_hit(ladder, price) -> dict | None:
+    """Which rung price is sitting in or on, if any.
+
+    Reported for EVERY name, quality or not — it is a statement about
+    where the price is, and the judgment about whether that matters
+    belongs to the caller. See the DCA column, which pairs it with
+    LQuality before saying anything.
+    """
+    px = f(price)
+    if not px or not ladder:
+        return None
+    for rung in ladder:
+        lo, hi = f(rung.get("low")), f(rung.get("high"))
+        if lo is None:
+            continue
+        inside = hi is not None and lo <= px <= hi
+        near = abs(px - lo) / lo * 100 <= ZONE_HIT_TOLERANCE_PCT
+        if inside or near:
+            return {"zone": rung["zone"], "label": rung.get("label"),
+                    "source": rung.get("source"),
+                    "inside": bool(inside),
+                    "distance_pct": rung.get("distance_pct")}
+    return None
+
+
+def _ladder_note(ladder, fundamental, pullback) -> str | None:
+    """Why the ladder is short, when it is.
+
+    A two-rung ladder and a three-rung one look the same on the page, and
+    the reader has no way to tell "this is all the structure there is"
+    from "something failed". ORCL is the case: price sitting on its 21 EMA,
+    the 52-week low 20% below, and genuinely nothing in between — its
+    valuation runs off peer multiples, so there is no cash-flow ladder to
+    supply the deeper rungs.
+    """
+    if len(ladder) >= MAX_LADDER_RUNGS:
+        return None
+    reasons = []
+    if not ((fundamental or {}).get("ladder") or ()):
+        blocked = s((fundamental or {}).get("blocked"))
+        reasons.append("no cash-flow value ladder"
+                       + (f" — {blocked.rstrip('.')}" if blocked else ""))
+    if not ((pullback or {}).get("buy_zone") or {}).get("price"):
+        reasons.append("no tested shelf beneath the price")
+    if not reasons:
+        return f"only {len(ladder)} tracked level(s) below the price"
+    return (f"only {len(ladder)} rung(s): " + "; ".join(reasons))
+
+
+def accumulation_ladder(pullback, technical, fundamental, price,
+                        limit: int = MAX_LADDER_RUNGS,
+                        row: dict | None = None) -> list[dict]:
+    """Up to `limit` places to accumulate, strictly below `price`.
+
+    Nearest first — Zone 1 is the level price meets next. Each rung says
+    where it came from, because a tested shelf and an arithmetic mean are
+    not the same claim and a ladder that renders them alike invites the
+    reader to treat them alike.
+    """
+    px = f(price)
+    if not px:
+        return []
+
+    rungs = []
+
+    # The tested shelf first: the market has actually defended it.
+    bz = (pullback or {}).get("buy_zone") or {}
+    shelf = f(bz.get("price"))
+    if shelf is not None and shelf < px:
+        touches = f(bz.get("touches"))
+        rungs.append({
+            "price": shelf, "low": shelf, "high": shelf,
+            "source": "volume_shelf" if bz.get("volume_confirmed") else "level",
+            "label": s(bz.get("label")) or "tested support",
+            "tested": bool(bz.get("actual_support")),
+            "touches": touches,
+            "why": s(bz.get("note")) or "tested support",
+        })
+
+    # Two structural levels the band builder never turns into bands: a
+    # prior breakout only joins the 50 MA band when it happens to sit close
+    # to it, and the 52-week low is not a moving average at all. Both are
+    # real — the market stopped at each of them — and for a name that has
+    # fallen through every average they are the only rungs left. HOOD had
+    # one rung and has both of these underneath it.
+    for key, label, why in (
+            ("Prior_Breakout_Level", "Prior breakout",
+             "the level the last advance began from"),
+            ("52W Low", "52-week low",
+             "where the market last stopped the fall")):
+        lv = f((row or {}).get(key))
+        if lv is not None and lv < px:
+            rungs.append({
+                "price": lv, "low": lv, "high": lv, "source": "structure",
+                "inside": False, "label": label, "tested": True,
+                "touches": None, "why": why,
+            })
+
+    for zone in (technical or ()):
+        lo, hi = f(zone.get("low")), f(zone.get("high"))
+        if lo is None or lo >= px:
+            continue                       # entirely overhead: not a rung
+        # A band price sits INSIDE is a rung you have already reached, and
+        # its representative price is today's — not the band mid, which
+        # would report a level underfoot as being above you. ORCL was the
+        # case: price $144.30 inside a $142-148 band, mid $145, and the
+        # rung read "+0.5%".
+        inside = hi is not None and lo <= px <= hi
+        rungs.append({
+            "price": px if inside else (f(zone.get("mid")) or lo),
+            "low": lo, "high": hi,
+            "source": "moving_average",
+            "inside": inside,
+            "label": s(zone.get("label")) or "band",
+            "tested": bool(zone.get("tested")),
+            "touches": None,
+            "why": s(zone.get("basis")) or "",
+        })
+
+    # The fundamental rungs are prices the RETURN would clear at — a
+    # different kind of evidence from a chart level, and the only kind
+    # still available when every moving average is overhead. They live in
+    # `fundamental["ladder"]`, not as top-level keys.
+    for rung in ((fundamental or {}).get("ladder") or ()):
+        p = f(rung.get("price"))
+        if p is None or p >= px:
+            continue
+        cagr = f(rung.get("cagr_pct"))
+        rungs.append({
+            "price": p, "low": p, "high": p, "source": "fundamental",
+            "inside": False,
+            "label": s(rung.get("label")) or "value",
+            "tested": False, "touches": None,
+            "why": (f"expected return clears {cagr:.0f}%/yr here"
+                    if cagr is not None else
+                    "price where the expected return clears its hurdle"),
+        })
+
+    # Deliberately NOT padded from the intraday columns the scan row also
+    # carries. ORB low, pre-market low and the previous day's low are all
+    # real prices and none of them is a place to accumulate a long-term
+    # position; a ladder that reached for them to make three would be
+    # inventing structure to fill a column.
+    rungs.sort(key=lambda r: -r["price"])          # nearest below first
+    out: list[dict] = []
+    for r in rungs:
+        if any(abs(r["price"] - k["price"]) / k["price"] * 100
+               < LADDER_MIN_SEPARATION_PCT for k in out):
+            continue                                # one level, twice
+        r["distance_pct"] = round((r["price"] / px - 1) * 100, 1)
+        r["zone"] = len(out) + 1
+        out.append(r)
+        if len(out) >= limit:
+            break
+    return out

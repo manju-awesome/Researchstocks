@@ -142,7 +142,7 @@ def earnings_distance(days_to_earnings, dte,
 
 
 def earnings_gate(dist, policy, quality=None, delta=None, liquidity=None,
-                  adequacy=None) -> dict:
+                  adequacy=None, settle: bool = False) -> dict:
     """Apply the three-state earnings policy.
 
     AVOID       skip the expiry entirely (the old boolean behaviour)
@@ -156,7 +156,29 @@ def earnings_gate(dist, policy, quality=None, delta=None, liquidity=None,
     conservative delta, excellent liquidity and a premium well above the
     hurdle. Anything less falls back to CONTROLLED's penalty rather than
     to a free pass.
+
+    CALLED TWICE, and the distinction is load-bearing
+    -------------------------------------------------
+    ACCEPT's four conditions are all properties of a CONTRACT — delta,
+    liquidity, and how far the premium clears its hurdle — and none of
+    them exists until a chain has been fetched and a strike chosen. The
+    expiry filter runs before any of that, so it must not evaluate them:
+    passing four Nones made every condition fail, which meant ACCEPT could
+    never once be met and silently behaved as CONTROLLED while printing
+    "delta 1.00 > 0.2" about a contract that had not been selected.
+
+    So the first call asks only "may this expiry be considered at all" and
+    the second — once the strike is priced — decides the penalty.
+
+    Which one you get is inferred from whether you supplied any contract
+    data, rather than from a flag you have to remember. That is deliberate:
+    the original bug was a caller with nothing to judge being handed the
+    judging path, and a rule of "no inputs, no verdict" makes that
+    unrepresentable. `settle=True` forces the second pass for a caller that
+    genuinely has all four and wants them evaluated even if some are None.
     """
+    settle = settle or any(v is not None for v in
+                           (quality, delta, liquidity, adequacy))
     pol = (policy or "AVOID").upper()
     if not dist.get("inside"):
         return {"allow": True, "penalty_option": 0, "penalty_csp": 0,
@@ -165,6 +187,15 @@ def earnings_gate(dist, policy, quality=None, delta=None, liquidity=None,
     if pol == "AVOID":
         return {"allow": False, "penalty_option": 0, "penalty_csp": 0,
                 "why": (f"{dist['detail']} — earnings policy is AVOID")}
+
+    if pol == "ACCEPT" and not settle:
+        # Admission only. The verdict on whether the trade earns its free
+        # pass is deferred to the settle pass, which has the contract.
+        return {"allow": True, "pending": True,
+                "penalty_option": 0, "penalty_csp": 0,
+                "why": (f"{dist['detail']} — earnings policy is ACCEPT; "
+                        f"whether it is taken without penalty depends on "
+                        f"the contract")}
 
     if pol == "ACCEPT":
         q, dl = f(quality), abs(f(delta) or 1.0)

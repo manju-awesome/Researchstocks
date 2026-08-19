@@ -71,8 +71,32 @@ def market_open(now=None) -> bool:
 # A rejected company needs only enough to appear in the rejected list
 # with the rule that fired. Storing its full audit made the snapshot an
 # order of magnitude larger for rows the page renders as one word.
+#
+# `reference` is the exception and is kept deliberately: it is the priced
+# chain for a rejected name, which exists precisely so the reader can see
+# what the market pays and weigh the risk themselves. Pruning it would
+# throw away the one thing that row was re-fetched to obtain, and the page
+# would show the rejection with its premiums blank — the exact state this
+# was added to fix.
+#
+# `lquality`/`lq_tier` are the two scalars that make such a premium worth
+# reading ("98/100 Elite, rejected on price" is a different proposition
+# from "41/100, rejected on the business"). Deliberately NOT the whole
+# `eligibility` blob: csp_page uses the presence of that key as its marker
+# for "the full audit was stored", so keeping it here would make every
+# slimmed rejection claim an audit it does not have.
 _REJECT_KEEP = ("ticker", "name", "sector", "price", "final",
-                "no_trade_reason", "lt_action")
+                "no_trade_reason", "lt_action", "reference",
+                "lquality", "lq_tier",
+                # Whether that `price` is a live quote or the last scan's.
+                # A rejected row shows a price too, and the question "is
+                # this current" is the same question there.
+                "spot_source", "spot_stored", "spot_drift_pct",
+                # The long-term context the page filters and sorts on. A
+                # rejected row is exactly where "is it in the buy zone"
+                # gets asked — a name turned down on price is the one you
+                # most want to know is near the level you would buy at.
+                "buy_zone", "dist_52w_high")
 
 
 def save(rows, meta, merge: bool = False, keep_full=()) -> Path:

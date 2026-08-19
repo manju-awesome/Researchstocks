@@ -24,6 +24,12 @@ BUILTIN_UNIVERSES = ("daytrade", "watchlist", "longterm", "dividend", "sp500")
 ALL_UNIVERSES_SENTINEL = "__all__"
 
 
+# How many names a watchlist-driven CSP scan will cover. Deliberately
+# above the typed box's 60: a list is a curated set the user chose, and a
+# prefix of it answers a question nobody asked. One option chain per name.
+MAX_LIST_SCAN = 200
+
+
 def expand_all(names: list[str]) -> list[str]:
     """ALL_UNIVERSES_SENTINEL -> every non-empty list in watchlists.json, so
     one picker entry can mean "everything I track" without the user
@@ -256,11 +262,75 @@ def job_portfolio_risk(progress: jobstore.Progress) -> str:
             f"{len(violations)} limit breaches ({critical} critical)")
 
 
+def _csp_etf_pass(wanted, risk_free, target_dte, progress=None):
+    """(rows, shared holdings) for the funds in the research library.
+
+    The universe is the library's own ETF classification, never a hardcoded
+    list — a fund added to the research pages appears here on the next scan
+    with nothing to edit, which is the same rule /longterm follows for
+    equities.
+
+    A NAMED scan re-prices only the funds it names and keeps the rest of
+    the stored section, matching how `csp_store.save(merge=...)` treats
+    equity rows: asking about SPY must not delete the other twenty-one.
+    """
+    from stockanalysis.core import etf_profile as EP
+    from stockanalysis.core.csp import etf as ETF
+    from stockanalysis.core.csp import store as csp_store
+
+    entries = _longterm_entries()
+    profiles = EP.load_profiles(OUTPUT_DIR)
+    raw_by = {r.get("Ticker"): r for r in _longterm_universe()}
+
+    # A fund the scan has classified, OR one carrying a stored profile —
+    # the second half matters because three funds in the current library
+    # (MDY, QQQM, VOO) have a profile and no scan row, and dropping them
+    # would silently shorten the section by an eighth.
+    tickers = {str(e.get("ticker") or "").upper()
+               for e in entries if EP.is_etf_row(e)}
+    tickers |= {str(t).upper() for t in profiles
+                if not str(t).startswith("^")}
+    tickers = sorted(t for t in tickers if t)
+
+    keep, stored_overlap = [], []
+    if wanted:
+        asked = {str(t).upper() for t in wanted}
+        snap = csp_store.load() or {}
+        keep = [r for r in (snap.get("etfs") or [])
+                if str(r.get("ticker") or "").upper() not in asked]
+        stored_overlap = snap.get("etf_overlap") or []
+        tickers = [t for t in tickers if t in asked]
+    # A named scan of equities only — nothing to re-price, so the stored
+    # section is handed back untouched rather than blanked.
+    if not tickers:
+        return keep, stored_overlap
+
+    def tick(i, ticker):
+        if progress:
+            progress.stage(f"pricing fund chains — {ticker}", i, len(tickers))
+
+    # Same live-quote rule as the equity pass. A fund's scan row and its
+    # stored profile are both as old as the last refresh that touched them,
+    # and every strike here is chosen relative to spot — SPY's two stored
+    # prices already disagreed by a point.
+    from stockanalysis.core.csp import engine as CE
+    quotes = CE.live_spots(tickers)
+
+    funds = [(t, raw_by.get(t) or {}, profiles.get(t)) for t in tickers]
+    fresh = ETF.evaluate_universe(funds, risk_free=risk_free,
+                                  target_dte=target_dte, progress=tick,
+                                  spots=quotes)
+    rows = keep + fresh
+    return rows, ETF.overlap(rows)
+
+
 def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
                  limit: int, progress: jobstore.Progress,
                  tickers: list[str] | None = None,
                  earnings_policy: str = "AVOID", target_dte: int = 35,
-                 min_stock: int = 0, min_csp: int = 0) -> str:
+                 min_stock: int = 0, min_csp: int = 0,
+                 reference_rejected: bool = False,
+                 reference_budget: int = 0) -> str:
     """Cash-Secured Put scan over the long-term universe.
 
     A job, not an inline render: the long-term evaluation is fast (it
@@ -321,7 +391,13 @@ def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
                                  # A named scan is a question about those
                                  # tickers, so a name with no qualifying
                                  # contract still gets its chain attached.
-                                 reference_chain=bool(wanted))
+                                 reference_chain=bool(wanted),
+                                 # And on a bulk scan, the highest-quality
+                                 # rejections can be priced too — see
+                                 # engine.MAX_REFERENCE_CHAINS. The verdict
+                                 # stays REJECT; only the numbers appear.
+                                 reference_rejected=reference_rejected,
+                                 reference_budget=reference_budget)
 
     # Score floors are applied AFTER ranking, not as a scan filter. The
     # point is to refuse to fill N slots with mediocre trades rather than
@@ -340,10 +416,25 @@ def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
                             f"against {min_stock}/{min_csp} required")}
                 r["below_floor"] = True
 
+    # ── the fund section ────────────────────────────────────────────────
+    # Runs after the equity pass, not instead of it. ETFs never reach the
+    # eligibility gate above — a fund has no income statement, so it is
+    # REJECTED for "no quality score", which is a category error reported
+    # honestly rather than a gap. core.csp.etf answers the narrower
+    # question that IS answerable for a fund; see its docstring.
+    etf_rows, etf_overlap = [], []
+    try:
+        etf_rows, etf_overlap = _csp_etf_pass(wanted, risk_free, target_dte,
+                                              progress)
+    except Exception as e:                    # never lose the equity scan
+        print(f"[CSP] ETF pass failed ({e})")
+
     settings = load_risk_settings()
     portfolio = csp.portfolio_view(rows, settings.get("capital"))
 
     csp_store.save(rows, {
+        "etfs": etf_rows,
+        "etf_overlap": etf_overlap,
         "regime": regime,
         "regime_note": data.get("regime_note"),
         "risk_free_note": data.get("risk_free_note"),
@@ -352,6 +443,8 @@ def job_csp_scan(min_dte: int, max_dte: int, allow_earnings: bool,
         "allow_earnings": allow_earnings,
         "earnings_policy": earnings_policy,
         "min_stock": min_stock, "min_csp": min_csp,
+        "reference_rejected": reference_rejected,
+        "reference_budget": reference_budget,
         "universe": len(rows_in), "eligible": survivors,
         "portfolio": portfolio,
         "settings": settings,
@@ -946,22 +1039,58 @@ def dispatch_run(action: str, form: dict) -> str:
         allow_earnings = policy != "AVOID"
         target_dte = _int("target_dte", 35)
         min_stock, min_csp = _int("min_stock", 0), _int("min_csp", 0)
+        show_rejected = first("reference_rejected") in ("1", "on", "true")
+        # 0 means "the engine's default". Capped at 600 because past that a
+        # scan is an hour of chains and the job tray is the wrong place to
+        # discover it.
+        ref_budget = max(0, min(600, _int("reference_budget", 0)))
         limit = max(1, min(60, _int("limit", 25)))
         from stockanalysis.webapp.longterm_view import parse_tickers
         tickers = parse_tickers(first("tickers"))
-        if tickers:
+        # A typed ticker wins over the picker: naming a symbol is the more
+        # specific instruction, and silently unioning the two would scan a
+        # list you had just narrowed away from.
+        scope = ""
+        if not tickers:
+            picked = [n for n in (form.get("list") or []) if n.strip()]
+            from_list = watchlist_tickers(picked) or []
+            if from_list:
+                # Capped, and the cap is applied HERE so the label can tell
+                # the truth — a list silently becoming its first 60 is the
+                # kind of thing you notice three minutes later, in a job
+                # tray, by counting.
+                #
+                # More generous than the typed box's 60 because a watchlist
+                # is a deliberate, curated set: you picked it, so the
+                # reasonable default is to scan it rather than a prefix of
+                # it. One chain per name, so 200 is a few minutes.
+                tickers = [str(t).upper() for t in from_list][:MAX_LIST_SCAN]
+                scope = f"{', '.join(picked)} ({len(from_list)})"
+                if len(from_list) > len(tickers):
+                    scope += f" — first {len(tickers)}"
+        if scope:
+            label = f"CSP scan: {scope}"
+        elif tickers:
             label = (f"CSP scan: {', '.join(tickers[:8])}"
                      + ("…" if len(tickers) > 8 else ""))
         else:
             label = f"CSP scan: {min_dte}-{max_dte} DTE, top {limit} eligible"
+        # A named set is a question about those names, so every one of them
+        # should get chain work rather than the first `limit`.
+        if tickers:
+            limit = max(limit, len(tickers))
         if policy != "AVOID":
             label += f" (earnings {policy})"
+        if show_rejected:
+            label += (f" + rejected premiums"
+                      + (f" (up to {ref_budget})" if ref_budget else ""))
         return jobstore.start("csp_scan", label,
                               lambda p: job_csp_scan(min_dte, max_dte,
                                                      allow_earnings, limit, p,
                                                      tickers, policy,
                                                      target_dte, min_stock,
-                                                     min_csp))
+                                                     min_csp, show_rejected,
+                                                     ref_budget))
 
     if action == "journal_review":
         trade_id = first("trade_id")

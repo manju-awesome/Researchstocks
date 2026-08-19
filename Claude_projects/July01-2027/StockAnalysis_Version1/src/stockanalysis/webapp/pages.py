@@ -1014,7 +1014,12 @@ def screener_page() -> tuple[str, str]:
     return screener_view.screener_page()
 
 
-def scanner_page() -> tuple[str, str]:
+def scanner_page(query: dict | None = None) -> tuple[str, str]:
+    # ?tickers=NVDA,AMD prefills the ad-hoc box — how /longterm's "Rescan
+    # these" arrives, so a filtered set becomes a scan without a copy-paste.
+    # Declaring the parameter is all the routing needs: app._wants_query
+    # detects it from the signature.
+    prefill = ((query or {}).get("tickers") or [""])[0].strip()
     steps_html = "".join(
         f'<div id="step-{key}" style="flex:1;text-align:center;padding:10px 6px;'
         f'border-radius:8px;background:#f1efea;font-size:11px;font-weight:600;'
@@ -1127,10 +1132,15 @@ def scanner_page() -> tuple[str, str]:
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <div>
-          <input name="tickers" placeholder="NVDA, AMD, MU…" style="min-width:220px">
+          <input name="tickers" placeholder="NVDA, AMD, MU…" style="min-width:220px"
+                 value="{esc(prefill)}">
           <div style="font-size:10px;color:#898781;margin-top:3px">
             optional tickers (comma or space separated) — added to the selected
             categories, or scanned alone if none selected</div>
+          {f'<div style="font-size:10px;color:#185FA5;margin-top:3px">'
+           f'{len([t for t in prefill.replace(chr(44), chr(32)).split() if t])} '
+           f'tickers loaded from the Long-Term page — nothing is selected '
+           f'above, so Run Scan covers exactly these.</div>' if prefill else ''}
         </div>
         <label style="font-size:12px;display:flex;gap:6px;align-items:center">
           <input type="checkbox" name="portfolio" checked> include Portfolio management</label>

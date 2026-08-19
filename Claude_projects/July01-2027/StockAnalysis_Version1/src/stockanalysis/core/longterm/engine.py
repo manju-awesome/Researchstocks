@@ -50,6 +50,7 @@ from __future__ import annotations
 from stockanalysis.core.longterm import buy_zones as BZ
 from stockanalysis.core.longterm import quality as Q
 from stockanalysis.core.longterm import technicals as T
+from stockanalysis.core.longterm import thesis as TH
 from stockanalysis.core.longterm import valuation as V
 from stockanalysis.core.longterm._common import b, blend, f, s
 
@@ -924,6 +925,10 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
         "name": s(row.get("LongName")) or ticker,
         "sector": s(row.get("Sector")),
         "price": price,
+        # The drawdown, carried onto the result so the screener can ask
+        # "quality, and genuinely in a correction" without re-reading the
+        # scan row it no longer has a handle on.
+        "dist_52w_high": f(row.get("Dist_52W_High%")),
         "action": action,
         "icon": ACTION_ICONS.get(action, ""),
         # Which gate produced this verdict — the whole point of the ordering
@@ -961,6 +966,13 @@ def _assemble(ticker, action, gate, row, lq, val, trend, pullback, confluence,
         # buy_zones.py for why this is not built from the support levels.
         "buy_zones": BZ.compute(row, pullback, val, lq, trend, volume, price,
                                 risk_free=risk_free),
+        # Whether the company is still the one you decided to own, which is a
+        # different question from every gate above and is deliberately NOT one
+        # of them. `action` answers "should I open a position at this price";
+        # this answers "may I keep adding to one". A name is routinely WAIT on
+        # the first and accumulable on the second — that is the gap the
+        # ladder lives in, not an inconsistency. See thesis.py.
+        "thesis": TH.compute_thesis(row),
         "why": why,
         "blockers": blockers,
         "triggers": triggers,
