@@ -34,7 +34,11 @@ that's a second lock on an already-closed door, and the reason to have it is
 that the door does get opened: a `--host 0.0.0.0` one day, an SSH tunnel, a
 screen-shared laptop, or another process on this machine talking to port 8899.
 Binding to localhost is still the primary control; don't expose it without
-putting TLS in front and turning on the cookie's Secure flag.
+putting TLS in front and setting WORKSTATION_BEHIND_TLS=1, which is what marks
+the session cookie Secure (see auth.BEHIND_TLS). The intended way to reach
+this from another device is a tunnel to 127.0.0.1 — `tailscale serve` or a
+Cloudflare tunnel — which terminates HTTPS without this process ever listening
+on a public interface.
 """
 
 from __future__ import annotations
@@ -536,6 +540,12 @@ def _announce_auth() -> None:
         print("     python app.py --set-password")
         print("─" * 62 + "\n")
     print(f"Auth → enabled ({len(users)} user(s); --set-password to reset)")
+    # Said out loud because getting it wrong looks like a broken password
+    # rather than a misconfiguration: a Secure cookie is dropped by the
+    # browser over plain HTTP, so /login just redirects back to /login.
+    if auth.BEHIND_TLS:
+        print("Cookies → Secure (WORKSTATION_BEHIND_TLS is set) — sign in "
+              "through the HTTPS front door; http://localhost cannot")
 
 
 def main() -> None:

@@ -221,6 +221,43 @@ class TestCookies(AuthCase):
         self.assertIn("SameSite=Lax", header)
         self.assertIn("Path=/", header)
 
+    def test_no_secure_flag_on_the_loopback_default(self):
+        """The default is plain HTTP on 127.0.0.1, where a Secure cookie is
+        never stored — the browser drops it and /login redirects to /login
+        forever. Absent here is the working configuration, not an oversight."""
+        self.assertNotIn("Secure", auth.cookie_header("tok123"))
+
+    def test_secure_flag_when_something_in_front_terminates_tls(self):
+        """WORKSTATION_BEHIND_TLS=1 — a tailscale serve, a tunnel, a proxy."""
+        original = auth.BEHIND_TLS
+        auth.BEHIND_TLS = True
+        try:
+            self.assertIn("Secure", auth.cookie_header("tok123"))
+            # The rest must survive the flag: Secure protects the transport,
+            # HttpOnly protects against XSS and SameSite against CSRF, and
+            # turning on one is not a reason to have dropped another.
+            self.assertIn("HttpOnly", auth.cookie_header("tok123"))
+            self.assertIn("SameSite=Lax", auth.cookie_header("tok123"))
+        finally:
+            auth.BEHIND_TLS = original
+
+    def test_clearing_a_cookie_matches_the_flags_it_replaces(self):
+        """A Set-Cookie whose flags disagree with the stored cookie can be
+        kept alongside it rather than overwriting it — which would make a
+        sign-out that reports success leave the session cookie in place."""
+        original = auth.BEHIND_TLS
+        try:
+            for behind_tls in (False, True):
+                auth.BEHIND_TLS = behind_tls
+                set_flags = auth.cookie_header("tok123").split("; ")[1:]
+                clear_flags = auth.clear_cookie_header().split("; ")[1:]
+                self.assertEqual(
+                    [f for f in set_flags if not f.startswith("Max-Age")],
+                    [f for f in clear_flags if not f.startswith("Max-Age")],
+                    f"flags diverge with BEHIND_TLS={behind_tls}")
+        finally:
+            auth.BEHIND_TLS = original
+
     def test_parse_cookie_finds_our_token_among_others(self):
         raw = f"theme=dark; {auth.COOKIE_NAME}=abc123; other=1"
         self.assertEqual(auth.parse_cookie(raw), "abc123")

@@ -58,6 +58,23 @@ COOKIE_NAME  = "ws_session"
 # drop you mid-scan, but a walked-away-from browser shouldn't stay open.
 IDLE_TIMEOUT = 12 * 3600
 
+# Whether something in front of this server terminates TLS — a Tailscale
+# `serve`, a Cloudflare tunnel, a reverse proxy. Set WORKSTATION_BEHIND_TLS=1
+# and the session cookie is marked Secure, so it is never sent in clear.
+#
+# Off by default, and that default is not laziness: this server speaks plain
+# HTTP on loopback, and a Secure cookie there is never stored at all — the
+# browser drops it, /login redirects back to /login, and the tool looks broken
+# rather than locked. So the flag belongs to the deployment that earns it.
+# The mirror-image trap is worth knowing before it costs an evening: with the
+# flag ON, http://localhost:8899 can no longer sign in. Reach the tool through
+# the HTTPS front door, or unset the flag.
+#
+# A module global rather than a read at each call, so a test can flip it the
+# same way it points USERS_PATH at a temp dir.
+BEHIND_TLS = (os.environ.get("WORKSTATION_BEHIND_TLS") or "").strip().lower() \
+    in ("1", "true", "yes", "on")
+
 MAX_FAILURES  = 5
 LOCKOUT_SECS  = 300
 
@@ -286,6 +303,18 @@ def destroy_session(token: str | None) -> None:
             _sessions.pop(token, None)
 
 
+def _cookie_attrs() -> str:
+    """The attributes every session cookie carries, set and cleared alike.
+
+    One function for both because a cleared cookie has to be written with the
+    SAME attributes as the one it replaces: a Set-Cookie whose flags disagree
+    can be stored as a second cookie instead of overwriting the first, and a
+    sign-out that leaves the old cookie in place is a sign-out that did not
+    happen.
+    """
+    return "HttpOnly; SameSite=Lax; Path=/" + ("; Secure" if BEHIND_TLS else "")
+
+
 def cookie_header(token: str) -> str:
     """Set-Cookie value for a fresh session.
 
@@ -296,16 +325,16 @@ def cookie_header(token: str) -> str:
                    CSRF-resistant without a token on every form. Lax rather
                    than Strict so following a bookmark still lands you
                    logged in.
-    No Secure    — the server binds 127.0.0.1 over plain HTTP; setting Secure
-                   would make the cookie never be sent at all. Add it the day
-                   this sits behind TLS.
+    Secure       — only when BEHIND_TLS says something in front is terminating
+                   HTTPS. Absent on the loopback default on purpose: a Secure
+                   cookie over plain HTTP is never stored, so setting it there
+                   locks you out instead of protecting you.
     """
-    return (f"{COOKIE_NAME}={token}; HttpOnly; SameSite=Lax; Path=/; "
-            f"Max-Age={IDLE_TIMEOUT}")
+    return f"{COOKIE_NAME}={token}; {_cookie_attrs()}; Max-Age={IDLE_TIMEOUT}"
 
 
 def clear_cookie_header() -> str:
-    return f"{COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"
+    return f"{COOKIE_NAME}=; {_cookie_attrs()}; Max-Age=0"
 
 
 def parse_cookie(header: str | None) -> str | None:
