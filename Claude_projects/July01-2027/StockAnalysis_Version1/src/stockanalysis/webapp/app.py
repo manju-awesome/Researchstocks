@@ -108,6 +108,10 @@ ROUTES = {
     # has no valuation term at all.
     "/compounder":  ("compounder", "Future Compounders",
                      pages.compounder_page),
+    # Its own route rather than a /scanner sub-page: Scanner ranks a ticker
+    # universe you chose, this one decides which universe should matter today
+    # by scoring the sectors first and only then the names inside them.
+    "/leaders":     ("leaders",   "Sector Leaders", pages.leaders_page),
     "/automation":  ("automation","Automation",pages.automation_page),
 }
 
@@ -291,6 +295,14 @@ class WorkstationHandler(SimpleHTTPRequestHandler):
             from stockanalysis.core import regime_client
             # _send_html takes bytes here (render_page already encodes).
             self._send_html(pages.render_regime(regime_client.run_regime()).encode())
+            return
+
+        if self.path == "/api/leaders/verdict":
+            self._send_json(api.leaders_verdict(
+                (form.get("ticker") or [""])[0],
+                (form.get("direction") or [""])[0],
+                (form.get("verdict") or [""])[0],
+                (form.get("note") or [""])[0]))
             return
 
         if self.path == "/run":

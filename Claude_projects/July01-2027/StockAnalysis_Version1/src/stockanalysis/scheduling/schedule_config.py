@@ -39,10 +39,24 @@ JOB_DEFS: dict[str, dict] = {
                        "post-close). Same scan as the Alerts page's \"Check Earnings Now\".",
         "default": {"enabled": True, "type": "daily", "times": ["06:30"]},
     },
+    "sector_leaders_scan": {
+        "label": "Sector-leader scan",
+        "description": "Market → sector → industry → stock scan feeding /leaders. Runs ten "
+                       "minutes AHEAD of the pre-market brief so the brief finds a fresh "
+                       "snapshot and can cross-reference it without doing the three-to-five "
+                       "minute scan inline — the scheduler runs jobs one at a time, and a "
+                       "long job inside the brief delays every interval job behind it. "
+                       "Sends no email of its own; the brief carries the result.",
+        "default": {"enabled": True, "type": "daily", "times": ["06:50", "07:50"]},
+    },
     "premarket_brief": {
-        "label": "Pre-market brief",
-        "description": "Compose and email the morning macro/movers/earnings brief (weekdays). "
-                       "Same as the Alerts page's \"Generate Brief Now\".",
+        "label": "Pre-market brief + sector leaders",
+        "description": "Compose and email the morning macro/movers/earnings brief together "
+                       "with the sector-leader rankings and the confluence between them "
+                       "(weekdays) — ONE email, not two. Same as the Alerts page's "
+                       "\"Generate Brief Now\". If the sector-leader scan has not run "
+                       "recently it is run inline here rather than shipping a brief that "
+                       "silently drops the cross-reference.",
         "default": {"enabled": True, "type": "daily", "times": ["07:00"]},
     },
     "watchlist_alerts": {

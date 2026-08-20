@@ -4465,57 +4465,6 @@
     },
     "since": "2026-08-12T09:03:07"
   },
-  "ET:52w_high": {
-    "alert": {
-      "dedup_key": "ET:52w_high",
-      "category": "watchlist",
-      "ticker": "ET",
-      "priority": "HIGH",
-      "headline": "hit a new 52-week high",
-      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
-      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
-      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
-      "confidence": 65,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "dist_52w_high_pct": 0.0,
-        "52w_high": 20.9,
-        "price": 20.9
-      },
-      "created_at": "2026-08-12T12:35:12"
-    },
-    "since": "2026-08-12T12:35:12"
-  },
-  "PGR:a_plus_setup": {
-    "alert": {
-      "dedup_key": "PGR:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "PGR",
-      "priority": "HIGH",
-      "headline": "A+ swing setup (Momentum-Pullback)",
-      "why_it_matters": "Scored in the top band for: swing (rank 105).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "swing (rank 105)"
-        ],
-        "category": "Momentum-Pullback",
-        "swing_rank": 105.0,
-        "day_rank": 31.0,
-        "investment_score": 42.0,
-        "entry": "Near 8EMA \u2014 buy hold above $212.45 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
-        "stop": "$202.76 from entry fill \u2014 Prev-Day Low $212.04 / ATR\u00d71.5 $202.76. Hard stop -7% = $197.58.",
-        "target": "T1 $239.38 (52W high / +12.7%) \u2014 % from entry $212.45. Trail 21EMA $214.05 once in profit.",
-        "grade": "B",
-        "price": 208.39
-      },
-      "created_at": "2026-08-12T12:35:12"
-    },
-    "since": "2026-08-12T12:35:12"
-  },
   "SCHW:a_plus_setup": {
     "alert": {
       "dedup_key": "SCHW:a_plus_setup",
@@ -4837,72 +4786,6 @@
     },
     "since": "2026-08-12T12:35:12"
   },
-  "MPC:put_score_high": {
-    "alert": {
-      "dedup_key": "MPC:put_score_high",
-      "category": "put_setup",
-      "ticker": "MPC",
-      "priority": "CRITICAL",
-      "headline": "put setup score 9 \u2014 high-conviction bearish",
-      "why_it_matters": "Put screen factors stacking up: PUT_CANDIDATE: near_52wh(-0.5% off high, set 0d ago) | extended_above_8ema(+6.6%) | RSI=71.0(stretched) | Vol_vs_20D=0.48(below_avg) | BB_PctB=1.160(above_upper_band)",
-      "expected_impact": "Downside continuation is the base case while the score holds this high.",
-      "suggested_action": "Review the put candidate (strike/expiry per the scan report); if holding the stock, reassess or hedge.",
-      "confidence": 95,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "put_score": 9.0,
-        "put_reason": "PUT_CANDIDATE: near_52wh(-0.5% off high, set 0d ago) | extended_above_8ema(+6.6%) | RSI=71.0(stretched) | Vol_vs_20D=0.48(below_avg) | BB_PctB=1.160(above_upper_band)",
-        "put_candidate": true,
-        "price": 341.25
-      },
-      "created_at": "2026-08-12T12:35:12"
-    },
-    "since": "2026-08-12T12:35:12"
-  },
-  "PSX:put_score_high": {
-    "alert": {
-      "dedup_key": "PSX:put_score_high",
-      "category": "put_setup",
-      "ticker": "PSX",
-      "priority": "CRITICAL",
-      "headline": "put setup score 9 \u2014 high-conviction bearish",
-      "why_it_matters": "Put screen factors stacking up: PUT_CANDIDATE: near_52wh(-0.9% off high, set 0d ago) | above_8ema(+4.8%\u26a0) | RSI=72.5(overbought) | Vol_vs_20D=0.38(below_avg) | BB_PctB=1.133(above_upper_band)",
-      "expected_impact": "Downside continuation is the base case while the score holds this high.",
-      "suggested_action": "Review the put candidate (strike/expiry per the scan report); if holding the stock, reassess or hedge.",
-      "confidence": 95,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "put_score": 9.0,
-        "put_reason": "PUT_CANDIDATE: near_52wh(-0.9% off high, set 0d ago) | above_8ema(+4.8%\u26a0) | RSI=72.5(overbought) | Vol_vs_20D=0.38(below_avg) | BB_PctB=1.133(above_upper_band)",
-        "put_candidate": true,
-        "price": 224.62
-      },
-      "created_at": "2026-08-12T12:35:12"
-    },
-    "since": "2026-08-12T12:35:12"
-  },
-  "VLO:put_score_high": {
-    "alert": {
-      "dedup_key": "VLO:put_score_high",
-      "category": "put_setup",
-      "ticker": "VLO",
-      "priority": "CRITICAL",
-      "headline": "put setup score 9 \u2014 high-conviction bearish",
-      "why_it_matters": "Put screen factors stacking up: PUT_CANDIDATE: near_52wh(-0.4% off high, set 0d ago) | above_8ema(+4.4%\u26a0) | RSI=69.0(stretched) | RVOL=0.82(volume_fading) | BB_PctB=1.127(above_upper_band)",
-      "expected_impact": "Downside continuation is the base case while the score holds this high.",
-      "suggested_action": "Review the put candidate (strike/expiry per the scan report); if holding the stock, reassess or hedge.",
-      "confidence": 95,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "put_score": 9.0,
-        "put_reason": "PUT_CANDIDATE: near_52wh(-0.4% off high, set 0d ago) | above_8ema(+4.4%\u26a0) | RSI=69.0(stretched) | RVOL=0.82(volume_fading) | BB_PctB=1.127(above_upper_band)",
-        "put_candidate": true,
-        "price": 327.84
-      },
-      "created_at": "2026-08-12T12:35:12"
-    },
-    "since": "2026-08-12T12:35:12"
-  },
   "UNH:a_plus_setup": {
     "alert": {
       "dedup_key": "UNH:a_plus_setup",
@@ -5000,25 +4883,6 @@
     },
     "since": "2026-08-14T12:02:46"
   },
-  "ZS:rsi_overbought": {
-    "alert": {
-      "dedup_key": "ZS:rsi_overbought",
-      "category": "watchlist",
-      "ticker": "ZS",
-      "priority": "MEDIUM",
-      "headline": "RSI overbought at 74",
-      "why_it_matters": "RSI this high often marks a stretched short-term move.",
-      "expected_impact": "Elevated odds of a short-term pullback, not a trend reversal by itself.",
-      "suggested_action": "Consider taking partial profits or tightening a stop if you're long.",
-      "confidence": 50,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "rsi_14": 74.5
-      },
-      "created_at": "2026-08-14T12:02:50"
-    },
-    "since": "2026-08-14T12:02:50"
-  },
   "NFLX:above_50ma": {
     "alert": {
       "dedup_key": "NFLX:above_50ma",
@@ -5068,36 +4932,6 @@
     },
     "since": "2026-08-14T11:47:19"
   },
-  "ET:a_plus_setup": {
-    "alert": {
-      "dedup_key": "ET:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "ET",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 101).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 101)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 57.0,
-        "day_rank": 101.0,
-        "investment_score": 60.0,
-        "entry": "Breakout entry \u2014 buy above Prev-Day High $21.10 with RVOL >1.5. Alternatively scale into 8EMA dip $20.64.",
-        "stop": "$20.78 \u2014 Prev-Day Low $20.78 / ATR\u00d71.0 $20.72. Hard stop -5% = $20.00.",
-        "target": "T1 $22.10 (+5%) \u2014 8EMA trail. T2 $23.16 (+10.0%). T3 $25.26 (+20%) \u2014 trail 21EMA $20.22.",
-        "grade": "C",
-        "price": 21.05
-      },
-      "created_at": "2026-08-15T06:16:26"
-    },
-    "since": "2026-08-15T06:16:26"
-  },
   "CVX:a_plus_setup": {
     "alert": {
       "dedup_key": "CVX:a_plus_setup",
@@ -5123,36 +4957,6 @@
         "target": "T1 $210.00 (+5%) \u2014 8EMA trail. T2 $212.76 (52W high / +6.4%). T3 $240.00 (+20%) \u2014 trail 21EMA $191.38.",
         "grade": "C",
         "price": 200.0
-      },
-      "created_at": "2026-08-15T06:16:26"
-    },
-    "since": "2026-08-15T06:16:26"
-  },
-  "AON:a_plus_setup": {
-    "alert": {
-      "dedup_key": "AON:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "AON",
-      "priority": "HIGH",
-      "headline": "A+ swing setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: swing (rank 95).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "swing (rank 95)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 95.0,
-        "day_rank": 63.0,
-        "investment_score": 61.0,
-        "entry": "Buy on VWAP reclaim $356.21 or 8EMA dip $357.35 with volume expansion (RVOL >1.3).",
-        "stop": "$353.78 \u2014 Prev-Day Low $353.78 / ATR\u00d71.0 $346.56. Hard stop -5% = $338.04.",
-        "target": "T1 $373.62 (+5%) \u2014 8EMA trail. T2 $382.34 (52W high / +7.5%). T3 $427.00 (+20%) \u2014 trail 21EMA $357.66.",
-        "grade": "C",
-        "price": 355.83
       },
       "created_at": "2026-08-15T06:16:26"
     },
@@ -5218,36 +5022,6 @@
     },
     "since": "2026-08-15T06:16:26"
   },
-  "PSX:a_plus_setup": {
-    "alert": {
-      "dedup_key": "PSX:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "PSX",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 104).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 104)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 47.0,
-        "day_rank": 104.0,
-        "investment_score": 77.0,
-        "entry": "Breakout entry \u2014 buy above Prev-Day High $236.14 with RVOL >1.5. Alternatively scale into 8EMA dip $221.94.",
-        "stop": "$229.42 \u2014 Prev-Day Low $229.42 / ATR\u00d71.0 $226.43. Hard stop -5% = $221.93.",
-        "target": "T1 $245.29 (+5%) \u2014 8EMA trail. T2 $256.97 (+10.0%). T3 $280.33 (+20%) \u2014 trail 21EMA $211.55.",
-        "grade": "C",
-        "price": 233.61
-      },
-      "created_at": "2026-08-15T06:16:26"
-    },
-    "since": "2026-08-15T06:16:26"
-  },
   "day_session:init_2026-08-16": {
     "alert": {
       "dedup_key": "day_session:init_2026-08-16",
@@ -5300,36 +5074,6 @@
         "target": "T1 $107.34 (+5%) \u2014 8EMA trail. T2 $106.50 (52W high / +4.2%). T3 $122.68 (+20%) \u2014 trail 21EMA $86.98.",
         "grade": "B",
         "price": 102.23
-      },
-      "created_at": "2026-08-16T18:04:47"
-    },
-    "since": "2026-08-16T18:04:47"
-  },
-  "CACI:a_plus_setup": {
-    "alert": {
-      "dedup_key": "CACI:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "CACI",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 83).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 83)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 51.0,
-        "day_rank": 83.0,
-        "investment_score": 84.0,
-        "entry": "VWAP hold confirmed. Add above Prev-Day High $677.00 or on 8EMA dip $636.97.",
-        "stop": "$659.94 \u2014 Prev-Day Low $659.94 / ATR\u00d71.0 $644.36. Hard stop -5% = $637.01.",
-        "target": "T1 $704.07 (+5%) \u2014 8EMA trail. T2 $737.59 (+10.0%). T3 $804.65 (+20%) \u2014 trail 21EMA $574.17.",
-        "grade": "C",
-        "price": 670.54
       },
       "created_at": "2026-08-16T18:04:47"
     },
@@ -5472,25 +5216,6 @@
     },
     "since": "2026-08-17T09:03:16"
   },
-  "COHR:gap": {
-    "alert": {
-      "dedup_key": "COHR:gap",
-      "category": "watchlist",
-      "ticker": "COHR",
-      "priority": "HIGH",
-      "headline": "gapped up 5.2%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 5.16
-      },
-      "created_at": "2026-08-17T09:03:18"
-    },
-    "since": "2026-08-17T09:03:18"
-  },
   "ADBE:macd_bearish": {
     "alert": {
       "dedup_key": "ADBE:macd_bearish",
@@ -5586,25 +5311,6 @@
     },
     "since": "2026-08-17T09:03:29"
   },
-  "AAOI:gap": {
-    "alert": {
-      "dedup_key": "AAOI:gap",
-      "category": "watchlist",
-      "ticker": "AAOI",
-      "priority": "HIGH",
-      "headline": "gapped up 5.5%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 5.52
-      },
-      "created_at": "2026-08-17T12:03:07"
-    },
-    "since": "2026-08-17T12:03:07"
-  },
   "day_session:init_2026-08-18": {
     "alert": {
       "dedup_key": "day_session:init_2026-08-18",
@@ -5675,85 +5381,6 @@
     },
     "since": "2026-08-18T08:34:45"
   },
-  "WDAY:news:702383af48": {
-    "alert": {
-      "dedup_key": "WDAY:news:702383af48",
-      "category": "news",
-      "ticker": "WDAY",
-      "priority": "HIGH",
-      "headline": "M&A / Acquisition: Workday Stock Drops 2.4% as Analysts Reject Takeover Hype",
-      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "M&A / Acquisition",
-        "publisher": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/workday-stock-drops-2-4-205113734.html",
-        "published": "2026-08-17"
-      },
-      "created_at": "2026-08-18T08:34:45"
-    },
-    "since": "2026-08-18T08:34:45"
-  },
-  "AMD:gap": {
-    "alert": {
-      "dedup_key": "AMD:gap",
-      "category": "watchlist",
-      "ticker": "AMD",
-      "priority": "HIGH",
-      "headline": "gapped down 6.7%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -6.66
-      },
-      "created_at": "2026-08-18T09:03:31"
-    },
-    "since": "2026-08-18T09:03:31"
-  },
-  "INTC:gap": {
-    "alert": {
-      "dedup_key": "INTC:gap",
-      "category": "watchlist",
-      "ticker": "INTC",
-      "priority": "HIGH",
-      "headline": "gapped down 5.3%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -5.33
-      },
-      "created_at": "2026-08-18T09:03:32"
-    },
-    "since": "2026-08-18T09:03:32"
-  },
-  "STX:gap": {
-    "alert": {
-      "dedup_key": "STX:gap",
-      "category": "watchlist",
-      "ticker": "STX",
-      "priority": "HIGH",
-      "headline": "gapped down 4.1%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -4.08
-      },
-      "created_at": "2026-08-18T09:03:32"
-    },
-    "since": "2026-08-18T09:03:32"
-  },
   "APH:resistance_touch": {
     "alert": {
       "dedup_key": "APH:resistance_touch",
@@ -5793,45 +5420,6 @@
     },
     "since": "2026-08-18T09:03:37"
   },
-  "VRT:gap": {
-    "alert": {
-      "dedup_key": "VRT:gap",
-      "category": "watchlist",
-      "ticker": "VRT",
-      "priority": "HIGH",
-      "headline": "gapped down 5.4%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -5.36
-      },
-      "created_at": "2026-08-18T09:03:37"
-    },
-    "since": "2026-08-18T09:03:37"
-  },
-  "MA:support_touch": {
-    "alert": {
-      "dedup_key": "MA:support_touch",
-      "category": "watchlist",
-      "ticker": "MA",
-      "priority": "MEDIUM",
-      "headline": "is testing support (0.1% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 0.06,
-        "S1": 570.34
-      },
-      "created_at": "2026-08-18T09:03:40"
-    },
-    "since": "2026-08-18T09:03:40"
-  },
   "PYPL:rsi_overbought": {
     "alert": {
       "dedup_key": "PYPL:rsi_overbought",
@@ -5850,26 +5438,6 @@
       "created_at": "2026-08-18T09:03:40"
     },
     "since": "2026-08-18T09:03:40"
-  },
-  "MINE:resistance_touch": {
-    "alert": {
-      "dedup_key": "MINE:resistance_touch",
-      "category": "watchlist",
-      "ticker": "MINE",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (1.0% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 1.0,
-        "R1": 3.02
-      },
-      "created_at": "2026-08-18T09:03:42"
-    },
-    "since": "2026-08-18T09:03:42"
   },
   "MMM:a_plus_setup": {
     "alert": {
@@ -5896,36 +5464,6 @@
         "target": "T1 $190.01 (+5%) \u2014 8EMA trail. T2 $199.06 (+10.0%). T3 $217.15 (+20%) \u2014 trail 21EMA $177.28.",
         "grade": "B",
         "price": 180.96
-      },
-      "created_at": "2026-08-18T09:09:51"
-    },
-    "since": "2026-08-18T09:09:51"
-  },
-  "JPM:a_plus_setup": {
-    "alert": {
-      "dedup_key": "JPM:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "JPM",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 84).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 84)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 74.0,
-        "day_rank": 84.0,
-        "investment_score": 53.0,
-        "entry": "VWAP hold confirmed. Add above Prev-Day High $365.90 or on 8EMA dip $360.92.",
-        "stop": "$361.45 \u2014 Prev-Day Low $361.45 / ATR\u00d71.0 $355.93. Hard stop -5% = $343.80.",
-        "target": "T1 $379.98 (+5%) \u2014 8EMA trail. T2 $398.08 (+10.0%). T3 $434.27 (+20%) \u2014 trail 21EMA $354.70.",
-        "grade": "B",
-        "price": 361.89
       },
       "created_at": "2026-08-18T09:09:51"
     },
@@ -6095,55 +5633,6 @@
     },
     "since": "2026-08-18T11:40:26"
   },
-  "CRWD:a_plus_setup": {
-    "alert": {
-      "dedup_key": "CRWD:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "CRWD",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 87).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 87)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 77.0,
-        "day_rank": 87.0,
-        "investment_score": 90.0,
-        "entry": "VWAP hold confirmed. Add above Prev-Day High $219.18 or on 8EMA dip $214.89.",
-        "stop": "$200.99 \u2014 Prev-Day Low $213.01 / ATR\u00d71.0 $203.00. Hard stop -5% = $200.99.",
-        "target": "T1 $222.15 (+5%) \u2014 8EMA trail. T2 $227.50 (52W high / +7.5%). T3 $253.88 (+20%) \u2014 trail 21EMA $206.90.",
-        "grade": "C",
-        "price": 211.57
-      },
-      "created_at": "2026-08-18T12:03:17"
-    },
-    "since": "2026-08-18T12:03:17"
-  },
-  "AVGO:volume_spike": {
-    "alert": {
-      "dedup_key": "AVGO:volume_spike",
-      "category": "watchlist",
-      "ticker": "AVGO",
-      "priority": "MEDIUM",
-      "headline": "volume is 3.1x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 3.09
-      },
-      "created_at": "2026-08-18T12:03:18"
-    },
-    "since": "2026-08-18T12:03:18"
-  },
   "AAPL:above_50ma": {
     "alert": {
       "dedup_key": "AAPL:above_50ma",
@@ -6162,25 +5651,6 @@
       "created_at": "2026-08-18T12:03:18"
     },
     "since": "2026-08-18T12:03:18"
-  },
-  "MRVL:gap": {
-    "alert": {
-      "dedup_key": "MRVL:gap",
-      "category": "watchlist",
-      "ticker": "MRVL",
-      "priority": "HIGH",
-      "headline": "gapped down 8.5%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -8.5
-      },
-      "created_at": "2026-08-18T12:03:19"
-    },
-    "since": "2026-08-18T12:03:19"
   },
   "MU:support_touch": {
     "alert": {
@@ -6202,101 +5672,6 @@
     },
     "since": "2026-08-18T12:03:19"
   },
-  "WDC:gap": {
-    "alert": {
-      "dedup_key": "WDC:gap",
-      "category": "watchlist",
-      "ticker": "WDC",
-      "priority": "HIGH",
-      "headline": "gapped down 6.8%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -6.78
-      },
-      "created_at": "2026-08-18T12:03:19"
-    },
-    "since": "2026-08-18T12:03:19"
-  },
-  "DELL:gap": {
-    "alert": {
-      "dedup_key": "DELL:gap",
-      "category": "watchlist",
-      "ticker": "DELL",
-      "priority": "HIGH",
-      "headline": "gapped down 3.5%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -3.55
-      },
-      "created_at": "2026-08-18T12:03:20"
-    },
-    "since": "2026-08-18T12:03:20"
-  },
-  "LITE:gap": {
-    "alert": {
-      "dedup_key": "LITE:gap",
-      "category": "watchlist",
-      "ticker": "LITE",
-      "priority": "HIGH",
-      "headline": "gapped down 9.6%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -9.63
-      },
-      "created_at": "2026-08-18T12:03:20"
-    },
-    "since": "2026-08-18T12:03:20"
-  },
-  "CRDO:gap": {
-    "alert": {
-      "dedup_key": "CRDO:gap",
-      "category": "watchlist",
-      "ticker": "CRDO",
-      "priority": "HIGH",
-      "headline": "gapped down 13.1%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -13.05
-      },
-      "created_at": "2026-08-18T12:03:20"
-    },
-    "since": "2026-08-18T12:03:20"
-  },
-  "GLW:gap": {
-    "alert": {
-      "dedup_key": "GLW:gap",
-      "category": "watchlist",
-      "ticker": "GLW",
-      "priority": "HIGH",
-      "headline": "gapped down 7.4%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -7.39
-      },
-      "created_at": "2026-08-18T12:03:20"
-    },
-    "since": "2026-08-18T12:03:20"
-  },
   "MSFT:macd_bearish": {
     "alert": {
       "dedup_key": "MSFT:macd_bearish",
@@ -6315,45 +5690,6 @@
       "created_at": "2026-08-18T12:03:21"
     },
     "since": "2026-08-18T12:03:21"
-  },
-  "NBIS:volume_spike": {
-    "alert": {
-      "dedup_key": "NBIS:volume_spike",
-      "category": "watchlist",
-      "ticker": "NBIS",
-      "priority": "MEDIUM",
-      "headline": "volume is 2.3x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 2.28
-      },
-      "created_at": "2026-08-18T12:03:23"
-    },
-    "since": "2026-08-18T12:03:23"
-  },
-  "MINE:support_touch": {
-    "alert": {
-      "dedup_key": "MINE:support_touch",
-      "category": "watchlist",
-      "ticker": "MINE",
-      "priority": "MEDIUM",
-      "headline": "is testing support (0.9% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 0.87,
-        "S1": 2.92
-      },
-      "created_at": "2026-08-18T12:03:27"
-    },
-    "since": "2026-08-18T12:03:27"
   },
   "HIMS:news:e1d7f20623": {
     "alert": {
@@ -6376,36 +5712,6 @@
       "created_at": "2026-08-18T12:25:33"
     },
     "since": "2026-08-18T12:25:33"
-  },
-  "BMY:a_plus_setup": {
-    "alert": {
-      "dedup_key": "BMY:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "BMY",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 95).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 95)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 66.0,
-        "day_rank": 95.0,
-        "investment_score": 79.0,
-        "entry": "VWAP hold confirmed. Add above Prev-Day High $64.74 or on 8EMA dip $64.69.",
-        "stop": "$64.51 \u2014 Prev-Day Low $63.36 / ATR\u00d71.0 $64.51. Hard stop -5% = $62.98.",
-        "target": "T1 $69.60 (+5%) \u2014 8EMA trail. T2 $72.92 (+10.0%). T3 $79.55 (+20%) \u2014 trail 21EMA $63.40.",
-        "grade": "B",
-        "price": 66.29
-      },
-      "created_at": "2026-08-18T12:55:31"
-    },
-    "since": "2026-08-18T12:55:31"
   },
   "HUBB:a_plus_setup": {
     "alert": {
@@ -6519,36 +5825,6 @@
     },
     "since": "2026-08-18T14:35:53"
   },
-  "HPE:a_plus_setup": {
-    "alert": {
-      "dedup_key": "HPE:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "HPE",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum-Pullback)",
-      "why_it_matters": "Scored in the top band for: day (rank 82).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 82)"
-        ],
-        "category": "Momentum-Pullback",
-        "swing_rank": 68.0,
-        "day_rank": 82.0,
-        "investment_score": 85.0,
-        "entry": "Near 8EMA \u2014 buy hold above $56.16 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
-        "stop": "$52.23 from entry fill \u2014 Prev-Day Low $57.09 / ATR\u00d71.5 $51.49. Hard stop -7% = $52.23.",
-        "target": "T1 $64.06 (52W high / +14.1%) \u2014 % from entry $56.16. Trail 21EMA $52.86 once in profit.",
-        "grade": "B",
-        "price": 55.69
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
   "XOM:a_plus_setup": {
     "alert": {
       "dedup_key": "XOM:a_plus_setup",
@@ -6609,66 +5885,6 @@
     },
     "since": "2026-08-18T21:21:29"
   },
-  "CDW:a_plus_setup": {
-    "alert": {
-      "dedup_key": "CDW:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "CDW",
-      "priority": "HIGH",
-      "headline": "A+ swing setup (Momentum-Pullback)",
-      "why_it_matters": "Scored in the top band for: swing (rank 98).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "swing (rank 98)"
-        ],
-        "category": "Momentum-Pullback",
-        "swing_rank": 98.0,
-        "day_rank": 39.0,
-        "investment_score": 79.0,
-        "entry": "Near 8EMA \u2014 buy hold above $137.76 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
-        "stop": "$128.12 from entry fill \u2014 Prev-Day Low $134.32 / ATR\u00d71.5 $127.17. Hard stop -7% = $128.12.",
-        "target": "T1 $168.93 (52W high / +22.6%) \u2014 % from entry $137.76. Trail 21EMA $138.36 once in profit.",
-        "grade": "B",
-        "price": 134.97
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
-  "HPQ:a_plus_setup": {
-    "alert": {
-      "dedup_key": "HPQ:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "HPQ",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 85).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 85)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 56.0,
-        "day_rank": 85.0,
-        "investment_score": 64.0,
-        "entry": "Buy on VWAP reclaim $30.08 or 8EMA dip $29.60 with volume expansion (RVOL >1.3).",
-        "stop": "$29.14 \u2014 Prev-Day Low $29.14 / ATR\u00d71.0 $28.55. Hard stop -5% = $28.46.",
-        "target": "T1 $31.46 (+5%) \u2014 8EMA trail. T2 $32.19 (52W high / +7.4%). T3 $35.95 (+20%) \u2014 trail 21EMA $28.22.",
-        "grade": "B",
-        "price": 29.96
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
   "MSI:a_plus_setup": {
     "alert": {
       "dedup_key": "MSI:a_plus_setup",
@@ -6694,66 +5910,6 @@
         "target": "T1 $492.98 (+5%) \u2014 8EMA trail. T2 $493.57 (52W high / +5.1%). T3 $563.40 (+20%) \u2014 trail 21EMA $448.28.",
         "grade": "C",
         "price": 469.5
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
-  "AJG:a_plus_setup": {
-    "alert": {
-      "dedup_key": "AJG:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "AJG",
-      "priority": "HIGH",
-      "headline": "A+ swing setup (Momentum-Pullback)",
-      "why_it_matters": "Scored in the top band for: swing (rank 104).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "swing (rank 104)"
-        ],
-        "category": "Momentum-Pullback",
-        "swing_rank": 104.0,
-        "day_rank": 48.0,
-        "investment_score": 90.0,
-        "entry": "Near 8EMA \u2014 buy hold above $250.80 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
-        "stop": "$238.01 from entry fill \u2014 Prev-Day Low $246.88 / ATR\u00d71.5 $238.01. Hard stop -7% = $233.24.",
-        "target": "T1 $310.73 (52W high / +23.9%) \u2014 % from entry $250.80. Trail 21EMA $250.22 once in profit.",
-        "grade": "B",
-        "price": 248.36
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
-  "BX:a_plus_setup": {
-    "alert": {
-      "dedup_key": "BX:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "BX",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum-Pullback)",
-      "why_it_matters": "Scored in the top band for: day (rank 80).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 80)"
-        ],
-        "category": "Momentum-Pullback",
-        "swing_rank": 69.0,
-        "day_rank": 80.0,
-        "investment_score": 90.0,
-        "entry": "Near 8EMA \u2014 buy hold above $141.64 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
-        "stop": "$134.29 from entry fill \u2014 Prev-Day Low $139.51 / ATR\u00d71.5 $134.29. Hard stop -7% = $131.73.",
-        "target": "T1 $182.68 (52W high / +29.0%) \u2014 % from entry $141.64. Trail 21EMA $136.21 once in profit.",
-        "grade": "B",
-        "price": 140.59
       },
       "created_at": "2026-08-18T21:21:29"
     },
@@ -7149,36 +6305,6 @@
     },
     "since": "2026-08-18T21:21:29"
   },
-  "TECH:a_plus_setup": {
-    "alert": {
-      "dedup_key": "TECH:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "TECH",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 84).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 84)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 78.0,
-        "day_rank": 84.0,
-        "investment_score": 79.0,
-        "entry": "Breakout entry \u2014 buy above Prev-Day High $72.62 with RVOL >1.5. Alternatively scale into 8EMA dip $72.22.",
-        "stop": "$68.61 \u2014 Prev-Day Low $72.22 / ATR\u00d71.0 $71.88. Hard stop -5% = $68.61.",
-        "target": "T1 $75.83 (+5%) \u2014 8EMA trail. T2 $79.44 (+10.0%). T3 $86.66 (+20%) \u2014 trail 21EMA $71.38.",
-        "grade": "B",
-        "price": 72.22
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
   "VRTX:a_plus_setup": {
     "alert": {
       "dedup_key": "VRTX:a_plus_setup",
@@ -7239,78 +6365,6 @@
     },
     "since": "2026-08-18T21:21:29"
   },
-  "UDR:a_plus_setup": {
-    "alert": {
-      "dedup_key": "UDR:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "UDR",
-      "priority": "HIGH",
-      "headline": "A+ swing setup (Momentum-Pullback)",
-      "why_it_matters": "Scored in the top band for: swing (rank 100).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "swing (rank 100)"
-        ],
-        "category": "Momentum-Pullback",
-        "swing_rank": 100.0,
-        "day_rank": 52.0,
-        "investment_score": 25.0,
-        "entry": "Near 8EMA \u2014 buy hold above $37.54 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
-        "stop": "$36.48 from entry fill \u2014 Prev-Day Low $37.09 / ATR\u00d71.5 $36.48. Hard stop -7% = $34.91.",
-        "target": "T1 $38.80 (50MA / +3.4%) \u2192 T2 $41.69 (52W high / +11.1%) \u2014 % from entry $37.54. Trail 21EMA $38.11 once in profit.",
-        "grade": "B",
-        "price": 37.09
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
-  "MPC:52w_high": {
-    "alert": {
-      "dedup_key": "MPC:52w_high",
-      "category": "watchlist",
-      "ticker": "MPC",
-      "priority": "HIGH",
-      "headline": "hit a new 52-week high",
-      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
-      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
-      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
-      "confidence": 65,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "dist_52w_high_pct": -0.3,
-        "52w_high": 367.24,
-        "price": 366.21
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
-  "PSX:52w_high": {
-    "alert": {
-      "dedup_key": "PSX:52w_high",
-      "category": "watchlist",
-      "ticker": "PSX",
-      "priority": "HIGH",
-      "headline": "hit a new 52-week high",
-      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
-      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
-      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
-      "confidence": 65,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "dist_52w_high_pct": -0.0,
-        "52w_high": 243.58,
-        "price": 243.49
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
   "TRGP:a_plus_setup": {
     "alert": {
       "dedup_key": "TRGP:a_plus_setup",
@@ -7336,57 +6390,6 @@
         "target": "T1 $312.66 (+5%) \u2014 8EMA trail. T2 $327.55 (+10.0%). T3 $357.32 (+20%) \u2014 trail 21EMA $271.57.",
         "grade": "C",
         "price": 297.77
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
-  "VLO:52w_high": {
-    "alert": {
-      "dedup_key": "VLO:52w_high",
-      "category": "watchlist",
-      "ticker": "VLO",
-      "priority": "HIGH",
-      "headline": "hit a new 52-week high",
-      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
-      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
-      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
-      "confidence": 65,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "dist_52w_high_pct": -0.3,
-        "52w_high": 351.0,
-        "price": 350.05
-      },
-      "created_at": "2026-08-18T21:21:29"
-    },
-    "since": "2026-08-18T21:21:29"
-  },
-  "OII:a_plus_setup": {
-    "alert": {
-      "dedup_key": "OII:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "OII",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 88).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 88)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 65.0,
-        "day_rank": 88.0,
-        "investment_score": 54.0,
-        "entry": "Breakout entry \u2014 buy above Prev-Day High $54.25 with RVOL >1.5. Alternatively scale into 8EMA dip $51.74.",
-        "stop": "$51.95 \u2014 Prev-Day Low $51.95 / ATR\u00d71.0 $50.44. Hard stop -5% = $50.45.",
-        "target": "T1 $55.76 (+5%) \u2014 8EMA trail. T2 $58.41 (+10.0%). T3 $63.72 (+20%) \u2014 trail 21EMA $49.08.",
-        "grade": "B",
-        "price": 53.1
       },
       "created_at": "2026-08-18T21:21:29"
     },
@@ -7469,28 +6472,6 @@
       "created_at": "2026-08-19T08:30:36"
     },
     "since": "2026-08-19T08:30:36"
-  },
-  "NOW:news:8398894119": {
-    "alert": {
-      "dedup_key": "NOW:news:8398894119",
-      "category": "news",
-      "ticker": "NOW",
-      "priority": "HIGH",
-      "headline": "M&A / Acquisition: Inside the $8 billion cybersecurity acquisition that rescued ServiceNow from the \u2018Saaspocalypse\u2019",
-      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "M&A / Acquisition",
-        "publisher": "Fortune",
-        "url": "https://finance.yahoo.com/technology/articles/inside-8-billion-cybersecurity-acquisition-065800120.html",
-        "published": "2026-08-19"
-      },
-      "created_at": "2026-08-19T08:36:44"
-    },
-    "since": "2026-08-19T08:36:44"
   },
   "NEE:news:62e969a955": {
     "alert": {
@@ -7610,25 +6591,6 @@
     },
     "since": "2026-08-19T09:03:08"
   },
-  "AVGO:gap": {
-    "alert": {
-      "dedup_key": "AVGO:gap",
-      "category": "watchlist",
-      "ticker": "AVGO",
-      "priority": "HIGH",
-      "headline": "gapped down 4.7%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -4.74
-      },
-      "created_at": "2026-08-19T09:03:08"
-    },
-    "since": "2026-08-19T09:03:08"
-  },
   "ARM:resistance_touch": {
     "alert": {
       "dedup_key": "ARM:resistance_touch",
@@ -7669,25 +6631,6 @@
     },
     "since": "2026-08-19T09:03:09"
   },
-  "MRVL:volume_spike": {
-    "alert": {
-      "dedup_key": "MRVL:volume_spike",
-      "category": "watchlist",
-      "ticker": "MRVL",
-      "priority": "MEDIUM",
-      "headline": "volume is 3.1x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 3.15
-      },
-      "created_at": "2026-08-19T09:03:09"
-    },
-    "since": "2026-08-19T09:03:09"
-  },
   "STX:support_touch": {
     "alert": {
       "dedup_key": "STX:support_touch",
@@ -7708,65 +6651,6 @@
     },
     "since": "2026-08-19T09:03:10"
   },
-  "STX:resistance_touch": {
-    "alert": {
-      "dedup_key": "STX:resistance_touch",
-      "category": "watchlist",
-      "ticker": "STX",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (1.2% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 1.23,
-        "R1": 876.68
-      },
-      "created_at": "2026-08-19T09:03:10"
-    },
-    "since": "2026-08-19T09:03:10"
-  },
-  "CRDO:resistance_touch": {
-    "alert": {
-      "dedup_key": "CRDO:resistance_touch",
-      "category": "watchlist",
-      "ticker": "CRDO",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.8% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.81,
-        "R1": 235.78
-      },
-      "created_at": "2026-08-19T09:03:11"
-    },
-    "since": "2026-08-19T09:03:11"
-  },
-  "NOW:gap": {
-    "alert": {
-      "dedup_key": "NOW:gap",
-      "category": "watchlist",
-      "ticker": "NOW",
-      "priority": "HIGH",
-      "headline": "gapped up 3.5%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 3.51
-      },
-      "created_at": "2026-08-19T09:03:12"
-    },
-    "since": "2026-08-19T09:03:12"
-  },
   "WDAY:support_touch": {
     "alert": {
       "dedup_key": "WDAY:support_touch",
@@ -7782,44 +6666,6 @@
       "supporting_data": {
         "dist_to_support_pct": 0.31,
         "S1": 195.73
-      },
-      "created_at": "2026-08-19T09:03:12"
-    },
-    "since": "2026-08-19T09:03:12"
-  },
-  "PANW:gap": {
-    "alert": {
-      "dedup_key": "PANW:gap",
-      "category": "watchlist",
-      "ticker": "PANW",
-      "priority": "HIGH",
-      "headline": "gapped down 4.0%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -4.04
-      },
-      "created_at": "2026-08-19T09:03:12"
-    },
-    "since": "2026-08-19T09:03:12"
-  },
-  "CRWD:gap": {
-    "alert": {
-      "dedup_key": "CRWD:gap",
-      "category": "watchlist",
-      "ticker": "CRWD",
-      "priority": "HIGH",
-      "headline": "gapped down 5.9%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -5.88
       },
       "created_at": "2026-08-19T09:03:12"
     },
@@ -7845,45 +6691,6 @@
     },
     "since": "2026-08-19T09:03:13"
   },
-  "S:gap": {
-    "alert": {
-      "dedup_key": "S:gap",
-      "category": "watchlist",
-      "ticker": "S",
-      "priority": "HIGH",
-      "headline": "gapped down 3.4%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -3.42
-      },
-      "created_at": "2026-08-19T09:03:13"
-    },
-    "since": "2026-08-19T09:03:13"
-  },
-  "CEG:support_touch": {
-    "alert": {
-      "dedup_key": "CEG:support_touch",
-      "category": "watchlist",
-      "ticker": "CEG",
-      "priority": "MEDIUM",
-      "headline": "is testing support (0.4% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 0.38,
-        "S1": 267.69
-      },
-      "created_at": "2026-08-19T09:03:14"
-    },
-    "since": "2026-08-19T09:03:14"
-  },
   "CEG:macd_bearish": {
     "alert": {
       "dedup_key": "CEG:macd_bearish",
@@ -7898,25 +6705,6 @@
       "time_sensitivity": "ongoing",
       "supporting_data": {
         "macd_state": "bearish"
-      },
-      "created_at": "2026-08-19T09:03:15"
-    },
-    "since": "2026-08-19T09:03:15"
-  },
-  "PWR:gap": {
-    "alert": {
-      "dedup_key": "PWR:gap",
-      "category": "watchlist",
-      "ticker": "PWR",
-      "priority": "HIGH",
-      "headline": "gapped down 3.8%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -3.78
       },
       "created_at": "2026-08-19T09:03:15"
     },
@@ -8039,25 +6827,6 @@
     },
     "since": "2026-08-19T09:03:18"
   },
-  "MINE:volume_spike": {
-    "alert": {
-      "dedup_key": "MINE:volume_spike",
-      "category": "watchlist",
-      "ticker": "MINE",
-      "priority": "MEDIUM",
-      "headline": "volume is 2.9x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 2.92
-      },
-      "created_at": "2026-08-19T09:03:18"
-    },
-    "since": "2026-08-19T09:03:18"
-  },
   "STRL:resistance_touch": {
     "alert": {
       "dedup_key": "STRL:resistance_touch",
@@ -8077,190 +6846,6 @@
       "created_at": "2026-08-19T09:03:18"
     },
     "since": "2026-08-19T09:03:18"
-  },
-  "MRVL:news:cfb7c1cb75": {
-    "alert": {
-      "dedup_key": "MRVL:news:cfb7c1cb75",
-      "category": "news",
-      "ticker": "MRVL",
-      "priority": "MEDIUM",
-      "headline": "New Deal / Contract: Marvell shares jump as Google warrant deepens AI chip partnership",
-      "why_it_matters": "A large new contract can move the revenue outlook meaningfully for smaller names.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "New Deal / Contract",
-        "publisher": "Proactive",
-        "url": "https://finance.yahoo.com/technology/ai/articles/marvell-shares-jump-google-warrant-144900122.html",
-        "published": "2026-08-19"
-      },
-      "created_at": "2026-08-19T10:40:32"
-    },
-    "since": "2026-08-19T10:40:32"
-  },
-  "AMZN:news:eaec382e52": {
-    "alert": {
-      "dedup_key": "AMZN:news:eaec382e52",
-      "category": "news",
-      "ticker": "AMZN",
-      "priority": "MEDIUM",
-      "headline": "New Deal / Contract: Eshallgo Secures Exclusive North American Distribution Partnership With Zhongshan Senwei",
-      "why_it_matters": "A large new contract can move the revenue outlook meaningfully for smaller names.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "New Deal / Contract",
-        "publisher": "InvestorsHub",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/eshallgo-secures-exclusive-north-american-143350337.html",
-        "published": "2026-08-19"
-      },
-      "created_at": "2026-08-19T10:40:38"
-    },
-    "since": "2026-08-19T10:40:38"
-  },
-  "MA:a_plus_setup": {
-    "alert": {
-      "dedup_key": "MA:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "MA",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 91).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 91)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 53.0,
-        "day_rank": 91.0,
-        "investment_score": 69.0,
-        "entry": "VWAP hold confirmed. Add above Prev-Day High $578.50 or on 8EMA dip $569.71.",
-        "stop": "$568.11 \u2014 Prev-Day Low $563.18 / ATR\u00d71.0 $568.11. Hard stop -5% = $550.47.",
-        "target": "T1 $608.41 (+5%) \u2014 8EMA trail. T2 $598.04 (52W high / +3.2%). T3 $695.33 (+20%) \u2014 trail 21EMA $561.13.",
-        "grade": "C",
-        "price": 579.44
-      },
-      "created_at": "2026-08-19T10:41:14"
-    },
-    "since": "2026-08-19T10:41:14"
-  },
-  "ADBE:news:f0cf0f09da": {
-    "alert": {
-      "dedup_key": "ADBE:news:f0cf0f09da",
-      "category": "news",
-      "ticker": "ADBE",
-      "priority": "HIGH",
-      "headline": "M&A / Acquisition: How to Play SpaceX Stock After the Elon Musk-Led Company Just Closed Its Cursor Acquisition",
-      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
-      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
-      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
-      "confidence": 60,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "catalyst": "M&A / Acquisition",
-        "publisher": "Barchart",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/play-spacex-stock-elon-musk-183846941.html",
-        "published": "2026-08-18"
-      },
-      "created_at": "2026-08-19T11:32:04"
-    },
-    "since": "2026-08-19T11:32:04"
-  },
-  "RTX:a_plus_setup": {
-    "alert": {
-      "dedup_key": "RTX:a_plus_setup",
-      "category": "a_plus_setup",
-      "ticker": "RTX",
-      "priority": "HIGH",
-      "headline": "A+ day setup (Momentum)",
-      "why_it_matters": "Scored in the top band for: day (rank 95).",
-      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
-      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
-      "confidence": 85,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "strategies": [
-          "day (rank 95)"
-        ],
-        "category": "Momentum",
-        "swing_rank": 71.0,
-        "day_rank": 95.0,
-        "investment_score": 84.0,
-        "entry": "Breakout entry \u2014 buy above Prev-Day High $226.09 with RVOL >1.5. Alternatively scale into 8EMA dip $222.07.",
-        "stop": "$211.02 \u2014 Prev-Day Low $222.30 / ATR\u00d71.0 $216.81. Hard stop -5% = $211.02.",
-        "target": "T1 $233.24 (+5%) \u2014 8EMA trail. T2 $244.34 (+10.0%). T3 $266.56 (+20%) \u2014 trail 21EMA $216.46.",
-        "grade": "A",
-        "price": 222.13
-      },
-      "created_at": "2026-08-19T12:03:08"
-    },
-    "since": "2026-08-19T12:03:08"
-  },
-  "NVDA:support_touch": {
-    "alert": {
-      "dedup_key": "NVDA:support_touch",
-      "category": "watchlist",
-      "ticker": "NVDA",
-      "priority": "MEDIUM",
-      "headline": "is testing support (0.5% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 0.45,
-        "S1": 218.0
-      },
-      "created_at": "2026-08-19T12:03:08"
-    },
-    "since": "2026-08-19T12:03:08"
-  },
-  "NVDA:volume_spike": {
-    "alert": {
-      "dedup_key": "NVDA:volume_spike",
-      "category": "watchlist",
-      "ticker": "NVDA",
-      "priority": "MEDIUM",
-      "headline": "volume is 3.3x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 3.34
-      },
-      "created_at": "2026-08-19T12:03:08"
-    },
-    "since": "2026-08-19T12:03:08"
-  },
-  "AAPL:volume_spike": {
-    "alert": {
-      "dedup_key": "AAPL:volume_spike",
-      "category": "watchlist",
-      "ticker": "AAPL",
-      "priority": "MEDIUM",
-      "headline": "volume is 2.0x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 2.03
-      },
-      "created_at": "2026-08-19T12:03:08"
-    },
-    "since": "2026-08-19T12:03:08"
   },
   "MRVL:resistance_touch": {
     "alert": {
@@ -8296,26 +6881,6 @@
       "time_sensitivity": "ongoing",
       "supporting_data": {
         "price_vs_50ma_pct": 0.4
-      },
-      "created_at": "2026-08-19T12:03:09"
-    },
-    "since": "2026-08-19T12:03:09"
-  },
-  "INTC:support_touch": {
-    "alert": {
-      "dedup_key": "INTC:support_touch",
-      "category": "watchlist",
-      "ticker": "INTC",
-      "priority": "MEDIUM",
-      "headline": "is testing support (0.3% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 0.35,
-        "S1": 93.12
       },
       "created_at": "2026-08-19T12:03:09"
     },
@@ -8361,123 +6926,6 @@
     },
     "since": "2026-08-19T12:03:10"
   },
-  "AAOI:support_touch": {
-    "alert": {
-      "dedup_key": "AAOI:support_touch",
-      "category": "watchlist",
-      "ticker": "AAOI",
-      "priority": "MEDIUM",
-      "headline": "is testing support (1.0% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 1.02,
-        "S1": 124.97
-      },
-      "created_at": "2026-08-19T12:03:10"
-    },
-    "since": "2026-08-19T12:03:10"
-  },
-  "ORCL:support_touch": {
-    "alert": {
-      "dedup_key": "ORCL:support_touch",
-      "category": "watchlist",
-      "ticker": "ORCL",
-      "priority": "MEDIUM",
-      "headline": "is testing support (0.0% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 0.0,
-        "S1": 144.95
-      },
-      "created_at": "2026-08-19T12:03:11"
-    },
-    "since": "2026-08-19T12:03:11"
-  },
-  "ORCL:volume_spike": {
-    "alert": {
-      "dedup_key": "ORCL:volume_spike",
-      "category": "watchlist",
-      "ticker": "ORCL",
-      "priority": "MEDIUM",
-      "headline": "volume is 2.2x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 2.16
-      },
-      "created_at": "2026-08-19T12:03:11"
-    },
-    "since": "2026-08-19T12:03:11"
-  },
-  "ADBE:resistance_touch": {
-    "alert": {
-      "dedup_key": "ADBE:resistance_touch",
-      "category": "watchlist",
-      "ticker": "ADBE",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.4% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.37,
-        "R1": 273.78
-      },
-      "created_at": "2026-08-19T12:03:11"
-    },
-    "since": "2026-08-19T12:03:11"
-  },
-  "ADBE:gap": {
-    "alert": {
-      "dedup_key": "ADBE:gap",
-      "category": "watchlist",
-      "ticker": "ADBE",
-      "priority": "HIGH",
-      "headline": "gapped up 3.7%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 3.66
-      },
-      "created_at": "2026-08-19T12:03:11"
-    },
-    "since": "2026-08-19T12:03:11"
-  },
-  "WDAY:gap": {
-    "alert": {
-      "dedup_key": "WDAY:gap",
-      "category": "watchlist",
-      "ticker": "WDAY",
-      "priority": "HIGH",
-      "headline": "gapped up 4.0%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 4.0
-      },
-      "created_at": "2026-08-19T12:03:11"
-    },
-    "since": "2026-08-19T12:03:11"
-  },
   "FTNT:support_touch": {
     "alert": {
       "dedup_key": "FTNT:support_touch",
@@ -8493,65 +6941,6 @@
       "supporting_data": {
         "dist_to_support_pct": 0.58,
         "S1": 152.34
-      },
-      "created_at": "2026-08-19T12:03:12"
-    },
-    "since": "2026-08-19T12:03:12"
-  },
-  "FTNT:gap": {
-    "alert": {
-      "dedup_key": "FTNT:gap",
-      "category": "watchlist",
-      "ticker": "FTNT",
-      "priority": "HIGH",
-      "headline": "gapped down 3.0%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -3.03
-      },
-      "created_at": "2026-08-19T12:03:12"
-    },
-    "since": "2026-08-19T12:03:12"
-  },
-  "OKTA:resistance_touch": {
-    "alert": {
-      "dedup_key": "OKTA:resistance_touch",
-      "category": "watchlist",
-      "ticker": "OKTA",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.8% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.8,
-        "R1": 142.91
-      },
-      "created_at": "2026-08-19T12:03:12"
-    },
-    "since": "2026-08-19T12:03:12"
-  },
-  "S:support_touch": {
-    "alert": {
-      "dedup_key": "S:support_touch",
-      "category": "watchlist",
-      "ticker": "S",
-      "priority": "MEDIUM",
-      "headline": "is testing support (0.2% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 0.23,
-        "S1": 21.32
       },
       "created_at": "2026-08-19T12:03:12"
     },
@@ -8577,64 +6966,6 @@
     },
     "since": "2026-08-19T12:03:12"
   },
-  "S:volume_spike": {
-    "alert": {
-      "dedup_key": "S:volume_spike",
-      "category": "watchlist",
-      "ticker": "S",
-      "priority": "MEDIUM",
-      "headline": "volume is 5.9x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 5.94
-      },
-      "created_at": "2026-08-19T12:03:12"
-    },
-    "since": "2026-08-19T12:03:12"
-  },
-  "META:resistance_touch": {
-    "alert": {
-      "dedup_key": "META:resistance_touch",
-      "category": "watchlist",
-      "ticker": "META",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.5% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.45,
-        "R1": 555.8
-      },
-      "created_at": "2026-08-19T12:03:13"
-    },
-    "since": "2026-08-19T12:03:13"
-  },
-  "NFLX:gap": {
-    "alert": {
-      "dedup_key": "NFLX:gap",
-      "category": "watchlist",
-      "ticker": "NFLX",
-      "priority": "HIGH",
-      "headline": "gapped up 3.2%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 3.24
-      },
-      "created_at": "2026-08-19T12:03:13"
-    },
-    "since": "2026-08-19T12:03:13"
-  },
   "INOD:resistance_touch": {
     "alert": {
       "dedup_key": "INOD:resistance_touch",
@@ -8650,45 +6981,6 @@
       "supporting_data": {
         "dist_to_resistance_pct": 0.02,
         "R1": 62.95
-      },
-      "created_at": "2026-08-19T12:03:13"
-    },
-    "since": "2026-08-19T12:03:13"
-  },
-  "NBIS:above_50ma": {
-    "alert": {
-      "dedup_key": "NBIS:above_50ma",
-      "category": "watchlist",
-      "ticker": "NBIS",
-      "priority": "LOW",
-      "headline": "is above its 50-day average (+2.1%)",
-      "why_it_matters": "Trend-following systems generally favor longs while price holds above this average.",
-      "expected_impact": "Mildly bullish backdrop while this holds.",
-      "suggested_action": "No action by itself \u2014 context for other signals.",
-      "confidence": 40,
-      "time_sensitivity": "ongoing",
-      "supporting_data": {
-        "price_vs_50ma_pct": 2.1
-      },
-      "created_at": "2026-08-19T12:03:13"
-    },
-    "since": "2026-08-19T12:03:13"
-  },
-  "CRWV:resistance_touch": {
-    "alert": {
-      "dedup_key": "CRWV:resistance_touch",
-      "category": "watchlist",
-      "ticker": "CRWV",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.3% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.26,
-        "R1": 93.25
       },
       "created_at": "2026-08-19T12:03:13"
     },
@@ -8713,26 +7005,6 @@
     },
     "since": "2026-08-19T12:03:13"
   },
-  "IONQ:resistance_touch": {
-    "alert": {
-      "dedup_key": "IONQ:resistance_touch",
-      "category": "watchlist",
-      "ticker": "IONQ",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (0.5% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 0.51,
-        "R1": 43.75
-      },
-      "created_at": "2026-08-19T12:03:14"
-    },
-    "since": "2026-08-19T12:03:14"
-  },
   "QBTS:resistance_touch": {
     "alert": {
       "dedup_key": "QBTS:resistance_touch",
@@ -8748,46 +7020,6 @@
       "supporting_data": {
         "dist_to_resistance_pct": 0.57,
         "R1": 19.4
-      },
-      "created_at": "2026-08-19T12:03:14"
-    },
-    "since": "2026-08-19T12:03:14"
-  },
-  "RGTI:resistance_touch": {
-    "alert": {
-      "dedup_key": "RGTI:resistance_touch",
-      "category": "watchlist",
-      "ticker": "RGTI",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (1.3% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 1.27,
-        "R1": 17.41
-      },
-      "created_at": "2026-08-19T12:03:14"
-    },
-    "since": "2026-08-19T12:03:14"
-  },
-  "VST:support_touch": {
-    "alert": {
-      "dedup_key": "VST:support_touch",
-      "category": "watchlist",
-      "ticker": "VST",
-      "priority": "MEDIUM",
-      "headline": "is testing support (0.5% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 0.5,
-        "S1": 140.63
       },
       "created_at": "2026-08-19T12:03:14"
     },
@@ -8813,64 +7045,6 @@
     },
     "since": "2026-08-19T12:03:14"
   },
-  "PWR:resistance_touch": {
-    "alert": {
-      "dedup_key": "PWR:resistance_touch",
-      "category": "watchlist",
-      "ticker": "PWR",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (1.1% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 1.06,
-        "R1": 682.16
-      },
-      "created_at": "2026-08-19T12:03:15"
-    },
-    "since": "2026-08-19T12:03:15"
-  },
-  "PWR:above_50ma": {
-    "alert": {
-      "dedup_key": "PWR:above_50ma",
-      "category": "watchlist",
-      "ticker": "PWR",
-      "priority": "LOW",
-      "headline": "is above its 50-day average (+0.4%)",
-      "why_it_matters": "Trend-following systems generally favor longs while price holds above this average.",
-      "expected_impact": "Mildly bullish backdrop while this holds.",
-      "suggested_action": "No action by itself \u2014 context for other signals.",
-      "confidence": 40,
-      "time_sensitivity": "ongoing",
-      "supporting_data": {
-        "price_vs_50ma_pct": 0.4
-      },
-      "created_at": "2026-08-19T12:03:15"
-    },
-    "since": "2026-08-19T12:03:15"
-  },
-  "RTX:volume_spike": {
-    "alert": {
-      "dedup_key": "RTX:volume_spike",
-      "category": "watchlist",
-      "ticker": "RTX",
-      "priority": "MEDIUM",
-      "headline": "volume is 2.3x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 2.27
-      },
-      "created_at": "2026-08-19T12:03:15"
-    },
-    "since": "2026-08-19T12:03:15"
-  },
   "KTOS:support_touch": {
     "alert": {
       "dedup_key": "KTOS:support_touch",
@@ -8886,63 +7060,6 @@
       "supporting_data": {
         "dist_to_support_pct": 0.28,
         "S1": 60.63
-      },
-      "created_at": "2026-08-19T12:03:16"
-    },
-    "since": "2026-08-19T12:03:16"
-  },
-  "GE:gap": {
-    "alert": {
-      "dedup_key": "GE:gap",
-      "category": "watchlist",
-      "ticker": "GE",
-      "priority": "HIGH",
-      "headline": "gapped down 4.5%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": -4.52
-      },
-      "created_at": "2026-08-19T12:03:16"
-    },
-    "since": "2026-08-19T12:03:16"
-  },
-  "TSLA:gap": {
-    "alert": {
-      "dedup_key": "TSLA:gap",
-      "category": "watchlist",
-      "ticker": "TSLA",
-      "priority": "HIGH",
-      "headline": "gapped up 3.1%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 3.13
-      },
-      "created_at": "2026-08-19T12:03:16"
-    },
-    "since": "2026-08-19T12:03:16"
-  },
-  "TSLA:volume_spike": {
-    "alert": {
-      "dedup_key": "TSLA:volume_spike",
-      "category": "watchlist",
-      "ticker": "TSLA",
-      "priority": "MEDIUM",
-      "headline": "volume is 3.1x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 3.06
       },
       "created_at": "2026-08-19T12:03:16"
     },
@@ -8983,44 +7100,6 @@
       "supporting_data": {
         "dist_to_resistance_pct": 0.7,
         "R1": 61.6
-      },
-      "created_at": "2026-08-19T12:03:17"
-    },
-    "since": "2026-08-19T12:03:17"
-  },
-  "SOFI:gap": {
-    "alert": {
-      "dedup_key": "SOFI:gap",
-      "category": "watchlist",
-      "ticker": "SOFI",
-      "priority": "HIGH",
-      "headline": "gapped up 5.2%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 5.21
-      },
-      "created_at": "2026-08-19T12:03:17"
-    },
-    "since": "2026-08-19T12:03:17"
-  },
-  "HOOD:gap": {
-    "alert": {
-      "dedup_key": "HOOD:gap",
-      "category": "watchlist",
-      "ticker": "HOOD",
-      "priority": "HIGH",
-      "headline": "gapped up 7.3%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 7.34
       },
       "created_at": "2026-08-19T12:03:17"
     },
@@ -9084,85 +7163,6 @@
     },
     "since": "2026-08-19T12:03:17"
   },
-  "UNH:volume_spike": {
-    "alert": {
-      "dedup_key": "UNH:volume_spike",
-      "category": "watchlist",
-      "ticker": "UNH",
-      "priority": "MEDIUM",
-      "headline": "volume is 2.5x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 2.47
-      },
-      "created_at": "2026-08-19T12:03:17"
-    },
-    "since": "2026-08-19T12:03:17"
-  },
-  "HIMS:resistance_touch": {
-    "alert": {
-      "dedup_key": "HIMS:resistance_touch",
-      "category": "watchlist",
-      "ticker": "HIMS",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (1.2% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 1.17,
-        "R1": 29.85
-      },
-      "created_at": "2026-08-19T12:03:17"
-    },
-    "since": "2026-08-19T12:03:17"
-  },
-  "USAR:resistance_touch": {
-    "alert": {
-      "dedup_key": "USAR:resistance_touch",
-      "category": "watchlist",
-      "ticker": "USAR",
-      "priority": "MEDIUM",
-      "headline": "is testing resistance (1.2% away)",
-      "why_it_matters": "Price is approaching a level that has previously capped upside.",
-      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
-      "suggested_action": "Watch for a breakout with volume before chasing.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_resistance_pct": 1.19,
-        "R1": 18.39
-      },
-      "created_at": "2026-08-19T12:03:18"
-    },
-    "since": "2026-08-19T12:03:18"
-  },
-  "IREN:support_touch": {
-    "alert": {
-      "dedup_key": "IREN:support_touch",
-      "category": "watchlist",
-      "ticker": "IREN",
-      "priority": "MEDIUM",
-      "headline": "is testing support (1.3% away)",
-      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
-      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
-      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
-      "confidence": 55,
-      "time_sensitivity": "next 1-2 sessions",
-      "supporting_data": {
-        "dist_to_support_pct": 1.3,
-        "S1": 42.5
-      },
-      "created_at": "2026-08-19T12:03:18"
-    },
-    "since": "2026-08-19T12:03:18"
-  },
   "DTCR:support_touch": {
     "alert": {
       "dedup_key": "DTCR:support_touch",
@@ -9178,44 +7178,6 @@
       "supporting_data": {
         "dist_to_support_pct": 0.09,
         "S1": 28.18
-      },
-      "created_at": "2026-08-19T12:03:18"
-    },
-    "since": "2026-08-19T12:03:18"
-  },
-  "NEM:gap": {
-    "alert": {
-      "dedup_key": "NEM:gap",
-      "category": "watchlist",
-      "ticker": "NEM",
-      "priority": "HIGH",
-      "headline": "gapped up 7.7%",
-      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
-      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
-      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
-      "confidence": 70,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "gap_pct": 7.71
-      },
-      "created_at": "2026-08-19T12:03:18"
-    },
-    "since": "2026-08-19T12:03:18"
-  },
-  "NEM:volume_spike": {
-    "alert": {
-      "dedup_key": "NEM:volume_spike",
-      "category": "watchlist",
-      "ticker": "NEM",
-      "priority": "MEDIUM",
-      "headline": "volume is 2.8x average",
-      "why_it_matters": "Unusually high volume often accompanies a real move, not noise.",
-      "expected_impact": "Whatever move is happening today is more likely to be meaningful.",
-      "suggested_action": "Check news/price action before treating this as a standalone signal.",
-      "confidence": 55,
-      "time_sensitivity": "today",
-      "supporting_data": {
-        "rvol": 2.77
       },
       "created_at": "2026-08-19T12:03:18"
     },
@@ -9277,5 +7239,2431 @@
       "created_at": "2026-08-19T12:03:19"
     },
     "since": "2026-08-19T12:03:19"
+  },
+  "OKTA:a_plus_setup": {
+    "alert": {
+      "dedup_key": "OKTA:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "OKTA",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 97).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 97)"
+        ],
+        "category": "Momentum-Pullback",
+        "swing_rank": 97.0,
+        "day_rank": 67.0,
+        "investment_score": 84.0,
+        "entry": "Near 8EMA \u2014 buy hold above $145.33 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
+        "stop": "$135.72 from entry fill \u2014 Prev-Day Low $142.13 / ATR\u00d71.5 $135.72. Hard stop -7% = $135.16.",
+        "target": "T1 $157.00 (52W high / +8.0%) \u2014 % from entry $145.33. Trail 21EMA $144.18 once in profit.",
+        "grade": "C",
+        "price": 141.21
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "ADP:a_plus_setup": {
+    "alert": {
+      "dedup_key": "ADP:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "ADP",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 84).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 84)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 68.0,
+        "day_rank": 84.0,
+        "investment_score": 61.0,
+        "entry": "Buy on VWAP reclaim $277.26 or 8EMA dip $271.70 with volume expansion (RVOL >1.3).",
+        "stop": "$269.14 \u2014 Prev-Day Low $269.14 / ATR\u00d71.0 $268.41. Hard stop -5% = $263.36.",
+        "target": "T1 $291.08 (+5%) \u2014 8EMA trail. T2 $301.70 (52W high / +8.8%). T3 $332.66 (+20%) \u2014 trail 21EMA $265.61.",
+        "grade": "B",
+        "price": 277.22
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "FFIV:a_plus_setup": {
+    "alert": {
+      "dedup_key": "FFIV:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "FFIV",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 100).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 100)"
+        ],
+        "category": "Momentum-Pullback",
+        "swing_rank": 100.0,
+        "day_rank": 31.0,
+        "investment_score": 62.0,
+        "entry": "Primary: 50MA reclaim above $403.96 with volume surge (RVOL >1.5). Secondary: 8EMA reclaim $399.29. Do NOT buy before 50MA reclaim.",
+        "stop": "$380.20 from entry fill \u2014 Prev-Day Low $390.81 / ATR\u00d71.5 $380.20. Hard stop -7% = $375.68.",
+        "target": "T1 $435.00 (52W high / +7.7%) \u2014 % from entry $403.96. Trail 21EMA $403.72 once in profit.",
+        "grade": "B",
+        "price": 382.63
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "PAYX:a_plus_setup": {
+    "alert": {
+      "dedup_key": "PAYX:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "PAYX",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 87).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 87)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 77.0,
+        "day_rank": 87.0,
+        "investment_score": 84.0,
+        "entry": "Buy on VWAP reclaim $122.60 or 8EMA dip $120.89 with volume expansion (RVOL >1.3).",
+        "stop": "$119.84 \u2014 Prev-Day Low $119.84 / ATR\u00d71.0 $118.68. Hard stop -5% = $116.38.",
+        "target": "T1 $128.62 (+5%) \u2014 8EMA trail. T2 $135.23 (52W high / +10.4%). T3 $147.00 (+20%) \u2014 trail 21EMA $117.95.",
+        "grade": "B",
+        "price": 122.5
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TDY:a_plus_setup": {
+    "alert": {
+      "dedup_key": "TDY:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "TDY",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: swing (rank 95).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 95)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 95.0,
+        "day_rank": 77.0,
+        "investment_score": 62.0,
+        "entry": "Buy on VWAP reclaim $650.05 or 8EMA dip $669.57 with volume expansion (RVOL >1.3).",
+        "stop": "$616.20 \u2014 Prev-Day Low $660.00 / ATR\u00d71.0 $631.54. Hard stop -5% = $616.20.",
+        "target": "T1 $681.06 (+5%) \u2014 8EMA trail. T2 $697.67 (52W high / +7.6%). T3 $778.36 (+20%) \u2014 trail 21EMA $665.20.",
+        "grade": "C",
+        "price": 648.63
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TEL:a_plus_setup": {
+    "alert": {
+      "dedup_key": "TEL:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "TEL",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 95).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 95)"
+        ],
+        "category": "Momentum-Pullback",
+        "swing_rank": 95.0,
+        "day_rank": 44.0,
+        "investment_score": 57.0,
+        "entry": "Primary: 50MA reclaim above $206.81 with volume surge (RVOL >1.5). Secondary: 8EMA reclaim $210.93. Do NOT buy before 50MA reclaim.",
+        "stop": "$196.15 from entry fill \u2014 Prev-Day Low $204.89 / ATR\u00d71.5 $196.15. Hard stop -7% = $192.33.",
+        "target": "T1 $217.91 (200MA / +5.4%) \u2192 T2 $251.59 (52W high / +21.7%) \u2014 % from entry $206.81. Trail 21EMA $210.43 once in profit.",
+        "grade": "B",
+        "price": 203.57
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "AIZ:a_plus_setup": {
+    "alert": {
+      "dedup_key": "AIZ:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "AIZ",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 80).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 80)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 67.0,
+        "day_rank": 80.0,
+        "investment_score": 47.0,
+        "entry": "Buy on VWAP reclaim $279.15 or 8EMA dip $281.60 with volume expansion (RVOL >1.3).",
+        "stop": "$264.39 \u2014 Prev-Day Low $279.90 / ATR\u00d71.0 $271.29. Hard stop -5% = $264.39.",
+        "target": "T1 $292.23 (+5%) \u2014 8EMA trail. T2 $303.94 (52W high / +9.2%). T3 $333.97 (+20%) \u2014 trail 21EMA $281.16.",
+        "grade": "C",
+        "price": 278.31
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "AMP:a_plus_setup": {
+    "alert": {
+      "dedup_key": "AMP:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "AMP",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 101).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 101)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 71.0,
+        "day_rank": 101.0,
+        "investment_score": 61.0,
+        "entry": "Buy on VWAP reclaim $561.63 or 8EMA dip $561.42 with volume expansion (RVOL >1.3).",
+        "stop": "$531.79 \u2014 Prev-Day Low $560.01 / ATR\u00d71.0 $548.49. Hard stop -5% = $531.79.",
+        "target": "T1 $587.77 (+5%) \u2014 8EMA trail. T2 $615.76 (+10.0%). T3 $671.74 (+20%) \u2014 trail 21EMA $548.31.",
+        "grade": "B",
+        "price": 559.78
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "CFG:a_plus_setup": {
+    "alert": {
+      "dedup_key": "CFG:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "CFG",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 84).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 84)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 93.0,
+        "day_rank": 84.0,
+        "investment_score": 74.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $74.99 with RVOL >1.5. Alternatively scale into 8EMA dip $73.01.",
+        "stop": "$67.22 \u2014 Prev-Day Low $73.11 / ATR\u00d71.0 $69.25. Hard stop -5% = $67.22.",
+        "target": "T1 $74.30 (+5%) \u2014 8EMA trail. T2 $75.33 (52W high / +6.5%). T3 $84.91 (+20%) \u2014 trail 21EMA $72.45.",
+        "grade": "C",
+        "price": 70.76
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "HBAN:a_plus_setup": {
+    "alert": {
+      "dedup_key": "HBAN:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "HBAN",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 96).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 96)"
+        ],
+        "category": "Momentum-Pullback",
+        "swing_rank": 96.0,
+        "day_rank": 40.0,
+        "investment_score": 73.0,
+        "entry": "Near 8EMA \u2014 buy hold above $17.61 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
+        "stop": "$17.04 from entry fill \u2014 Prev-Day Low $17.63 / ATR\u00d71.5 $17.04. Hard stop -7% = $16.38.",
+        "target": "T1 $19.09 (52W high / +8.4%) \u2014 % from entry $17.61. Trail 21EMA $17.59 once in profit.",
+        "grade": "B",
+        "price": 17.17
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "IVZ:a_plus_setup": {
+    "alert": {
+      "dedup_key": "IVZ:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "IVZ",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 82).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 82)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 65.0,
+        "day_rank": 82.0,
+        "investment_score": 75.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $32.62 with RVOL >1.5. Alternatively scale into 8EMA dip $32.00.",
+        "stop": "$31.92 \u2014 Prev-Day Low $31.92 / ATR\u00d71.0 $31.31. Hard stop -5% = $30.60.",
+        "target": "T1 $33.82 (+5%) \u2014 8EMA trail. T2 $35.43 (+10.0%). T3 $38.65 (+20%) \u2014 trail 21EMA $30.99.",
+        "grade": "B",
+        "price": 32.21
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "MET:a_plus_setup": {
+    "alert": {
+      "dedup_key": "MET:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "MET",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 87).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 87)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 85.0,
+        "day_rank": 87.0,
+        "investment_score": 69.0,
+        "entry": "Buy on VWAP reclaim $95.19 or 8EMA dip $96.54 with volume expansion (RVOL >1.3).",
+        "stop": "$90.35 \u2014 Prev-Day Low $96.69 / ATR\u00d71.0 $93.29. Hard stop -5% = $90.35.",
+        "target": "T1 $99.87 (+5%) \u2014 8EMA trail. T2 $100.93 (52W high / +6.1%). T3 $114.13 (+20%) \u2014 trail 21EMA $95.54.",
+        "grade": "C",
+        "price": 95.11
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "NDAQ:a_plus_setup": {
+    "alert": {
+      "dedup_key": "NDAQ:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "NDAQ",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 87).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 87)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 71.0,
+        "day_rank": 87.0,
+        "investment_score": 62.0,
+        "entry": "Buy on VWAP reclaim $96.81 or 8EMA dip $96.20 with volume expansion (RVOL >1.3).",
+        "stop": "$91.53 \u2014 Prev-Day Low $96.63 / ATR\u00d71.0 $94.26. Hard stop -5% = $91.53.",
+        "target": "T1 $101.17 (+5%) \u2014 8EMA trail. T2 $101.11 (52W high / +4.9%). T3 $115.62 (+20%) \u2014 trail 21EMA $94.42.",
+        "grade": "C",
+        "price": 96.35
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "RF:a_plus_setup": {
+    "alert": {
+      "dedup_key": "RF:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "RF",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: swing (rank 97).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 97)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 97.0,
+        "day_rank": 79.0,
+        "investment_score": 61.0,
+        "entry": "Buy on VWAP reclaim $30.79 or 8EMA dip $31.41 with volume expansion (RVOL >1.3).",
+        "stop": "$29.06 \u2014 Prev-Day Low $31.42 / ATR\u00d71.0 $30.03. Hard stop -5% = $29.06.",
+        "target": "T1 $32.12 (+5%) \u2014 8EMA trail. T2 $32.47 (52W high / +6.1%). T3 $36.71 (+20%) \u2014 trail 21EMA $31.28.",
+        "grade": "C",
+        "price": 30.59
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "RJF:a_plus_setup": {
+    "alert": {
+      "dedup_key": "RJF:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "RJF",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 83).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 83)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 68.0,
+        "day_rank": 83.0,
+        "investment_score": 61.0,
+        "entry": "Buy on VWAP reclaim $178.35 or 8EMA dip $179.11 with volume expansion (RVOL >1.3).",
+        "stop": "$169.03 \u2014 Prev-Day Low $178.95 / ATR\u00d71.0 $174.21. Hard stop -5% = $169.03.",
+        "target": "T1 $186.83 (+5%) \u2014 8EMA trail. T2 $195.72 (+10.0%). T3 $213.52 (+20%) \u2014 trail 21EMA $175.93.",
+        "grade": "C",
+        "price": 177.93
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "STT:a_plus_setup": {
+    "alert": {
+      "dedup_key": "STT:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "STT",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 90).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 90)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 85.0,
+        "day_rank": 90.0,
+        "investment_score": 60.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $193.18 with RVOL >1.5. Alternatively scale into 8EMA dip $188.96.",
+        "stop": "$176.52 \u2014 Prev-Day Low $190.98 / ATR\u00d71.0 $181.61. Hard stop -5% = $176.52.",
+        "target": "T1 $195.10 (+5%) \u2014 8EMA trail. T2 $195.18 (52W high / +5.0%). T3 $222.97 (+20%) \u2014 trail 21EMA $185.90.",
+        "grade": "C",
+        "price": 185.81
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "SYF:a_plus_setup": {
+    "alert": {
+      "dedup_key": "SYF:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "SYF",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 83).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 83)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 71.0,
+        "day_rank": 83.0,
+        "investment_score": 49.0,
+        "entry": "Buy on VWAP reclaim $80.53 or 8EMA dip $79.72 with volume expansion (RVOL >1.3).",
+        "stop": "$75.64 \u2014 Prev-Day Low $80.37 / ATR\u00d71.0 $77.71. Hard stop -5% = $75.64.",
+        "target": "T1 $83.60 (+5%) \u2014 8EMA trail. T2 $87.67 (52W high / +10.1%). T3 $95.54 (+20%) \u2014 trail 21EMA $78.04.",
+        "grade": "C",
+        "price": 79.62
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TRV:a_plus_setup": {
+    "alert": {
+      "dedup_key": "TRV:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "TRV",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 83).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 83)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 91.0,
+        "day_rank": 83.0,
+        "investment_score": 49.0,
+        "entry": "Buy on VWAP reclaim $363.59 or 8EMA dip $369.17 with volume expansion (RVOL >1.3).",
+        "stop": "$344.11 \u2014 Prev-Day Low $366.65 / ATR\u00d71.0 $353.92. Hard stop -5% = $344.11.",
+        "target": "T1 $380.33 (+5%) \u2014 8EMA trail. T2 $398.70 (52W high / +10.1%). T3 $434.66 (+20%) \u2014 trail 21EMA $368.60.",
+        "grade": "C",
+        "price": 362.22
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "WRB:a_plus_setup": {
+    "alert": {
+      "dedup_key": "WRB:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "WRB",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 96).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 96)"
+        ],
+        "category": "Momentum-Pullback",
+        "swing_rank": 96.0,
+        "day_rank": 60.0,
+        "investment_score": 29.0,
+        "entry": "Near 8EMA \u2014 buy hold above $70.34 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
+        "stop": "$68.09 from entry fill \u2014 Prev-Day Low $70.15 / ATR\u00d71.5 $68.09. Hard stop -7% = $65.42.",
+        "target": "T1 $77.45 (52W high / +10.1%) \u2014 % from entry $70.34. Trail 21EMA $71.10 once in profit.",
+        "grade": "B",
+        "price": 69.61
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "WTW:a_plus_setup": {
+    "alert": {
+      "dedup_key": "WTW:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "WTW",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 80).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 80)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 52.0,
+        "day_rank": 80.0,
+        "investment_score": 79.0,
+        "entry": "Buy on VWAP reclaim $335.60 or 8EMA dip $332.88 with volume expansion (RVOL >1.3).",
+        "stop": "$327.78 \u2014 Prev-Day Low $327.78 / ATR\u00d71.0 $326.15. Hard stop -5% = $318.69.",
+        "target": "T1 $352.23 (+5%) \u2014 8EMA trail. T2 $349.38 (52W high / +4.1%). T3 $402.55 (+20%) \u2014 trail 21EMA $323.87.",
+        "grade": "C",
+        "price": 335.46
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "UNP:a_plus_setup": {
+    "alert": {
+      "dedup_key": "UNP:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "UNP",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 83).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 83)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 50.0,
+        "day_rank": 83.0,
+        "investment_score": 52.0,
+        "entry": "Buy on VWAP reclaim $302.93 or 8EMA dip $297.52 with volume expansion (RVOL >1.3).",
+        "stop": "$298.64 \u2014 Prev-Day Low $298.64 / ATR\u00d71.0 $294.64. Hard stop -5% = $286.71.",
+        "target": "T1 $316.89 (+5%) \u2014 8EMA trail. T2 $315.99 (52W high / +4.7%). T3 $362.16 (+20%) \u2014 trail 21EMA $294.46.",
+        "grade": "C",
+        "price": 301.8
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "WAB:a_plus_setup": {
+    "alert": {
+      "dedup_key": "WAB:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "WAB",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 83).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 83)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 62.0,
+        "day_rank": 83.0,
+        "investment_score": 67.0,
+        "entry": "Buy on VWAP reclaim $292.29 or 8EMA dip $295.51 with volume expansion (RVOL >1.3).",
+        "stop": "$277.62 \u2014 Prev-Day Low $294.30 / ATR\u00d71.0 $284.15. Hard stop -5% = $277.62.",
+        "target": "T1 $306.84 (+5%) \u2014 8EMA trail. T2 $306.32 (52W high / +4.8%). T3 $350.68 (+20%) \u2014 trail 21EMA $290.78.",
+        "grade": "C",
+        "price": 292.23
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "ABBV:a_plus_setup": {
+    "alert": {
+      "dedup_key": "ABBV:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "ABBV",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 83).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 83)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 72.0,
+        "day_rank": 83.0,
+        "investment_score": 69.0,
+        "entry": "VWAP hold confirmed. Add above Prev-Day High $259.18 or on 8EMA dip $254.77.",
+        "stop": "$259.66 \u2014 Prev-Day Low $252.41 / ATR\u00d71.0 $259.66. Hard stop -5% = $252.67.",
+        "target": "T1 $279.27 (+5%) \u2014 8EMA trail. T2 $292.57 (+10.0%). T3 $319.16 (+20%) \u2014 trail 21EMA $251.76.",
+        "grade": "C",
+        "price": 265.97
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "AMGN:52w_high": {
+    "alert": {
+      "dedup_key": "AMGN:52w_high",
+      "category": "watchlist",
+      "ticker": "AMGN",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.2,
+        "52w_high": 443.19,
+        "price": 442.36
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "BDX:52w_high": {
+    "alert": {
+      "dedup_key": "BDX:52w_high",
+      "category": "watchlist",
+      "ticker": "BDX",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.2,
+        "52w_high": 187.93,
+        "price": 187.6
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "BIIB:52w_high": {
+    "alert": {
+      "dedup_key": "BIIB:52w_high",
+      "category": "watchlist",
+      "ticker": "BIIB",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.3,
+        "52w_high": 222.15,
+        "price": 221.56
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "CAH:a_plus_setup": {
+    "alert": {
+      "dedup_key": "CAH:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "CAH",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 85).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 85)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 64.0,
+        "day_rank": 85.0,
+        "investment_score": 69.0,
+        "entry": "Buy on VWAP reclaim $235.11 or 8EMA dip $234.99 with volume expansion (RVOL >1.3).",
+        "stop": "$233.94 \u2014 Prev-Day Low $233.94 / ATR\u00d71.0 $228.59. Hard stop -5% = $223.11.",
+        "target": "T1 $246.59 (+5%) \u2014 8EMA trail. T2 $258.30 (52W high / +10.0%). T3 $281.82 (+20%) \u2014 trail 21EMA $233.63.",
+        "grade": "B",
+        "price": 234.85
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "DGX:a_plus_setup": {
+    "alert": {
+      "dedup_key": "DGX:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "DGX",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 102).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 102)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 75.0,
+        "day_rank": 102.0,
+        "investment_score": 84.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $239.38 with RVOL >1.5. Alternatively scale into 8EMA dip $237.07.",
+        "stop": "$236.07 \u2014 Prev-Day Low $236.07 / ATR\u00d71.0 $235.36. Hard stop -5% = $229.67.",
+        "target": "T1 $253.85 (+5%) \u2014 8EMA trail. T2 $265.94 (+10.0%). T3 $290.11 (+20%) \u2014 trail 21EMA $231.39.",
+        "grade": "A",
+        "price": 241.76
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "DGX:52w_high": {
+    "alert": {
+      "dedup_key": "DGX:52w_high",
+      "category": "watchlist",
+      "ticker": "DGX",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.3,
+        "52w_high": 242.39,
+        "price": 241.76
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "DXCM:a_plus_setup": {
+    "alert": {
+      "dedup_key": "DXCM:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "DXCM",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 86).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 86)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 63.0,
+        "day_rank": 86.0,
+        "investment_score": 66.0,
+        "entry": "Buy on VWAP reclaim $90.12 or 8EMA dip $88.72 with volume expansion (RVOL >1.3).",
+        "stop": "$88.98 \u2014 Prev-Day Low $88.98 / ATR\u00d71.0 $86.96. Hard stop -5% = $85.39.",
+        "target": "T1 $94.37 (+5%) \u2014 8EMA trail. T2 $98.87 (+10.0%). T3 $107.86 (+20%) \u2014 trail 21EMA $84.40.",
+        "grade": "B",
+        "price": 89.88
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "LH:52w_high": {
+    "alert": {
+      "dedup_key": "LH:52w_high",
+      "category": "watchlist",
+      "ticker": "LH",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.2,
+        "52w_high": 331.0,
+        "price": 330.44
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "LLY:a_plus_setup": {
+    "alert": {
+      "dedup_key": "LLY:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "LLY",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 94).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 94)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 54.0,
+        "day_rank": 94.0,
+        "investment_score": 80.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $1,228.47 with RVOL >1.5. Alternatively scale into 8EMA dip $1,217.28.",
+        "stop": "$1,237.97 \u2014 Prev-Day Low $1,194.01 / ATR\u00d71.0 $1,237.97. Hard stop -5% = $1,216.32.",
+        "target": "T1 $1,344.36 (+5%) \u2014 8EMA trail. T2 $1,408.37 (+10.0%). T3 $1,536.41 (+20%) \u2014 trail 21EMA $1,195.59.",
+        "grade": "C",
+        "price": 1280.34
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "MDT:a_plus_setup": {
+    "alert": {
+      "dedup_key": "MDT:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "MDT",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 91).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 91)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 59.0,
+        "day_rank": 91.0,
+        "investment_score": 64.0,
+        "entry": "VWAP hold confirmed. Add above Prev-Day High $93.09 or on 8EMA dip $91.07.",
+        "stop": "$91.96 \u2014 Prev-Day Low $91.47 / ATR\u00d71.0 $91.96. Hard stop -5% = $89.42.",
+        "target": "T1 $98.84 (+5%) \u2014 8EMA trail. T2 $103.76 (52W high / +10.2%). T3 $112.96 (+20%) \u2014 trail 21EMA $88.20.",
+        "grade": "C",
+        "price": 94.13
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "MRK:put_score_high": {
+    "alert": {
+      "dedup_key": "MRK:put_score_high",
+      "category": "put_setup",
+      "ticker": "MRK",
+      "priority": "CRITICAL",
+      "headline": "put setup score 9 \u2014 high-conviction bearish",
+      "why_it_matters": "Put screen factors stacking up: PUT_CANDIDATE: near_52wh(-0.8% off high, set 0d ago) | extended_above_8ema(+10.5%) | RSI=83.2(overbought) | BB_PctB=1.450(above_upper_band)",
+      "expected_impact": "Downside continuation is the base case while the score holds this high.",
+      "suggested_action": "Review the put candidate (strike/expiry per the scan report); if holding the stock, reassess or hedge.",
+      "confidence": 95,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "put_score": 9.0,
+        "put_reason": "PUT_CANDIDATE: near_52wh(-0.8% off high, set 0d ago) | extended_above_8ema(+10.5%) | RSI=83.2(overbought) | BB_PctB=1.450(above_upper_band)",
+        "put_candidate": true,
+        "price": 152.2
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "MRK:a_plus_setup": {
+    "alert": {
+      "dedup_key": "MRK:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "MRK",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 98).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 98)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 47.0,
+        "day_rank": 98.0,
+        "investment_score": 79.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $137.98 with RVOL >1.5. Alternatively scale into 8EMA dip $137.76.",
+        "stop": "$148.29 \u2014 Prev-Day Low $134.88 / ATR\u00d71.0 $148.29. Hard stop -5% = $144.59.",
+        "target": "T1 $159.81 (+5%) \u2014 8EMA trail. T2 $167.42 (+10.0%). T3 $182.64 (+20%) \u2014 trail 21EMA $132.82.",
+        "grade": "C",
+        "price": 152.2
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "MRNA:a_plus_setup": {
+    "alert": {
+      "dedup_key": "MRNA:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "MRNA",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 89).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 89)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 63.0,
+        "day_rank": 89.0,
+        "investment_score": 79.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $64.46 with RVOL >1.5. Alternatively scale into 8EMA dip $86.98.",
+        "stop": "$165.39 \u2014 Prev-Day Low $62.13 / ATR\u00d71.0 $165.39. Hard stop -5% = $165.66.",
+        "target": "T1 $183.10 (+5%) \u2014 8EMA trail. T2 $191.82 (+10.0%). T3 $209.26 (+20%) \u2014 trail 21EMA $71.05.",
+        "grade": "C",
+        "price": 174.38
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "REGN:a_plus_setup": {
+    "alert": {
+      "dedup_key": "REGN:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "REGN",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 82).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 82)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 51.0,
+        "day_rank": 82.0,
+        "investment_score": 74.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $821.02 with RVOL >1.5. Alternatively scale into 8EMA dip $805.10.",
+        "stop": "$818.35 \u2014 Prev-Day Low $805.93 / ATR\u00d71.0 $818.35. Hard stop -5% = $798.80.",
+        "target": "T1 $882.88 (+5%) \u2014 8EMA trail. T2 $924.92 (+10.0%). T3 $1,009.01 (+20%) \u2014 trail 21EMA $761.82.",
+        "grade": "C",
+        "price": 840.84
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TECH:52w_high": {
+    "alert": {
+      "dedup_key": "TECH:52w_high",
+      "category": "watchlist",
+      "ticker": "TECH",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.2,
+        "52w_high": 72.62,
+        "price": 72.48
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TMO:a_plus_setup": {
+    "alert": {
+      "dedup_key": "TMO:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "TMO",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 82).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 82)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 63.0,
+        "day_rank": 82.0,
+        "investment_score": 84.0,
+        "entry": "VWAP hold confirmed. Add above Prev-Day High $592.22 or on 8EMA dip $594.90.",
+        "stop": "$596.29 \u2014 Prev-Day Low $584.86 / ATR\u00d71.0 $596.29. Hard stop -5% = $582.86.",
+        "target": "T1 $644.22 (+5%) \u2014 8EMA trail. T2 $642.71 (52W high / +4.8%). T3 $736.25 (+20%) \u2014 trail 21EMA $578.66.",
+        "grade": "C",
+        "price": 613.54
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "VRTX:52w_high": {
+    "alert": {
+      "dedup_key": "VRTX:52w_high",
+      "category": "watchlist",
+      "ticker": "VRTX",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.3,
+        "52w_high": 553.69,
+        "price": 552.06
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "EMN:a_plus_setup": {
+    "alert": {
+      "dedup_key": "EMN:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "EMN",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 83).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 83)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 71.0,
+        "day_rank": 83.0,
+        "investment_score": 62.0,
+        "entry": "Buy on VWAP reclaim $75.16 or 8EMA dip $73.72 with volume expansion (RVOL >1.3).",
+        "stop": "$73.26 \u2014 Prev-Day Low $72.80 / ATR\u00d71.0 $73.26. Hard stop -5% = $71.40.",
+        "target": "T1 $78.92 (+5%) \u2014 8EMA trail. T2 $81.56 (52W high / +8.5%). T3 $90.19 (+20%) \u2014 trail 21EMA $72.27.",
+        "grade": "C",
+        "price": 75.16
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "IFF:a_plus_setup": {
+    "alert": {
+      "dedup_key": "IFF:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "IFF",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 94).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 94)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 60.0,
+        "day_rank": 94.0,
+        "investment_score": 59.0,
+        "entry": "VWAP hold confirmed. Add above Prev-Day High $82.46 or on 8EMA dip $82.98.",
+        "stop": "$80.87 \u2014 Prev-Day Low $80.87 / ATR\u00d71.0 $80.72. Hard stop -5% = $79.16.",
+        "target": "T1 $87.50 (+5%) \u2014 8EMA trail. T2 $89.32 (52W high / +7.2%). T3 $100.00 (+20%) \u2014 trail 21EMA $81.81.",
+        "grade": "B",
+        "price": 83.33
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "MOH:a_plus_setup": {
+    "alert": {
+      "dedup_key": "MOH:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "MOH",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 95).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 95)"
+        ],
+        "category": "Momentum-Pullback",
+        "swing_rank": 95.0,
+        "day_rank": 57.0,
+        "investment_score": 53.0,
+        "entry": "Near 8EMA \u2014 buy hold above $202.75 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
+        "stop": "$189.47 from entry fill \u2014 Prev-Day Low $203.16 / ATR\u00d71.5 $189.47. Hard stop -7% = $188.56.",
+        "target": "T1 $210.03 (50MA / +3.6%) \u2192 T2 $244.89 (52W high / +20.8%) \u2014 % from entry $202.75. Trail 21EMA $204.43 once in profit.",
+        "grade": "B",
+        "price": 201.17
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "VLO:a_plus_setup": {
+    "alert": {
+      "dedup_key": "VLO:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "VLO",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 97).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 97)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 66.0,
+        "day_rank": 97.0,
+        "investment_score": 85.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $351.00 with RVOL >1.5. Alternatively scale into 8EMA dip $337.26.",
+        "stop": "$344.49 \u2014 Prev-Day Low $344.49 / ATR\u00d71.0 $334.86. Hard stop -5% = $328.95.",
+        "target": "T1 $363.57 (+5%) \u2014 8EMA trail. T2 $380.89 (+10.0%). T3 $415.51 (+20%) \u2014 trail 21EMA $320.12.",
+        "grade": "B",
+        "price": 346.26
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TWST:a_plus_setup": {
+    "alert": {
+      "dedup_key": "TWST:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "TWST",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 101).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 101)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 55.0,
+        "day_rank": 101.0,
+        "investment_score": 80.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $123.30 with RVOL >1.5. Alternatively scale into 8EMA dip $123.72.",
+        "stop": "$132.76 \u2014 Prev-Day Low $115.28 / ATR\u00d71.0 $132.76. Hard stop -5% = $135.27.",
+        "target": "T1 $149.51 (+5%) \u2014 8EMA trail. T2 $156.63 (+10.0%). T3 $170.87 (+20%) \u2014 trail 21EMA $112.13.",
+        "grade": "C",
+        "price": 142.39
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TWST:52w_high": {
+    "alert": {
+      "dedup_key": "TWST:52w_high",
+      "category": "watchlist",
+      "ticker": "TWST",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.3,
+        "52w_high": 142.84,
+        "price": 142.39
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TENB:a_plus_setup": {
+    "alert": {
+      "dedup_key": "TENB:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "TENB",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 98).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 98)"
+        ],
+        "category": "Momentum-Pullback",
+        "swing_rank": 98.0,
+        "day_rank": 58.0,
+        "investment_score": 79.0,
+        "entry": "8EMA reclaim above $36.46 on volume (RVOL >1.3). Scale add on pullback to 21EMA $36.04.",
+        "stop": "$33.91 from entry fill \u2014 Prev-Day Low $35.00 / ATR\u00d71.5 $32.98. Hard stop -7% = $33.91.",
+        "target": "T1 $43.67 (52W high / +19.8%) \u2014 % from entry $36.46. Trail 21EMA $36.04 once in profit.",
+        "grade": "B",
+        "price": 35.28
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TXG:a_plus_setup": {
+    "alert": {
+      "dedup_key": "TXG:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "TXG",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 86).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 86)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 60.0,
+        "day_rank": 86.0,
+        "investment_score": 75.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $58.80 with RVOL >1.5. Alternatively scale into 8EMA dip $57.02.",
+        "stop": "$58.53 \u2014 Prev-Day Low $55.25 / ATR\u00d71.0 $58.53. Hard stop -5% = $59.08.",
+        "target": "T1 $65.30 (+5%) \u2014 8EMA trail. T2 $68.41 (+10.0%). T3 $74.63 (+20%) \u2014 trail 21EMA $52.31.",
+        "grade": "C",
+        "price": 62.19
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "TXG:52w_high": {
+    "alert": {
+      "dedup_key": "TXG:52w_high",
+      "category": "watchlist",
+      "ticker": "TXG",
+      "priority": "HIGH",
+      "headline": "hit a new 52-week high",
+      "why_it_matters": "Price is trading at or above its highest level in the past year \u2014 no overhead supply left to absorb.",
+      "expected_impact": "Momentum names often continue trending once they clear the prior 52-week ceiling.",
+      "suggested_action": "Consider a breakout entry with a stop below the prior high, or trail a stop on an existing position.",
+      "confidence": 65,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "dist_52w_high_pct": -0.3,
+        "52w_high": 62.36,
+        "price": 62.19
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "VRNS:a_plus_setup": {
+    "alert": {
+      "dedup_key": "VRNS:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "VRNS",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (VCP Setup)",
+      "why_it_matters": "Scored in the top band for: swing (rank 105).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 105)"
+        ],
+        "category": "VCP Setup",
+        "swing_rank": 105.0,
+        "day_rank": 24.0,
+        "investment_score": 84.0,
+        "entry": "Pivot breakout above $44.58 (Prev-Day High) on volume surge RVOL >2.0. Do NOT enter during base \u2014 wait for the breakout candle to close above pivot. Ideal BB_PctB < 0.3 before entry (current: 0.342).",
+        "stop": "$41.01 from pivot fill \u2014 base low ref: Prev-Day Low $43.14 / ATR\u00d72.0 $40.12. Hard stop -8% from pivot = $41.01. VCP stops are WIDER \u2014 size accordingly.",
+        "target": "T1 $49.04 (+10% from pivot). T2 $53.50 (+20.0%). T3 $63.90 (52W high / +43.3%). Hold weeks \u2014 trail 21EMA $43.22.",
+        "grade": "A",
+        "price": 42.28
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "WTS:a_plus_setup": {
+    "alert": {
+      "dedup_key": "WTS:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "WTS",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 84).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 84)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 77.0,
+        "day_rank": 84.0,
+        "investment_score": 71.0,
+        "entry": "Buy on VWAP reclaim $374.99 or 8EMA dip $378.32 with volume expansion (RVOL >1.3).",
+        "stop": "$355.98 \u2014 Prev-Day Low $374.75 / ATR\u00d71.0 $364.78. Hard stop -5% = $355.98.",
+        "target": "T1 $393.46 (+5%) \u2014 8EMA trail. T2 $394.54 (52W high / +5.3%). T3 $449.66 (+20%) \u2014 trail 21EMA $369.40.",
+        "grade": "C",
+        "price": 374.72
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "RGEN:a_plus_setup": {
+    "alert": {
+      "dedup_key": "RGEN:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "RGEN",
+      "priority": "HIGH",
+      "headline": "A+ day setup (Momentum)",
+      "why_it_matters": "Scored in the top band for: day (rank 101).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "day (rank 101)"
+        ],
+        "category": "Momentum",
+        "swing_rank": 63.0,
+        "day_rank": 101.0,
+        "investment_score": 84.0,
+        "entry": "Breakout entry \u2014 buy above Prev-Day High $168.03 with RVOL >1.5. Alternatively scale into 8EMA dip $167.02.",
+        "stop": "$168.17 \u2014 Prev-Day Low $164.83 / ATR\u00d71.0 $168.17. Hard stop -5% = $167.54.",
+        "target": "T1 $185.18 (+5%) \u2014 8EMA trail. T2 $194.00 (+10.0%). T3 $211.63 (+20%) \u2014 trail 21EMA $157.90.",
+        "grade": "B",
+        "price": 176.36
+      },
+      "created_at": "2026-08-19T19:59:04"
+    },
+    "since": "2026-08-19T19:59:04"
+  },
+  "day_session:init_2026-08-20": {
+    "alert": {
+      "dedup_key": "day_session:init_2026-08-20",
+      "category": "day_session",
+      "ticker": null,
+      "priority": "MEDIUM",
+      "headline": "day-trade universe set: 16 tickers (10 hot mover(s) merged)",
+      "why_it_matters": "Today's intraday scans run on: WMT, COIN, AAOI, HOOD, USAR, COST, UUUU, IREN, NBIS, CRWD, META, MSFT, NVDA, TSLA, AMD\u2026",
+      "expected_impact": "Hot movers join the static day-trade list for every intraday scan until the next session init.",
+      "suggested_action": "Expand the daytrade category on the Scanner page to review or edit the merged list.",
+      "confidence": 100,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "hot_movers": [
+          "WMT",
+          "COIN",
+          "AAOI",
+          "HOOD",
+          "USAR",
+          "COST",
+          "UUUU",
+          "IREN",
+          "NBIS",
+          "CRWD"
+        ],
+        "merged_universe": [
+          "WMT",
+          "COIN",
+          "AAOI",
+          "HOOD",
+          "USAR",
+          "COST",
+          "UUUU",
+          "IREN",
+          "NBIS",
+          "CRWD",
+          "META",
+          "MSFT",
+          "NVDA",
+          "TSLA",
+          "AMD",
+          "AVGO"
+        ]
+      },
+      "created_at": "2026-08-20T08:30:17"
+    },
+    "since": "2026-08-20T08:30:17"
+  },
+  "DELL:news:4d63f6aede": {
+    "alert": {
+      "dedup_key": "DELL:news:4d63f6aede",
+      "category": "news",
+      "ticker": "DELL",
+      "priority": "MEDIUM",
+      "headline": "New Deal / Contract: Dell Technologies (DELL) Extends Esports Partnership For Five More Years",
+      "why_it_matters": "A large new contract can move the revenue outlook meaningfully for smaller names.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "New Deal / Contract",
+        "publisher": "Simply Wall St.",
+        "url": "https://finance.yahoo.com/technology/articles/dell-technologies-dell-extends-esports-170958867.html",
+        "published": "2026-08-19"
+      },
+      "created_at": "2026-08-20T08:31:09"
+    },
+    "since": "2026-08-20T08:31:09"
+  },
+  "ORCL:news:526199cb39": {
+    "alert": {
+      "dedup_key": "ORCL:news:526199cb39",
+      "category": "news",
+      "ticker": "ORCL",
+      "priority": "MEDIUM",
+      "headline": "Product Launch: Bloom Energy's New Product Just Made Its Biggest AI Advantage Even Stronger. Here's What Investors Need to Know.",
+      "why_it_matters": "A major product launch can shift the competitive/revenue picture.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "Product Launch",
+        "publisher": "Motley Fool",
+        "url": "https://finance.yahoo.com/energy/articles/bloom-energys-product-just-made-195001062.html",
+        "published": "2026-08-19"
+      },
+      "created_at": "2026-08-20T08:31:10"
+    },
+    "since": "2026-08-20T08:31:10"
+  },
+  "NOW:news:e9d3ecb968": {
+    "alert": {
+      "dedup_key": "NOW:news:e9d3ecb968",
+      "category": "news",
+      "ticker": "NOW",
+      "priority": "HIGH",
+      "headline": "M&A / Acquisition: Inside the $8 billion cybersecurity acquisition that helped ServiceNow\u2019s stock buck the \u2018Saaspocalypse\u2019 fears",
+      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "M&A / Acquisition",
+        "publisher": "Fortune",
+        "url": "https://finance.yahoo.com/technology/articles/inside-8-billion-cybersecurity-acquisition-065800120.html",
+        "published": "2026-08-19"
+      },
+      "created_at": "2026-08-20T08:31:11"
+    },
+    "since": "2026-08-20T08:31:11"
+  },
+  "PLTR:news:2c85f56324": {
+    "alert": {
+      "dedup_key": "PLTR:news:2c85f56324",
+      "category": "news",
+      "ticker": "PLTR",
+      "priority": "MEDIUM",
+      "headline": "New Deal / Contract: Is Mercury Systems (MRCY)\u2019s Partnership With Palantir Technologies (PLTR) the Catalyst for a Hardware Turnaround?",
+      "why_it_matters": "A large new contract can move the revenue outlook meaningfully for smaller names.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "New Deal / Contract",
+        "publisher": "Insider Monkey",
+        "url": "https://finance.yahoo.com/markets/stocks/articles/mercury-systems-mrcy-partnership-palantir-120300085.html",
+        "published": "2026-08-20"
+      },
+      "created_at": "2026-08-20T08:31:14"
+    },
+    "since": "2026-08-20T08:31:14"
+  },
+  "BE:news:526199cb39": {
+    "alert": {
+      "dedup_key": "BE:news:526199cb39",
+      "category": "news",
+      "ticker": "BE",
+      "priority": "MEDIUM",
+      "headline": "Product Launch: Bloom Energy's New Product Just Made Its Biggest AI Advantage Even Stronger. Here's What Investors Need to Know.",
+      "why_it_matters": "A major product launch can shift the competitive/revenue picture.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "Product Launch",
+        "publisher": "Motley Fool",
+        "url": "https://finance.yahoo.com/energy/articles/bloom-energys-product-just-made-195001062.html",
+        "published": "2026-08-19"
+      },
+      "created_at": "2026-08-20T08:31:16"
+    },
+    "since": "2026-08-20T08:31:16"
+  },
+  "GE:news:9cc56bd30e": {
+    "alert": {
+      "dedup_key": "GE:news:9cc56bd30e",
+      "category": "news",
+      "ticker": "GE",
+      "priority": "HIGH",
+      "headline": "M&A / Acquisition: SpaceX Attempted to Acquire AI Coding Startup Cognition",
+      "why_it_matters": "M&A activity typically re-prices a stock immediately toward (or away from) deal terms.",
+      "expected_impact": "Historically a market-moving category \u2014 magnitude depends on the specifics of this article.",
+      "suggested_action": "Read the full article before trading; a headline alone isn't enough to size a position.",
+      "confidence": 60,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "catalyst": "M&A / Acquisition",
+        "publisher": "Bloomberg",
+        "url": "https://finance.yahoo.com/technology/ai/articles/spacex-attempted-acquire-ai-coding-190705186.html",
+        "published": "2026-08-19"
+      },
+      "created_at": "2026-08-20T08:31:18"
+    },
+    "since": "2026-08-20T08:31:18"
+  },
+  "AVGO:support_touch": {
+    "alert": {
+      "dedup_key": "AVGO:support_touch",
+      "category": "watchlist",
+      "ticker": "AVGO",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.1% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.07,
+        "S1": 363.36
+      },
+      "created_at": "2026-08-20T09:03:05"
+    },
+    "since": "2026-08-20T09:03:05"
+  },
+  "AVGO:resistance_touch": {
+    "alert": {
+      "dedup_key": "AVGO:resistance_touch",
+      "category": "watchlist",
+      "ticker": "AVGO",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (1.0% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.98,
+        "R1": 367.2
+      },
+      "created_at": "2026-08-20T09:03:05"
+    },
+    "since": "2026-08-20T09:03:05"
+  },
+  "MRVL:support_touch": {
+    "alert": {
+      "dedup_key": "MRVL:support_touch",
+      "category": "watchlist",
+      "ticker": "MRVL",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.1% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.12,
+        "S1": 236.39
+      },
+      "created_at": "2026-08-20T09:03:06"
+    },
+    "since": "2026-08-20T09:03:06"
+  },
+  "TXN:support_touch": {
+    "alert": {
+      "dedup_key": "TXN:support_touch",
+      "category": "watchlist",
+      "ticker": "TXN",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.7% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.69,
+        "S1": 264.61
+      },
+      "created_at": "2026-08-20T09:03:06"
+    },
+    "since": "2026-08-20T09:03:06"
+  },
+  "WDC:support_touch": {
+    "alert": {
+      "dedup_key": "WDC:support_touch",
+      "category": "watchlist",
+      "ticker": "WDC",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.7% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.68,
+        "S1": 462.74
+      },
+      "created_at": "2026-08-20T09:03:06"
+    },
+    "since": "2026-08-20T09:03:06"
+  },
+  "DELL:support_touch": {
+    "alert": {
+      "dedup_key": "DELL:support_touch",
+      "category": "watchlist",
+      "ticker": "DELL",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.4% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.43,
+        "S1": 438.39
+      },
+      "created_at": "2026-08-20T09:03:07"
+    },
+    "since": "2026-08-20T09:03:07"
+  },
+  "LITE:support_touch": {
+    "alert": {
+      "dedup_key": "LITE:support_touch",
+      "category": "watchlist",
+      "ticker": "LITE",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.5% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.52,
+        "S1": 827.38
+      },
+      "created_at": "2026-08-20T09:03:07"
+    },
+    "since": "2026-08-20T09:03:07"
+  },
+  "AAOI:resistance_touch": {
+    "alert": {
+      "dedup_key": "AAOI:resistance_touch",
+      "category": "watchlist",
+      "ticker": "AAOI",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.0% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.04,
+        "R1": 122.05
+      },
+      "created_at": "2026-08-20T09:03:07"
+    },
+    "since": "2026-08-20T09:03:07"
+  },
+  "CIEN:resistance_touch": {
+    "alert": {
+      "dedup_key": "CIEN:resistance_touch",
+      "category": "watchlist",
+      "ticker": "CIEN",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.5% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.48,
+        "R1": 399.91
+      },
+      "created_at": "2026-08-20T09:03:07"
+    },
+    "since": "2026-08-20T09:03:07"
+  },
+  "ORCL:resistance_touch": {
+    "alert": {
+      "dedup_key": "ORCL:resistance_touch",
+      "category": "watchlist",
+      "ticker": "ORCL",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.6% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.63,
+        "R1": 144.06
+      },
+      "created_at": "2026-08-20T09:03:08"
+    },
+    "since": "2026-08-20T09:03:08"
+  },
+  "NOW:resistance_touch": {
+    "alert": {
+      "dedup_key": "NOW:resistance_touch",
+      "category": "watchlist",
+      "ticker": "NOW",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.6% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.57,
+        "R1": 129.03
+      },
+      "created_at": "2026-08-20T09:03:08"
+    },
+    "since": "2026-08-20T09:03:08"
+  },
+  "WDAY:resistance_touch": {
+    "alert": {
+      "dedup_key": "WDAY:resistance_touch",
+      "category": "watchlist",
+      "ticker": "WDAY",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.3% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.29,
+        "R1": 198.03
+      },
+      "created_at": "2026-08-20T09:03:09"
+    },
+    "since": "2026-08-20T09:03:09"
+  },
+  "CRWD:support_touch": {
+    "alert": {
+      "dedup_key": "CRWD:support_touch",
+      "category": "watchlist",
+      "ticker": "CRWD",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.7% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.66,
+        "S1": 197.34
+      },
+      "created_at": "2026-08-20T09:03:09"
+    },
+    "since": "2026-08-20T09:03:09"
+  },
+  "CRWD:resistance_touch": {
+    "alert": {
+      "dedup_key": "CRWD:resistance_touch",
+      "category": "watchlist",
+      "ticker": "CRWD",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.4% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.41,
+        "R1": 199.46
+      },
+      "created_at": "2026-08-20T09:03:09"
+    },
+    "since": "2026-08-20T09:03:09"
+  },
+  "META:support_touch": {
+    "alert": {
+      "dedup_key": "META:support_touch",
+      "category": "watchlist",
+      "ticker": "META",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.8% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.84,
+        "S1": 542.51
+      },
+      "created_at": "2026-08-20T09:03:10"
+    },
+    "since": "2026-08-20T09:03:10"
+  },
+  "INOD:support_touch": {
+    "alert": {
+      "dedup_key": "INOD:support_touch",
+      "category": "watchlist",
+      "ticker": "INOD",
+      "priority": "MEDIUM",
+      "headline": "is testing support (1.4% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 1.4,
+        "S1": 61.94
+      },
+      "created_at": "2026-08-20T09:03:10"
+    },
+    "since": "2026-08-20T09:03:10"
+  },
+  "NBIS:support_touch": {
+    "alert": {
+      "dedup_key": "NBIS:support_touch",
+      "category": "watchlist",
+      "ticker": "NBIS",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.8% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.75,
+        "S1": 214.5
+      },
+      "created_at": "2026-08-20T09:03:10"
+    },
+    "since": "2026-08-20T09:03:10"
+  },
+  "CRWV:support_touch": {
+    "alert": {
+      "dedup_key": "CRWV:support_touch",
+      "category": "watchlist",
+      "ticker": "CRWV",
+      "priority": "MEDIUM",
+      "headline": "is testing support (1.4% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 1.39,
+        "S1": 90.65
+      },
+      "created_at": "2026-08-20T09:03:10"
+    },
+    "since": "2026-08-20T09:03:10"
+  },
+  "IONQ:support_touch": {
+    "alert": {
+      "dedup_key": "IONQ:support_touch",
+      "category": "watchlist",
+      "ticker": "IONQ",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.4% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.4,
+        "S1": 41.84
+      },
+      "created_at": "2026-08-20T09:03:11"
+    },
+    "since": "2026-08-20T09:03:11"
+  },
+  "IONQ:gap": {
+    "alert": {
+      "dedup_key": "IONQ:gap",
+      "category": "watchlist",
+      "ticker": "IONQ",
+      "priority": "HIGH",
+      "headline": "gapped down 3.1%",
+      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
+      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
+      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
+      "confidence": 70,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "gap_pct": -3.11
+      },
+      "created_at": "2026-08-20T09:03:11"
+    },
+    "since": "2026-08-20T09:03:11"
+  },
+  "QBTS:support_touch": {
+    "alert": {
+      "dedup_key": "QBTS:support_touch",
+      "category": "watchlist",
+      "ticker": "QBTS",
+      "priority": "MEDIUM",
+      "headline": "is testing support (1.0% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.99,
+        "S1": 18.92
+      },
+      "created_at": "2026-08-20T09:03:11"
+    },
+    "since": "2026-08-20T09:03:11"
+  },
+  "VRT:resistance_touch": {
+    "alert": {
+      "dedup_key": "VRT:resistance_touch",
+      "category": "watchlist",
+      "ticker": "VRT",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.8% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.77,
+        "R1": 255.83
+      },
+      "created_at": "2026-08-20T09:03:11"
+    },
+    "since": "2026-08-20T09:03:11"
+  },
+  "PWR:support_touch": {
+    "alert": {
+      "dedup_key": "PWR:support_touch",
+      "category": "watchlist",
+      "ticker": "PWR",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.8% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.75,
+        "S1": 664.0
+      },
+      "created_at": "2026-08-20T09:03:12"
+    },
+    "since": "2026-08-20T09:03:12"
+  },
+  "ETN:support_touch": {
+    "alert": {
+      "dedup_key": "ETN:support_touch",
+      "category": "watchlist",
+      "ticker": "ETN",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.2% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.22,
+        "S1": 416.57
+      },
+      "created_at": "2026-08-20T09:03:12"
+    },
+    "since": "2026-08-20T09:03:12"
+  },
+  "LMT:support_touch": {
+    "alert": {
+      "dedup_key": "LMT:support_touch",
+      "category": "watchlist",
+      "ticker": "LMT",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.3% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.31,
+        "S1": 581.98
+      },
+      "created_at": "2026-08-20T09:03:12"
+    },
+    "since": "2026-08-20T09:03:12"
+  },
+  "RTX:resistance_touch": {
+    "alert": {
+      "dedup_key": "RTX:resistance_touch",
+      "category": "watchlist",
+      "ticker": "RTX",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.1% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.06,
+        "R1": 218.24
+      },
+      "created_at": "2026-08-20T09:03:12"
+    },
+    "since": "2026-08-20T09:03:12"
+  },
+  "NOC:support_touch": {
+    "alert": {
+      "dedup_key": "NOC:support_touch",
+      "category": "watchlist",
+      "ticker": "NOC",
+      "priority": "MEDIUM",
+      "headline": "is testing support (0.0% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 0.02,
+        "S1": 579.14
+      },
+      "created_at": "2026-08-20T09:03:12"
+    },
+    "since": "2026-08-20T09:03:12"
+  },
+  "GD:support_touch": {
+    "alert": {
+      "dedup_key": "GD:support_touch",
+      "category": "watchlist",
+      "ticker": "GD",
+      "priority": "MEDIUM",
+      "headline": "is testing support (1.1% away)",
+      "why_it_matters": "Price is approaching a level where buyers have previously stepped in.",
+      "expected_impact": "Possible bounce if support holds, or a breakdown if it fails.",
+      "suggested_action": "Watch for a reversal candle or volume confirmation before acting.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_support_pct": 1.08,
+        "S1": 386.95
+      },
+      "created_at": "2026-08-20T09:03:13"
+    },
+    "since": "2026-08-20T09:03:13"
+  },
+  "GD:resistance_touch": {
+    "alert": {
+      "dedup_key": "GD:resistance_touch",
+      "category": "watchlist",
+      "ticker": "GD",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.2% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.16,
+        "R1": 391.76
+      },
+      "created_at": "2026-08-20T09:03:13"
+    },
+    "since": "2026-08-20T09:03:13"
+  },
+  "KTOS:resistance_touch": {
+    "alert": {
+      "dedup_key": "KTOS:resistance_touch",
+      "category": "watchlist",
+      "ticker": "KTOS",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.4% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.37,
+        "R1": 58.47
+      },
+      "created_at": "2026-08-20T09:03:13"
+    },
+    "since": "2026-08-20T09:03:13"
+  },
+  "KTOS:gap": {
+    "alert": {
+      "dedup_key": "KTOS:gap",
+      "category": "watchlist",
+      "ticker": "KTOS",
+      "priority": "HIGH",
+      "headline": "gapped down 3.8%",
+      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
+      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
+      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
+      "confidence": 70,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "gap_pct": -3.8
+      },
+      "created_at": "2026-08-20T09:03:13"
+    },
+    "since": "2026-08-20T09:03:13"
+  },
+  "MA:resistance_touch": {
+    "alert": {
+      "dedup_key": "MA:resistance_touch",
+      "category": "watchlist",
+      "ticker": "MA",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (0.1% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 0.08,
+        "R1": 576.29
+      },
+      "created_at": "2026-08-20T09:03:13"
+    },
+    "since": "2026-08-20T09:03:13"
+  },
+  "COIN:resistance_touch": {
+    "alert": {
+      "dedup_key": "COIN:resistance_touch",
+      "category": "watchlist",
+      "ticker": "COIN",
+      "priority": "MEDIUM",
+      "headline": "is testing resistance (1.5% away)",
+      "why_it_matters": "Price is approaching a level that has previously capped upside.",
+      "expected_impact": "Possible breakout if resistance breaks, or a pullback if it holds.",
+      "suggested_action": "Watch for a breakout with volume before chasing.",
+      "confidence": 55,
+      "time_sensitivity": "next 1-2 sessions",
+      "supporting_data": {
+        "dist_to_resistance_pct": 1.49,
+        "R1": 174.05
+      },
+      "created_at": "2026-08-20T09:03:14"
+    },
+    "since": "2026-08-20T09:03:14"
+  },
+  "HIMS:above_50ma": {
+    "alert": {
+      "dedup_key": "HIMS:above_50ma",
+      "category": "watchlist",
+      "ticker": "HIMS",
+      "priority": "LOW",
+      "headline": "is above its 50-day average (+3.7%)",
+      "why_it_matters": "Trend-following systems generally favor longs while price holds above this average.",
+      "expected_impact": "Mildly bullish backdrop while this holds.",
+      "suggested_action": "No action by itself \u2014 context for other signals.",
+      "confidence": 40,
+      "time_sensitivity": "ongoing",
+      "supporting_data": {
+        "price_vs_50ma_pct": 3.7
+      },
+      "created_at": "2026-08-20T09:03:14"
+    },
+    "since": "2026-08-20T09:03:14"
+  },
+  "MP:gap": {
+    "alert": {
+      "dedup_key": "MP:gap",
+      "category": "watchlist",
+      "ticker": "MP",
+      "priority": "HIGH",
+      "headline": "gapped down 5.7%",
+      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
+      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
+      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
+      "confidence": 70,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "gap_pct": -5.66
+      },
+      "created_at": "2026-08-20T09:03:14"
+    },
+    "since": "2026-08-20T09:03:14"
+  },
+  "USAR:gap": {
+    "alert": {
+      "dedup_key": "USAR:gap",
+      "category": "watchlist",
+      "ticker": "USAR",
+      "priority": "HIGH",
+      "headline": "gapped down 5.1%",
+      "why_it_matters": "A gap this size usually means new information hit the stock overnight.",
+      "expected_impact": "Elevated volatility for the session; gaps often partially fill.",
+      "suggested_action": "Check for a news catalyst before trading the gap in either direction.",
+      "confidence": 70,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "gap_pct": -5.14
+      },
+      "created_at": "2026-08-20T09:03:14"
+    },
+    "since": "2026-08-20T09:03:14"
+  },
+  "TXN:a_plus_setup": {
+    "alert": {
+      "dedup_key": "TXN:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "TXN",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 100).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 100)"
+        ],
+        "category": "Momentum-Pullback",
+        "swing_rank": 100.0,
+        "day_rank": 23.0,
+        "investment_score": 60.0,
+        "entry": "Near 8EMA \u2014 buy hold above $273.48 (8EMA) with RVOL expansion >1.2. Confirm VWAP hold.",
+        "stop": "$258.47 from entry fill \u2014 Prev-Day Low $266.39 / ATR\u00d71.5 $258.47. Hard stop -7% = $254.34.",
+        "target": "T1 $289.47 (50MA / +5.8%) \u2192 T2 $332.33 (52W high / +21.5%) \u2014 % from entry $273.48. Trail 21EMA $278.39 once in profit.",
+        "grade": "B",
+        "price": 266.32
+      },
+      "created_at": "2026-08-20T10:50:18"
+    },
+    "since": "2026-08-20T10:50:18"
+  },
+  "CRWD:a_plus_setup": {
+    "alert": {
+      "dedup_key": "CRWD:a_plus_setup",
+      "category": "a_plus_setup",
+      "ticker": "CRWD",
+      "priority": "HIGH",
+      "headline": "A+ swing setup (Momentum-Pullback)",
+      "why_it_matters": "Scored in the top band for: swing (rank 95).",
+      "expected_impact": "Highest-conviction tier the scanner produces \u2014 these are the setups the grade filter emails for.",
+      "suggested_action": "Open the research page and review the entry/stop/target plan before the setup ages.",
+      "confidence": 85,
+      "time_sensitivity": "today",
+      "supporting_data": {
+        "strategies": [
+          "swing (rank 95)"
+        ],
+        "category": "Momentum-Pullback",
+        "swing_rank": 95.0,
+        "day_rank": 49.0,
+        "investment_score": 80.0,
+        "entry": "8EMA reclaim above $207.93 on volume (RVOL >1.3). Scale add on pullback to 21EMA $205.30.",
+        "stop": "$194.28 from entry fill \u2014 Prev-Day Low $197.25 / ATR\u00d71.5 $194.28. Hard stop -7% = $193.37.",
+        "target": "T1 $227.50 (52W high / +9.4%) \u2014 % from entry $207.93. Trail 21EMA $205.30 once in profit.",
+        "grade": "C",
+        "price": 193.04
+      },
+      "created_at": "2026-08-20T10:50:18"
+    },
+    "since": "2026-08-20T10:50:18"
   }
 }

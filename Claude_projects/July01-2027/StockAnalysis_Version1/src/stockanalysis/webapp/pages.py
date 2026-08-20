@@ -975,6 +975,17 @@ def csp_page(query: dict | None = None) -> tuple[str, str]:
     return csp_view.csp_page(query)
 
 
+def leaders_page(query: dict | None = None) -> tuple[str, str]:
+    """The market → sector → industry → stock → setup scan — see
+    webapp/leaders_view.py.
+
+    Takes the query dict for the same reason /shortside does: it renders from
+    a stored snapshot and its filters belong in the URL, not in session state.
+    """
+    from stockanalysis.webapp import leaders_view
+    return leaders_view.leaders_page(query)
+
+
 def shortside_page(query: dict | None = None) -> tuple[str, str]:
     """The two-sided decision engine — see webapp/shortside_view.py.
 

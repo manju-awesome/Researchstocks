@@ -724,6 +724,27 @@ def job_day_session_init():
     _initialize_day_session()
 
 
+# Sector-Leader Scan — no email of its own. It runs ahead of the brief so
+# the brief can cross-reference a snapshot from this morning rather than one
+# from last night, without paying the scan's three-to-five minutes inside a
+# job that other interval jobs are queued behind.
+def job_sector_leaders_scan():
+    if datetime.now(ET).weekday() >= 5:
+        return
+    from stockanalysis.scanners.scan_sector_leaders import scan_and_store
+    try:
+        res = scan_and_store()
+        market = res.get("market") or {}
+        sectors = res.get("sectors") or []
+        bull = sum(1 for x in sectors if x.get("direction") == "bullish")
+        bear = sum(1 for x in sectors if x.get("direction") == "bearish")
+        _log(f"🧭 Sector-leader scan — {market.get('label')} "
+             f"({market.get('score'):+.1f}), {bull} bullish / {bear} bearish "
+             f"of {len(sectors)} groups")
+    except Exception as e:
+        _log(f"Sector-leader scan failed: {e}")
+
+
 # Pre-Market Brief — one composed email; macro/movers/earnings/breakout
 # context already fetched elsewhere, see core/premarket_brief.py for why
 # this isn't a fresh data source.
@@ -732,8 +753,13 @@ def job_premarket_brief():
         return
     from stockanalysis.core.premarket_brief import send_premarket_brief
     try:
-        send_premarket_brief()
-        _log("📰 Pre-market brief sent")
+        brief = send_premarket_brief()
+        conf = (brief or {}).get("confluence") or {}
+        counts = conf.get("counts") or {}
+        _log(f"📰 Pre-market brief + sector leaders sent — "
+             f"{counts.get('aligned', 0)} aligned, "
+             f"{counts.get('conflicts', 0)} conflicting "
+             f"({(brief or {}).get('sector_leaders_note')})")
     except Exception as e:
         _log(f"Pre-market brief failed: {e}")
 
@@ -875,6 +901,9 @@ def job_nightly_cleanup():
 # live in schedule_config.py; this maps them to the code to run.
 SCHEDULED_JOBS: dict[str, callable] = {
     "earnings_alerts":   job_earnings_alerts,
+    # Ahead of premarket_brief by dict order as well as by clock, so a shared
+    # slot still scans before the brief that reads the scan.
+    "sector_leaders_scan": job_sector_leaders_scan,
     "premarket_brief":   job_premarket_brief,
     "watchlist_alerts":  job_watchlist_alerts,
     "longterm_entry_alerts": job_longterm_entry_alerts,

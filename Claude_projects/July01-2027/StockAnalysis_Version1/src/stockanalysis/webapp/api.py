@@ -241,6 +241,72 @@ def job_ta_analysis(ticker: str, progress: jobstore.Progress) -> str:
             f" · probability {result['probability_score']}%")
 
 
+def job_sector_leaders(progress: jobstore.Progress) -> str:
+    """Full market → sector → industry → stock scan, written to the snapshot.
+
+    A job rather than an inline render because it downloads two years of daily
+    bars for ~570 constituents plus twenty benchmarks and proxy ETFs, then
+    five-minute bars for the finalists — three to five minutes, far past what
+    a page render can block on. The /leaders page shows the last snapshot and
+    this replaces it.
+    """
+    from stockanalysis.scanners.scan_sector_leaders import scan_and_store
+
+    res = scan_and_store(
+        progress_cb=lambda stage, done=None, total=None: progress.stage(
+            stage, done, total))
+    market = res.get("market") or {}
+    sectors = res.get("sectors") or []
+    bull = sum(1 for x in sectors if x.get("direction") == "bullish")
+    bear = sum(1 for x in sectors if x.get("direction") == "bearish")
+    return (f'{market.get("label")} ({market.get("score"):+.1f}) · '
+            f'{len(sectors)} groups — {bull} bullish, {bear} bearish · '
+            f'{len(res.get("candidates") or [])} candidate scores')
+
+
+def job_sector_leaders_confirm(tickers: list[str] | None,
+                               progress: jobstore.Progress) -> str:
+    """News, fundamentals, cash flow and the next earnings date for the
+    finalists.
+
+    Separate from the scan because it goes stale on a different clock —
+    headlines age in hours, 20-day relative strength does not — and because
+    it is per-ticker .info and .news calls, which are slow and rate-limited.
+    With no tickers given it confirms the top names on BOTH sides: the short
+    list is exactly where a contradicting headline changes the answer most.
+    """
+    from stockanalysis.core import leaders_store
+    from stockanalysis.scanners.confirm_leaders import confirm_and_store
+
+    snap = leaders_store.load()
+    if not snap:
+        return "no scan snapshot yet — run the sector-leader scan first"
+
+    if not tickers:
+        picks = []
+        for direction in ("long", "short"):
+            best = {}
+            for c in snap.get("candidates") or []:
+                if c.get("direction") != direction:
+                    continue
+                t = c.get("ticker")
+                score = (c.get("confluence") or {}).get("score", 0)
+                if t not in best or score > best[t]:
+                    best[t] = score
+            picks += [t for t, _ in sorted(best.items(), key=lambda kv: -kv[1])[:12]]
+        tickers = list(dict.fromkeys(picks))
+
+    out = confirm_and_store(
+        tickers,
+        progress_cb=lambda stage, done=None, total=None: progress.stage(
+            stage, done, total))
+    dated = sum(1 for v in out.values()
+                if (v.get("earnings") or {}).get("next_earnings"))
+    heads = sum(len(v.get("headlines") or []) for v in out.values())
+    return (f"confirmed {len(out)} names — {heads} headlines, "
+            f"{dated} with a scheduled earnings date")
+
+
 def job_portfolio_risk(progress: jobstore.Progress) -> str:
     """Institutional-style risk report over portfolio.csv + options_positions.csv.
 
@@ -853,6 +919,19 @@ def dispatch_run(action: str, form: dict) -> str:
                  + ("…" if len(tickers) > 12 else ""))
         return jobstore.start("research", label,
                               lambda p: job_research(tickers, p))
+
+    if action == "sector_leaders":
+        return jobstore.start("scan", "sector-leader scan (market → sector → stock)",
+                              job_sector_leaders)
+
+    if action == "sector_leaders_confirm":
+        raw = first("tickers")
+        tickers = [t.strip().upper() for t in raw.replace(",", " ").split()
+                   if t.strip()]
+        label = ("confirming " + ", ".join(tickers[:8]) if tickers
+                 else "confirming the top sector-leader names")
+        return jobstore.start("news", label,
+                              lambda p: job_sector_leaders_confirm(tickers, p))
 
     if action == "scan":
         universes = expand_all(form.get("universe") or [])
@@ -2083,3 +2162,27 @@ def analysis(scope: str, value: str = "") -> dict:
             "matched": len(rows), "scope_total": len(rows) + len(missing),
             "full_link": full_link, "regime": data["regime"],
             "regime_note": data["regime_note"]}
+
+
+def leaders_verdict(ticker: str, direction: str, verdict: str,
+                    note: str = "") -> dict:
+    """Store a human reading of one name's headlines for the /leaders page.
+
+    Validation lives here rather than in the handler so the CLI and any future
+    caller get the same rules: an unknown verdict or a direction that is not
+    long/short is rejected rather than written through.
+    """
+    from stockanalysis.core import leaders_store
+
+    ticker = (ticker or "").strip().upper()
+    if not ticker:
+        return {"ok": False, "error": "no ticker"}
+    if direction not in ("long", "short"):
+        return {"ok": False, "error": "direction must be 'long' or 'short'"}
+    if verdict not in leaders_store.VERDICTS:
+        return {"ok": False,
+                "error": f"verdict must be one of {', '.join(leaders_store.VERDICTS)}"}
+    saved = leaders_store.save_verdict(ticker, direction, verdict, note)
+    if saved is None:
+        return {"ok": False, "error": "no sector-leader snapshot to write to"}
+    return {"ok": True, "verdict": saved}
